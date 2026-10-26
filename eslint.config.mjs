@@ -64,7 +64,9 @@ const eslintConfig = defineConfig([
             },
         },
         rules: {
+            // PocketBase uses require() and generated global type declarations.
             "@typescript-eslint/no-require-imports": "off",
+            "@typescript-eslint/triple-slash-reference": ["error", { path: "always" }],
             "no-undef": "error",
         },
     },

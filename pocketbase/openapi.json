@@ -43,7 +43,9 @@
                 "merchant": "Apartment Coffee",
                 "currency": "SGD",
                 "category": "Food & drinks",
-                "amount_minor": 650
+                "amount_minor": 650,
+                "payment_method": "Visa",
+                "notes": "Afternoon coffee"
               }
             }
           }
@@ -70,7 +72,7 @@
             }
           },
           "400": {
-            "description": "Invalid input"
+            "description": "Invalid field type or length, unsupported or disabled currency, unknown or inactive category, or conflicting payment_method/card aliases"
           },
           "401": {
             "description": "Invalid, expired or revoked key"
@@ -335,13 +337,13 @@
               "ZMW",
               "ZWG"
             ],
-            "description": "Must be enabled in the user account. Defaults to the user main currency."
+            "description": "A supported uppercase currency code enabled in the user account. Defaults to the user main currency only when omitted; null, empty strings and non-string values are rejected."
           },
           "category": {
             "type": "string",
             "minLength": 1,
             "maxLength": 60,
-            "description": "An active category belonging to the user; case-insensitive. Defaults to active Other, otherwise the first active category. Responses use the configured casing."
+            "description": "A non-empty string naming an active category belonging to the user; surrounding whitespace is trimmed and matching is case-insensitive. Defaults to active Other, otherwise the first active category, only when omitted."
           },
           "occurred_at": {
             "type": "string",
@@ -350,17 +352,24 @@
           },
           "card": {
             "type": "string",
-            "maxLength": 80
+            "maxLength": 80,
+            "description": "Legacy request alias for payment_method. Must match exactly when both are supplied. Native PocketBase records continue to store this field."
           },
           "notes": {
             "type": "string",
-            "maxLength": 2000
+            "maxLength": 2000,
+            "description": "Optional text, preserved as supplied, up to 2000 characters. Defaults to an empty string."
           },
           "amount_minor": {
             "type": "integer",
             "minimum": 1,
             "maximum": 99999999999,
             "description": "Positive integer currency minor units. SGD 6.50 = 650, JPY 1000 = 1000, KWD 1.234 = 1234. If amount_cents is also present both must agree."
+          },
+          "payment_method": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "Optional free-text payment method, such as Cash or Visa. Defaults to an empty string. The legacy card alias is accepted; if both are supplied they must match exactly."
           }
         },
         "anyOf": [
@@ -414,6 +423,11 @@
                 "type": "integer",
                 "minimum": 1,
                 "maximum": 99999999999
+              },
+              "payment_method": {
+                "type": "string",
+                "maxLength": 80,
+                "description": "Payment method; returned with the native compatibility field card on create, replay and list responses."
               }
             }
           }

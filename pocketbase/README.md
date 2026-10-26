@@ -83,17 +83,17 @@ curl -X POST 'https://e.tkkr.dev/api/expenses/transactions' \
     "amount_minor": 650,
     "currency": "SGD",
     "category": "Food & drinks",
-    "card": "DBS Live Fresh",
+    "payment_method": "DBS Live Fresh",
     "occurred_at": "2026-10-26T15:30:00+08:00",
     "notes": "Afternoon coffee"
   }'
 ```
 
-`merchant` and `amount_minor` are required. Use positive integer currency minor units, up to 99999999999: SGD 6.50 = 650, JPY 1000 = 1000, KWD 1.234 = 1234. Defaults: `currency` = the user’s main currency, `category` = active `Other` or the first active category, `occurred_at` = server time. Legacy `amount_cents` is accepted only for two-decimal currencies; if both amount fields are supplied they must agree. Optional strings: `card` (80 characters), `notes` (2000 characters). Merchant limit: 160 characters. If supplied, `occurred_at` must be ISO 8601 with `Z` or an explicit timezone offset. The server determines ownership from the key. Omit `user`.
+`merchant` and `amount_minor` are required. Use positive integer currency minor units, up to 99999999999: SGD 6.50 = 650, JPY 1000 = 1000, KWD 1.234 = 1234. Defaults: `currency` = the user’s main currency, `category` = active `Other` or the first active category, `occurred_at` = server time. Legacy `amount_cents` is accepted only for two-decimal currencies; if both amount fields are supplied they must agree. Optional strings: `payment_method` (80 characters), `notes` (2000 characters). Both default to an empty string. The legacy `card` request field is still accepted; when both payment fields are supplied their values must match exactly. Text is stored as supplied. Merchant limit: 160 characters. If supplied, `occurred_at` must be ISO 8601 with `Z` or an explicit timezone offset. The server determines ownership from the key. Omit `user`.
 
-The currency must be supported and enabled in the user’s Settings. The category must be active and belong to that user. Category matching in the automation API is case-insensitive; responses use the configured name. New users start with SGD, USD, EUR, GBP, AUD, and MYR enabled, and eight editable categories.
+All optional fields are validated by PocketBase before saving. Explicit nulls, arrays, objects, numbers, and booleans are rejected for text fields; defaults apply only when a field is omitted. The currency must be a supported uppercase code enabled in the user’s Settings; an empty string is invalid. The category must be a non-empty string of at most 60 characters naming an active category belonging to that user. Category matching trims surrounding whitespace and is case-insensitive; responses use the configured name. Payment methods are free-text labels such as Cash or Visa, up to 80 characters, and notes allow up to 2000 characters. New users start with SGD, USD, EUR, GBP, AUD, and MYR enabled, and eight editable categories.
 
-Responses include `amount_minor` and the legacy native field `amount_cents`, both containing the same currency minor-unit value. A new expense returns its record with HTTP 201 and `replay: false`. An exact retry with the same Idempotency-Key returns the original record with HTTP 200 and `replay: true`. Reusing a key with different expense data returns HTTP 409. The idempotency key is optional, scoped to the user, up to 128 characters, and allows letters, digits, underscores, dots, colons, and hyphens. Keep one value for retries of the same purchase and use a new value for each new purchase. If you omit `occurred_at`, a retry can omit it too. Deleting an expense also removes its deduplication record.
+Responses include `amount_minor` and the legacy native field `amount_cents`, both containing the same currency minor-unit value. Create, replay, and list responses include `payment_method` and the legacy native `card` field with the same payment label. No database migration is needed for this alias. A new expense returns its record with HTTP 201 and `replay: false`. An exact retry with the same Idempotency-Key returns the original record with HTTP 200 and `replay: true`. Reusing a key with different expense data returns HTTP 409. The idempotency key is optional, scoped to the user, up to 128 characters, and allows letters, digits, underscores, dots, colons, and hyphens. Keep one value for retries of the same purchase and use a new value for each new purchase. If you omit `occurred_at`, a retry can omit it too. Deleting an expense also removes its deduplication record.
 
 ### List expenses
 
@@ -119,7 +119,7 @@ Native collection validation returns PocketBase’s usual error responses.
 2. Add **Get Contents of URL** with `https://e.tkkr.dev/api/expenses/transactions`.
 3. Set method to **POST** and request body to **JSON**.
 4. Add headers `X-API-Key` with your key and `Content-Type` with `application/json`.
-5. Add `merchant` as Text, `amount_minor` as Number, `currency` as Text (`SGD`), and optionally `category`, `card`, `notes`, and `occurred_at`.
+5. Add `merchant` as Text, `amount_minor` as Number, `currency` as Text (`SGD`), and optionally `category`, `payment_method`, `notes`, and `occurred_at`.
 6. Convert the currency amount to integer minor units before sending: multiply SGD/USD by 100, JPY by 1, or KWD by 1000, then round. SGD 8.50 becomes 850. For multiple currencies, use the `digits` value from the supplied catalog.
 7. For retries, generate a unique identifier once per purchase and pass it in `Idempotency-Key`. Reuse that identifier only for retries of the same purchase.
 

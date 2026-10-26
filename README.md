@@ -97,10 +97,13 @@ Reference: [Vercel build configuration](https://vercel.com/docs/builds/configure
 ## Verify
 
 ```sh
+pnpm format
 pnpm validate
 POCKETBASE_BINARY=/absolute/path/to/pocketbase pnpm test:backend
 ```
 
-`validate` runs ESLint, TypeScript, domain tests, and a production build. The backend tests start a separate PocketBase process with a fresh temporary database and two disposable users; they never contact `e.tkkr.dev`. They cover ownership isolation, locked key collections, secret hashing, input validation, scopes, retry deduplication (including concurrent requests), timezone boundaries, currency precision, custom categories and category renames, main-currency totals, cached-rate outages, existing-database upgrades, budget uniqueness, expiration, revocation, and user deletion.
+`format` applies ESLint's layout fixes. The style rules match tkkr.dev: four-space indentation, double quotes, semicolons, and consistent JSX formatting. `pnpm lint` checks all JavaScript and TypeScript source, configuration, tests, PocketBase hooks, and migrations. Only dependencies, generated output, and PocketBase runtime data are excluded. PocketBase files use their own runtime globals and CommonJS loading.
+
+`validate` runs ESLint, TypeScript, domain and export tests, and a production build. The backend tests start a separate PocketBase process with a fresh temporary database and two disposable users; they never contact `e.tkkr.dev`. They cover ownership isolation, locked key collections, secret hashing, input validation, scopes, retry deduplication (including concurrent requests), timezone boundaries, currency precision, custom categories and category renames, main-currency totals, cached-rate outages, existing-database upgrades, budget uniqueness, expiration, revocation, and user deletion.
 
 Validated locally against PocketBase 0.40.6. Hosted tkID login and installation on `e.tkkr.dev` still require your deployment and a real interactive sign-in.

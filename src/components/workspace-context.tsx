@@ -5,7 +5,7 @@ export const WorkspaceContext = createContext<
   (WorkspaceConfig & { rates: ExchangeRates }) | null
 >(null);
 export function useWorkspace() {
-  const context = useContext(WorkspaceContext);
-  if (!context) throw new Error("Workspace context is unavailable.");
-  return context;
+    const context = useContext(WorkspaceContext);
+    if (!context) throw new Error("Workspace context is unavailable.");
+    return context;
 }

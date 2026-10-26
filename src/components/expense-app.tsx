@@ -61,6 +61,7 @@ import {
 import { useAuth } from "./auth-provider";
 import { SignIn } from "./sign-in";
 import { Brand } from "./brand";
+import { UserAvatar } from "./user-avatar";
 import { CategoryIcon } from "./category-icon";
 import { ExpenseEditor } from "./expense-editor";
 import { Transactions } from "./transactions";
@@ -586,9 +587,7 @@ function Workspace({
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <button className="flex w-full items-center gap-3 rounded-lg px-1 text-left">
-                                        <span className="flex size-8 items-center justify-center rounded-full bg-[#363e30] text-[11px] text-[#d4dcc6]">
-                                            {name.slice(0, 2).toUpperCase()}
-                                        </span>
+                                        <UserAvatar user={user} name={name} />
                                         <span className="min-w-0 flex-1">
                                             <span className="block truncate text-xs">{name}</span>
                                         </span>

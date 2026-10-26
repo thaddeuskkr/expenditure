@@ -3,6 +3,7 @@ import {
     createContext,
     useContext,
     useEffect,
+    useMemo,
     useState,
     useSyncExternalStore,
 } from "react";
@@ -17,11 +18,21 @@ function subscribe(callback: () => void) {
     return pb.authStore.onChange(callback);
 }
 
+function authSnapshot() {
+    // LocalAuthStore parses a new record object on each read. A string snapshot
+    // stays stable while still detecting avatar/profile changes with the same token.
+    return JSON.stringify({ token: pb.authStore.token, record: pb.authStore.record });
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const token = useSyncExternalStore(
+    const snapshot = useSyncExternalStore(
         subscribe,
-        () => pb.authStore.token,
+        authSnapshot,
         () => "",
+    );
+    const auth = useMemo<{ token: string; record: RecordModel | null }>(
+        () => snapshot ? JSON.parse(snapshot) : { token: "", record: null },
+        [snapshot],
     );
     const [ready, setReady] = useState(false);
     useEffect(() => {
@@ -46,7 +57,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return (
         <AuthContext.Provider
             value={{
-                user: token && pb.authStore.isValid ? pb.authStore.record : null,
+                user: auth.token && pb.authStore.isValid ? auth.record : null,
                 ready,
                 signOut: () => pb.authStore.clear(),
             }}>

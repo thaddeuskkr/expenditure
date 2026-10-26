@@ -7,6 +7,7 @@ Production app: **https://expenses.tkkr.dev** on Vercel. API: **https://e.tkkr.d
 ## What works
 
 - Sign in through the providers already configured on PocketBase’s `users` collection. No second authentication system or OIDC secrets in Next.js.
+- Account avatars load from the existing `users.avatar` file field, including protected files. Initials remain visible when an avatar is missing or unavailable.
 - Add, edit, and delete expenses; search merchants, payment methods, and notes; filter by category, currency, and month; paginate and export all matching rows to Excel (.xlsx) or CSV for Google Sheets.
 - Monthly totals, previous-month comparison, daily activity, category spending, and overall/category budgets.
 - Custom categories with names, colors, renaming, and archiving. Changes belong to each user.

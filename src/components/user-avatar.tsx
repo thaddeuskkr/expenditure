@@ -5,7 +5,10 @@ import Image from "next/image";
 import type { RecordModel } from "pocketbase";
 import { pb } from "@/lib/pocketbase";
 
-export function UserAvatar({ user, name }: { user: RecordModel; name: string }) {
+export function UserAvatar({ user, name }: {
+    user: Pick<RecordModel, "id" | "collectionId"> & { avatar?: string | string[] };
+    name: string;
+}) {
     const file = Array.isArray(user.avatar) ? user.avatar[0] : user.avatar;
     const filename = typeof file === "string" ? file : "";
     const publicUrl = filename ? pb.files.getURL(user, filename, { thumb: "100x100" }) : "";

@@ -1,0 +1,84 @@
+"use client";
+
+import { useWorkspace } from "../workspace-context";
+import type { CircleDetail } from "@/lib/circles";
+import { convertAmount, dayLabel, money, rateDate } from "@/lib/domain";
+import { SPLIT_LABELS, type CircleExpense } from "@/lib/circles";
+import { CirclePagination } from "./circle-pagination";
+
+export function CircleExpenseList({
+    detail,
+    onView,
+    onPage,
+}: {
+    detail: CircleDetail;
+    onView: (expense: CircleExpense) => void;
+    onPage: (page: number) => void;
+}) {
+    const { preferences, rates } = useWorkspace();
+    const name = (id: string) =>
+        detail.members.find((member) => member.id === id)?.name || "Former member";
+    return (
+        <div>
+            {!detail.expenses.items.length && (
+                <p className="py-12 text-center text-xs text-muted-foreground">
+                    No shared expenses yet.
+                </p>
+            )}
+            <div className="divide-y">
+                {detail.expenses.items.map((expense) => {
+                    const myShare =
+                        expense.shares.find((share) => share.member === detail.me)?.amount_minor ||
+                        0;
+                    const converted =
+                        expense.currency !== detail.circle.currency ?
+                                convertAmount(
+                                    expense.amount_minor,
+                                    expense.currency,
+                                    detail.circle.currency,
+                                    rates,
+                                ) :
+                            null;
+                    return (
+                        <button
+                            key={expense.id}
+                            onClick={() => onView(expense)}
+                            className="flex w-full items-center gap-4 py-5 text-left hover:bg-white/2">
+                            <span className="min-w-0 flex-1">
+                                <span className="block truncate text-sm">{expense.title}</span>
+                                <span className="mt-2 block text-[10px] text-muted-foreground">
+                                    {name(expense.paid_by)} paid ·{" "}
+                                    {dayLabel(expense.occurred_at, preferences.timezone)} ·{" "}
+                                    {SPLIT_LABELS[expense.split_mode]}
+                                </span>
+                                <span className="mt-1 block text-[10px] text-muted-foreground">
+                                    Your share: {money(myShare, expense.currency)}{" "}
+                                    {expense.currency}
+                                </span>
+                            </span>
+                            <span className="shrink-0 text-right text-sm tabular-nums">
+                                {money(expense.amount_minor, expense.currency)}{" "}
+                                <span className="text-[10px] text-muted-foreground">
+                                    {expense.currency}
+                                </span>
+                                {expense.currency !== detail.circle.currency && (
+                                    <span
+                                        className="mt-1 block text-[10px] text-muted-foreground"
+                                        title={`Rate date: ${rateDate(expense.currency, detail.circle.currency, rates) || "unavailable"}`}>
+                                        {converted === null ? "Conversion unavailable" : `≈ ${money(converted, detail.circle.currency)} ${detail.circle.currency}`}
+                                    </span>
+                                )}
+                            </span>
+                        </button>
+                    );
+                })}
+            </div>
+            <CirclePagination
+                page={detail.expenses.page}
+                totalPages={detail.expenses.totalPages}
+                label="expenses"
+                onPage={onPage}
+            />
+        </div>
+    );
+}

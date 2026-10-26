@@ -1,9 +1,9 @@
 {
   "openapi": "3.0.3",
   "info": {
-    "title": "Expenditure automation API",
-    "version": "2.0.0",
-    "description": "Personal API keys authorize only these endpoints. Create and revoke keys after signing in to Expenditure. Ownership always comes from the key. Normal PocketBase collection APIs require PocketBase user authentication. Amounts use currency minor units. Enable currencies and customize categories in the signed-in app. Conversions are separate latest-reference-rate estimates; originals are preserved."
+    "title": "Expenditure API",
+    "version": "3.0.0",
+    "description": "Personal API keys authorize the personal expense automation endpoints. Circles require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server."
   },
   "servers": [
     {
@@ -51,8 +51,8 @@
           }
         },
         "responses": {
-          "201": {
-            "description": "Expense created",
+          "200": {
+            "description": "Idempotent replay",
             "content": {
               "application/json": {
                 "schema": {
@@ -61,8 +61,8 @@
               }
             }
           },
-          "200": {
-            "description": "Idempotent replay",
+          "201": {
+            "description": "Expense created",
             "content": {
               "application/json": {
                 "schema": {
@@ -86,7 +86,7 @@
         }
       },
       "get": {
-        "summary": "List the key owner\u2019s expenses",
+        "summary": "List the key owner’s expenses",
         "description": "Requires expenses:read. Ordered by occurred_at, then created, newest first.",
         "parameters": [
           {
@@ -149,6 +149,817 @@
           }
         }
       }
+    },
+    "/api/expenditure/circles": {
+      "get": {
+        "summary": "List active circles and incoming invitations",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleIndex"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a circle",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Circle"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Read circle ledger",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          }
+        },
+        "parameters": [
+          {
+            "name": "expense_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "settlement_page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          }
+        ]
+      },
+      "patch": {
+        "summary": "Owner: change settings or transfer ownership",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Circle"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          },
+          "409": {
+            "description": "Stale record version; reload before retrying"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Owner: permanently delete the circle and its ledger",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleDeletion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          },
+          "409": {
+            "description": "Stale record version; reload before retrying"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/invitations": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Owner: create an email-bound seven-day invitation",
+        "description": "The recipient needs a matching verified account. Reissuing revokes previous pending links. No email is sent.",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteEmail"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleInvitation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circle-invitations/{invitation}": {
+      "parameters": [
+        {
+          "name": "invitation",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "get": {
+        "summary": "Matching verified recipient: preview invitation",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncomingCircleInvitation"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Owner revokes or recipient declines invitation",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circle-invitations/{invitation}/accept": {
+      "parameters": [
+        {
+          "name": "invitation",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Matching verified recipient: join circle",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinedCircle"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/members/{member}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        },
+        {
+          "name": "member",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Owner removes member, or member leaves",
+        "description": "All currencies must be settled. The owner must transfer ownership before leaving. History is retained.",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/expenses": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Member: add shared expense",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleExpenseInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleExpense"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/expenses/{expense}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        },
+        {
+          "name": "expense",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Author or owner: replace shared expense",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleExpenseEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleExpense"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          },
+          "409": {
+            "description": "Stale record version; reload before retrying"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Author or owner: delete shared expense",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordVersion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          },
+          "409": {
+            "description": "Stale record version; reload before retrying"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/settlements": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Owner or participant: record full or partial repayment",
+        "description": "This records an external repayment. It does not transfer money. Amount cannot exceed the current debtor or creditor balance in this currency.",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleSettlementInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleSettlement"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/settlements/{settlement}": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        },
+        {
+          "name": "settlement",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Author or owner: undo recorded repayment",
+        "description": "",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordVersion"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, allocation, expiry, overpayment, confirmation or unsettled removal"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Owner, author, participant or matching verified email is required"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          },
+          "409": {
+            "description": "Stale record version; reload before retrying"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -157,6 +968,12 @@
         "type": "apiKey",
         "in": "header",
         "name": "X-API-Key"
+      },
+      "UserSession": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization",
+        "description": "A normal PocketBase users authentication token. Personal exp_ API keys do not grant Circles access."
       }
     },
     "schemas": {
@@ -431,6 +1248,2504 @@
               }
             }
           }
+        ]
+      },
+      "CircleInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "icon": {
+            "type": "string",
+            "enum": [
+              "users",
+              "plane",
+              "home",
+              "utensils",
+              "coffee",
+              "gift",
+              "briefcase",
+              "car",
+              "music",
+              "heart"
+            ],
+            "default": "users"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "Circle": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "icon": {
+            "type": "string",
+            "enum": [
+              "users",
+              "plane",
+              "home",
+              "utensils",
+              "coffee",
+              "gift",
+              "briefcase",
+              "car",
+              "music",
+              "heart"
+            ],
+            "default": "users"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Current record version; stale writes return 409."
+          },
+          "is_owner": {
+            "type": "boolean"
+          },
+          "member_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "currency",
+          "owner",
+          "version",
+          "is_owner",
+          "member_count"
+        ]
+      },
+      "CircleUpdate": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "icon": {
+            "type": "string",
+            "enum": [
+              "users",
+              "plane",
+              "home",
+              "utensils",
+              "coffee",
+              "gift",
+              "briefcase",
+              "car",
+              "music",
+              "heart"
+            ],
+            "default": "users"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ]
+          },
+          "owner_member": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$",
+            "description": "Active membership id of the new owner."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Current record version; stale writes return 409."
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "CircleDeletion": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Current record version; stale writes return 409."
+          },
+          "confirmation": {
+            "type": "string",
+            "description": "Exact current circle name."
+          }
+        },
+        "required": [
+          "version",
+          "confirmation"
+        ]
+      },
+      "RecordVersion": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Current record version; stale writes return 409."
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "CircleMember": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "user": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9]{15}$"
+              },
+              "collectionId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "avatar": {
+                "type": "string"
+              }
+            },
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "active",
+          "user"
+        ]
+      },
+      "CircleInvitation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "expires_at"
+        ]
+      },
+      "IncomingCircleInvitation": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CircleInvitation"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "circle": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9]{15}$"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "icon": {
+                    "type": "string",
+                    "enum": [
+                      "users",
+                      "plane",
+                      "home",
+                      "utensils",
+                      "coffee",
+                      "gift",
+                      "briefcase",
+                      "car",
+                      "music",
+                      "heart"
+                    ],
+                    "default": "users"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "enum": [
+                      "AED",
+                      "AFN",
+                      "ALL",
+                      "AMD",
+                      "ANG",
+                      "AOA",
+                      "ARS",
+                      "AUD",
+                      "AWG",
+                      "AZN",
+                      "BAM",
+                      "BBD",
+                      "BDT",
+                      "BHD",
+                      "BIF",
+                      "BMD",
+                      "BND",
+                      "BOB",
+                      "BRL",
+                      "BSD",
+                      "BTN",
+                      "BWP",
+                      "BYN",
+                      "BZD",
+                      "CAD",
+                      "CDF",
+                      "CHF",
+                      "CLP",
+                      "CNY",
+                      "COP",
+                      "CRC",
+                      "CUP",
+                      "CVE",
+                      "CZK",
+                      "DJF",
+                      "DKK",
+                      "DOP",
+                      "DZD",
+                      "EGP",
+                      "ERN",
+                      "ETB",
+                      "EUR",
+                      "FJD",
+                      "FKP",
+                      "GBP",
+                      "GEL",
+                      "GHS",
+                      "GIP",
+                      "GMD",
+                      "GNF",
+                      "GTQ",
+                      "GYD",
+                      "HKD",
+                      "HNL",
+                      "HTG",
+                      "HUF",
+                      "IDR",
+                      "ILS",
+                      "INR",
+                      "IQD",
+                      "IRR",
+                      "ISK",
+                      "JMD",
+                      "JOD",
+                      "JPY",
+                      "KES",
+                      "KGS",
+                      "KHR",
+                      "KMF",
+                      "KPW",
+                      "KRW",
+                      "KWD",
+                      "KYD",
+                      "KZT",
+                      "LAK",
+                      "LBP",
+                      "LKR",
+                      "LRD",
+                      "LSL",
+                      "LYD",
+                      "MAD",
+                      "MDL",
+                      "MGA",
+                      "MKD",
+                      "MMK",
+                      "MNT",
+                      "MOP",
+                      "MRU",
+                      "MUR",
+                      "MVR",
+                      "MWK",
+                      "MXN",
+                      "MYR",
+                      "MZN",
+                      "NAD",
+                      "NGN",
+                      "NIO",
+                      "NOK",
+                      "NPR",
+                      "NZD",
+                      "OMR",
+                      "PAB",
+                      "PEN",
+                      "PGK",
+                      "PHP",
+                      "PKR",
+                      "PLN",
+                      "PYG",
+                      "QAR",
+                      "RON",
+                      "RSD",
+                      "RUB",
+                      "RWF",
+                      "SAR",
+                      "SBD",
+                      "SCR",
+                      "SDG",
+                      "SEK",
+                      "SGD",
+                      "SHP",
+                      "SLE",
+                      "SOS",
+                      "SRD",
+                      "SSP",
+                      "STN",
+                      "SVC",
+                      "SYP",
+                      "SZL",
+                      "THB",
+                      "TJS",
+                      "TMT",
+                      "TND",
+                      "TOP",
+                      "TRY",
+                      "TTD",
+                      "TWD",
+                      "TZS",
+                      "UAH",
+                      "UGX",
+                      "USD",
+                      "UYU",
+                      "UZS",
+                      "VES",
+                      "VND",
+                      "VUV",
+                      "WST",
+                      "XAF",
+                      "XCD",
+                      "XCG",
+                      "XOF",
+                      "XPF",
+                      "YER",
+                      "ZAR",
+                      "ZMW",
+                      "ZWG"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "icon",
+                  "currency"
+                ]
+              }
+            },
+            "required": [
+              "circle"
+            ]
+          }
+        ]
+      },
+      "CircleIndex": {
+        "type": "object",
+        "properties": {
+          "circles": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Circle"
+            }
+          },
+          "invitations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IncomingCircleInvitation"
+            }
+          }
+        },
+        "required": [
+          "circles",
+          "invitations"
+        ]
+      },
+      "CircleBalance": {
+        "type": "object",
+        "properties": {
+          "member": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ]
+          },
+          "net": {
+            "type": "integer",
+            "description": "Positive gets back, negative owes. Every currency balances to zero."
+          }
+        },
+        "required": [
+          "member",
+          "currency",
+          "net"
+        ]
+      },
+      "CircleSuggestion": {
+        "type": "object",
+        "properties": {
+          "from_member": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "to_member": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ]
+          },
+          "amount_minor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999,
+            "description": "Integer minor units of the specified currency."
+          }
+        },
+        "required": [
+          "from_member",
+          "to_member",
+          "currency",
+          "amount_minor"
+        ]
+      },
+      "CircleExpenseInput": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "amount_minor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999,
+            "description": "Integer minor units of the specified currency."
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ]
+          },
+          "paid_by": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$",
+            "description": "Membership id of the payer; the payer need not be a participant."
+          },
+          "split_mode": {
+            "type": "string",
+            "enum": [
+              "even",
+              "percentage",
+              "exact"
+            ]
+          },
+          "shares": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "member": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]{15}$"
+                },
+                "value": {
+                  "type": "string",
+                  "description": "Omit for even splits. Percentage: decimal string with up to 2 decimals, all values total 100. Exact: decimal currency string; all values total the expense amount."
+                }
+              },
+              "required": [
+                "member"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 50
+          },
+          "payment_method": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO date with Z or an explicit offset. Omission uses server time."
+          }
+        },
+        "required": [
+          "title",
+          "amount_minor",
+          "currency",
+          "paid_by",
+          "split_mode",
+          "shares"
+        ]
+      },
+      "CircleExpenseEdit": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CircleExpenseInput"
+          },
+          {
+            "$ref": "#/components/schemas/RecordVersion"
+          }
+        ]
+      },
+      "CircleExpense": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "amount_minor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999,
+            "description": "Integer minor units of the specified currency."
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ]
+          },
+          "paid_by": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$",
+            "description": "Membership id of the payer; the payer need not be a participant."
+          },
+          "split_mode": {
+            "type": "string",
+            "enum": [
+              "even",
+              "percentage",
+              "exact"
+            ]
+          },
+          "shares": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "member": {
+                  "type": "string",
+                  "pattern": "^[a-z0-9]{15}$"
+                },
+                "amount_minor": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "percentage_bp": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                }
+              },
+              "required": [
+                "member",
+                "amount_minor"
+              ]
+            }
+          },
+          "payment_method": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO date with Z or an explicit offset. Omission uses server time."
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "circle": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "created_by": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Current record version; stale writes return 409."
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "currency",
+          "amount_minor",
+          "paid_by",
+          "created_by",
+          "split_mode",
+          "shares",
+          "occurred_at",
+          "version"
+        ]
+      },
+      "CircleSettlementInput": {
+        "type": "object",
+        "properties": {
+          "from_member": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "to_member": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ]
+          },
+          "amount_minor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999,
+            "description": "Integer minor units of the specified currency."
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO date with Z or an explicit offset. Omission uses server time."
+          }
+        },
+        "required": [
+          "from_member",
+          "to_member",
+          "currency",
+          "amount_minor"
+        ]
+      },
+      "CircleSettlement": {
+        "type": "object",
+        "properties": {
+          "from_member": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "to_member": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ]
+          },
+          "amount_minor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999,
+            "description": "Integer minor units of the specified currency."
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 1000
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO date with Z or an explicit offset. Omission uses server time."
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "circle": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "created_by": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Current record version; stale writes return 409."
+          }
+        },
+        "required": [
+          "id",
+          "from_member",
+          "to_member",
+          "currency",
+          "amount_minor",
+          "occurred_at",
+          "created_by",
+          "version"
+        ]
+      },
+      "CircleDetail": {
+        "type": "object",
+        "properties": {
+          "circle": {
+            "$ref": "#/components/schemas/Circle"
+          },
+          "me": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CircleMember"
+            }
+          },
+          "balances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CircleBalance"
+            }
+          },
+          "suggestions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CircleSuggestion"
+            }
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "currency": {
+                  "type": "string",
+                  "enum": [
+                    "AED",
+                    "AFN",
+                    "ALL",
+                    "AMD",
+                    "ANG",
+                    "AOA",
+                    "ARS",
+                    "AUD",
+                    "AWG",
+                    "AZN",
+                    "BAM",
+                    "BBD",
+                    "BDT",
+                    "BHD",
+                    "BIF",
+                    "BMD",
+                    "BND",
+                    "BOB",
+                    "BRL",
+                    "BSD",
+                    "BTN",
+                    "BWP",
+                    "BYN",
+                    "BZD",
+                    "CAD",
+                    "CDF",
+                    "CHF",
+                    "CLP",
+                    "CNY",
+                    "COP",
+                    "CRC",
+                    "CUP",
+                    "CVE",
+                    "CZK",
+                    "DJF",
+                    "DKK",
+                    "DOP",
+                    "DZD",
+                    "EGP",
+                    "ERN",
+                    "ETB",
+                    "EUR",
+                    "FJD",
+                    "FKP",
+                    "GBP",
+                    "GEL",
+                    "GHS",
+                    "GIP",
+                    "GMD",
+                    "GNF",
+                    "GTQ",
+                    "GYD",
+                    "HKD",
+                    "HNL",
+                    "HTG",
+                    "HUF",
+                    "IDR",
+                    "ILS",
+                    "INR",
+                    "IQD",
+                    "IRR",
+                    "ISK",
+                    "JMD",
+                    "JOD",
+                    "JPY",
+                    "KES",
+                    "KGS",
+                    "KHR",
+                    "KMF",
+                    "KPW",
+                    "KRW",
+                    "KWD",
+                    "KYD",
+                    "KZT",
+                    "LAK",
+                    "LBP",
+                    "LKR",
+                    "LRD",
+                    "LSL",
+                    "LYD",
+                    "MAD",
+                    "MDL",
+                    "MGA",
+                    "MKD",
+                    "MMK",
+                    "MNT",
+                    "MOP",
+                    "MRU",
+                    "MUR",
+                    "MVR",
+                    "MWK",
+                    "MXN",
+                    "MYR",
+                    "MZN",
+                    "NAD",
+                    "NGN",
+                    "NIO",
+                    "NOK",
+                    "NPR",
+                    "NZD",
+                    "OMR",
+                    "PAB",
+                    "PEN",
+                    "PGK",
+                    "PHP",
+                    "PKR",
+                    "PLN",
+                    "PYG",
+                    "QAR",
+                    "RON",
+                    "RSD",
+                    "RUB",
+                    "RWF",
+                    "SAR",
+                    "SBD",
+                    "SCR",
+                    "SDG",
+                    "SEK",
+                    "SGD",
+                    "SHP",
+                    "SLE",
+                    "SOS",
+                    "SRD",
+                    "SSP",
+                    "STN",
+                    "SVC",
+                    "SYP",
+                    "SZL",
+                    "THB",
+                    "TJS",
+                    "TMT",
+                    "TND",
+                    "TOP",
+                    "TRY",
+                    "TTD",
+                    "TWD",
+                    "TZS",
+                    "UAH",
+                    "UGX",
+                    "USD",
+                    "UYU",
+                    "UZS",
+                    "VES",
+                    "VND",
+                    "VUV",
+                    "WST",
+                    "XAF",
+                    "XCD",
+                    "XCG",
+                    "XOF",
+                    "XPF",
+                    "YER",
+                    "ZAR",
+                    "ZMW",
+                    "ZWG"
+                  ]
+                },
+                "total": {
+                  "type": "integer"
+                },
+                "count": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "invitations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CircleInvitation"
+            }
+          },
+          "expenses": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CircleExpense"
+                }
+              },
+              "page": {
+                "type": "integer"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalPages": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "items",
+              "page",
+              "totalItems",
+              "totalPages"
+            ]
+          },
+          "settlements": {
+            "type": "object",
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CircleSettlement"
+                }
+              },
+              "page": {
+                "type": "integer"
+              },
+              "totalItems": {
+                "type": "integer"
+              },
+              "totalPages": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "items",
+              "page",
+              "totalItems",
+              "totalPages"
+            ]
+          }
+        },
+        "required": [
+          "circle",
+          "me",
+          "members",
+          "balances",
+          "suggestions",
+          "totals",
+          "invitations",
+          "expenses",
+          "settlements"
+        ]
+      },
+      "InviteEmail": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 254
+          }
+        },
+        "required": [
+          "email"
+        ]
+      },
+      "JoinedCircle": {
+        "type": "object",
+        "properties": {
+          "circle": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "member": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        },
+        "required": [
+          "circle",
+          "member"
         ]
       }
     }

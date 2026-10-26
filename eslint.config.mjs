@@ -33,7 +33,7 @@ const eslintConfig = defineConfig([
     },
     {
         // PocketBase runs these files in its embedded JavaScript runtime.
-        files: ["pocketbase/**/*.js"],
+        files: ["pocketbase/**/*.{js,cjs}"],
         languageOptions: {
             sourceType: "commonjs",
             globals: {
@@ -58,6 +58,7 @@ const eslintConfig = defineConfig([
                 cronAdd: "readonly",
                 migrate: "readonly",
                 onRecordCreateRequest: "readonly",
+                onRecordDelete: "readonly",
                 onRecordUpdateRequest: "readonly",
                 onRecordValidate: "readonly",
                 routerAdd: "readonly",

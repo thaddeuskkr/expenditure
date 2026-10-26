@@ -1,0 +1,160 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+import { Input } from "../ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { DialogFooter } from "../ui/dialog";
+import { useWorkspace } from "../workspace-context";
+import {
+    errorMessage,
+    formatAmountInput,
+    fromZonedInput,
+    money,
+    parseMinorUnits,
+    zonedInput,
+} from "@/lib/domain";
+import { circlesApi, type CircleDetail, type SettlementSuggestion } from "@/lib/circles";
+import { CircleModal, CurrencySelect, FormError, SaveButton } from "./circle-dialogs";
+
+export function SettlementDialog({
+    data,
+    suggestion,
+    onClose,
+    onSaved,
+}: {
+    data: CircleDetail;
+    suggestion: SettlementSuggestion;
+    onClose: () => void;
+    onSaved: () => void;
+}) {
+    const { preferences } = useWorkspace();
+    const [currency, setCurrency] = useState(suggestion.currency),
+        [from, setFrom] = useState(suggestion.from_member),
+        [to, setTo] = useState(suggestion.to_member);
+    const [amount, setAmount] = useState(
+        formatAmountInput(suggestion.amount_minor, suggestion.currency),
+    );
+    const [busy, setBusy] = useState(false),
+        [error, setError] = useState("");
+    const net = (id: string) =>
+        data.balances.find((row) => row.member === id && row.currency === currency)?.net || 0;
+    const maximum = Math.max(0, Math.min(-net(from), net(to)));
+    const currencies = [...new Set(data.suggestions.map((row) => row.currency))];
+    async function submit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        setBusy(true);
+        setError("");
+        const form = new FormData(event.currentTarget);
+        try {
+            await circlesApi.settle(data.circle.id, {
+                from_member: from,
+                to_member: to,
+                currency,
+                amount_minor: parseMinorUnits(amount, currency),
+                notes: String(form.get("notes") || ""),
+                occurred_at: fromZonedInput(String(form.get("occurred_at")), preferences.timezone),
+            });
+            onSaved();
+            onClose();
+        } catch (e) {
+            setError(errorMessage(e));
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return (
+        <CircleModal
+            title="Record settlement"
+            description="Record a repayment made outside Expenditure. This does not transfer money."
+            busy={busy}
+            onClose={onClose}>
+            <form onSubmit={submit} className="space-y-5 pt-3">
+                <div>
+                    <label htmlFor="settlement-currency" className="field-label">
+                        Currency
+                    </label>
+                    <CurrencySelect
+                        id="settlement-currency"
+                        value={currency}
+                        codes={currencies}
+                        onChange={(code) => {
+                            setCurrency(code);
+                            const next = data.suggestions.find((row) => row.currency === code)!;
+                            setFrom(next.from_member);
+                            setTo(next.to_member);
+                            setAmount(formatAmountInput(next.amount_minor, code));
+                        }}
+                    />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    {(
+                        [
+                            ["From", from, setFrom, -1],
+                            ["To", to, setTo, 1],
+                        ] as const
+                    ).map(([label, value, setter, sign]) => (
+                        <div key={label}>
+                            <label htmlFor={`settlement-${label}`} className="field-label">
+                                {label}
+                            </label>
+                            <Select value={value} onValueChange={setter}>
+                                <SelectTrigger id={`settlement-${label}`} className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {data.members
+                                        .filter((m) => net(m.id) * sign > 0)
+                                        .map((member) => (
+                                            <SelectItem key={member.id} value={member.id}>
+                                                {member.name}
+                                                {member.id === data.me ? " (you)" : ""}
+                                            </SelectItem>
+                                        ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    ))}
+                </div>
+                <div>
+                    <label htmlFor="settlement-amount" className="field-label">
+                        Amount ({currency})
+                    </label>
+                    <Input
+                        id="settlement-amount"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        inputMode="decimal"
+                        required
+                        autoFocus
+                    />
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                        Remaining: {money(maximum, currency)} {currency}
+                    </p>
+                </div>
+                <div>
+                    <label htmlFor="settlement-date" className="field-label">
+                        Date & time
+                    </label>
+                    <Input
+                        id="settlement-date"
+                        name="occurred_at"
+                        type="datetime-local"
+                        defaultValue={zonedInput(new Date(), preferences.timezone)}
+                        required
+                    />
+                </div>
+                <div>
+                    <label htmlFor="settlement-notes" className="field-label">
+                        Notes (optional)
+                    </label>
+                    <Input id="settlement-notes" name="notes" maxLength={1000} />
+                </div>
+                <FormError error={error} />
+                <DialogFooter>
+                    <SaveButton busy={busy} label="Record settlement" />
+                </DialogFooter>
+            </form>
+        </CircleModal>
+    );
+}

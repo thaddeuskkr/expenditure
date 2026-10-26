@@ -29,6 +29,7 @@ import {
     Settings2,
     Target,
     Wallet,
+    Users,
     X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -72,6 +73,8 @@ import { SpendingChart } from "./spending-chart";
 import { ApiKeys } from "./api-keys";
 import { WorkspaceContext } from "./workspace-context";
 import { WorkspaceSettings } from "./workspace-settings";
+import { CirclesView } from "./circles/circles-view";
+import { CircleInvitationGate } from "./circles/circle-invitation";
 import { pb } from "@/lib/pocketbase";
 import { downloadExpenses, type ExportFormat } from "@/lib/export";
 import {
@@ -98,6 +101,7 @@ type Section =
     "Transactions" |
     "Categories" |
     "Budgets" |
+    "Circles" |
     "API keys" |
     "Settings";
 const navigation = [
@@ -105,6 +109,7 @@ const navigation = [
     { name: "Transactions", icon: ArrowDownLeft },
     { name: "Categories", icon: FolderOpen },
     { name: "Budgets", icon: Target },
+    { name: "Circles", icon: Users },
 ] as const;
 function subscribeDesktop(callback: () => void) {
     const media = window.matchMedia("(min-width: 1024px)");
@@ -228,6 +233,7 @@ function Workspace({
     onSignOut: () => void;
 }) {
     const [section, setSection] = useState<Section>("Overview");
+    const [focusedCircle, setFocusedCircle] = useState<string>();
     const [configuration, setConfiguration] = useState(initialConfiguration);
     const preferences = configuration.preferences;
     const [rates, setRates] = useState<ExchangeRates>(EMPTY_RATES);
@@ -311,6 +317,7 @@ function Workspace({
             if (event.key === "Escape") setMobileNav(false);
             if (
                 event.key.toLowerCase() === "n" &&
+                section !== "Circles" &&
                 !event.metaKey &&
                 !event.ctrlKey &&
                 !event.altKey &&
@@ -326,7 +333,7 @@ function Workspace({
 
         window.addEventListener("keydown", onKey);
         return () => window.removeEventListener("keydown", onKey);
-    }, []);
+    }, [section]);
     useEffect(() => {
         const onFocus = () => {
             refresh();
@@ -1158,6 +1165,7 @@ function Workspace({
                             </section>
                         )}
                         {section === "API keys" && <ApiKeys timezone={timezone} />}
+                        {section === "Circles" && <CirclesView key={focusedCircle || "circles"} initialCircle={focusedCircle} />}
                         {section === "Settings" && (
                             <WorkspaceSettings
                                 key={preferences.id || "defaults"}
@@ -1182,6 +1190,11 @@ function Workspace({
                         )}
                     </main>
                 </div>
+                <CircleInvitationGate onJoined={(id) => {
+                    setFocusedCircle(id);
+                    navigate("Circles");
+                }}
+                />
                 {editor && (
                     <ExpenseEditor
                         key={typeof editor === "string" ? "new" : editor.id}

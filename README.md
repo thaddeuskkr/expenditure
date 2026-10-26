@@ -13,6 +13,7 @@ Production app: **https://expenses.tkkr.dev** on Vercel. API: **https://e.tkkr.d
 - Custom categories with names, colors, renaming, and archiving. Changes belong to each user.
 - Choose enabled currencies from 155 supported fiat currencies and set a main currency for combined totals, conversion previews, and budgets. Defaults: SGD and Asia/Singapore.
 - Online reference rates cached in PocketBase, checked hourly. Original amounts stay intact; dated conversions are estimates using the latest available rates.
+- Circles with owner controls, email-bound invitations, equal/percentage/exact splits, per-currency balances, and recorded settlements.
 - Scoped, expiring, revocable personal API keys for adding or reading expenses from Shortcuts and other tools. Secrets are shown once and only SHA-256 hashes are stored.
 - Idempotent API writes, live expense updates through PocketBase realtime, and refresh on window focus.
 - Responsive layouts, accessible shadcn dialogs and menus, keyboard shortcut `N` for a new expense, and reduced-motion support.
@@ -37,7 +38,7 @@ See [pocketbase/README.md](pocketbase/README.md). The backend source lives in `p
 
 Upload the hooks and migrations next to your **existing** PocketBase executable, or to the directories mapped to your PocketBase container. Restart PocketBase to apply the migrations and load the routes. Keep the existing `pb_data` and OIDC configuration. Use PocketBase **0.40.6**, the version validated by the integration tests; do not assume compatibility with older versions.
 
-The migrations add `expenses`, `budgets`, `preferences`, `api_keys`, `categories`, and `exchange_rates`. It references the existing `users` collection and does not replace it or change its provider settings.
+The migrations add the personal expense collections, categories, exchange-rate cache, and five Circles collections. They reference the existing `users` collection without replacing it or changing its provider settings.
 
 ## Architecture
 
@@ -55,6 +56,8 @@ Browser session tokens use PocketBase’s standard local auth store. API keys ar
 - `src/components/`: named feature components for transactions, expense and budget forms, category reports, settings, and API keys. `ui/` contains shared shadcn controls.
 - `src/lib/domain.ts`: record types, currency amounts, conversions, and timezone calculations. Amount helpers use currency minor units; the database keeps the legacy `amount_cents` field name.
 - `src/lib/export.ts`: CSV and Excel formatting and downloads.
+- `src/components/circles/` and `src/lib/circles.ts`: shared-expense screens, dialogs, types, and session-authenticated API calls.
+- `pocketbase/pb_hooks/circles-core.cjs`: pure split calculations shared by the browser and server; `circles-service.js` enforces membership, owner permissions, and ledger invariants.
 - `pocketbase/pb_hooks/`: server-side validation, owned categories, API keys, report aggregation, and cached exchange rates.
 - `pocketbase/pb_migrations/`: ordered database schema changes. Keep applied migrations intact when adding new ones.
 - `tests/`: amount, export, API isolation, and upgrade checks.
@@ -70,6 +73,18 @@ PocketBase fetches [Frankfurter v2](https://frankfurter.dev/) reference rates fr
 Conversions use the latest cached rates even for historical expenses, rounded once per expense into the main currency. They are estimates, not the actual card or bank exchange rate. Each expense retains its original amount and currency. Failed refreshes preserve the last good quotes; the app flags a cache older than 36 hours. Missing quotes or observations over 14 days old are excluded from converted totals, with an explicit incomplete-total warning. Same-currency expenses need no exchange rate.
 
 For an existing installation, upload all updated `pb_hooks` files, including `currencies.json`, and the new migration `1793100000_categories_currencies_rates.js`, then restart PocketBase. Back up first. The upgrade preserves expense and budget IDs, amounts, categories, preferences, API keys, and idempotency data. See the backend guide for installation and rollback details.
+
+## Circles
+
+Create a circle from **Circles**, choose its name, icon, and default currency, then invite friends by email. Invitations appear in their Circles inbox; owners can also copy a link to share. Only a signed-in account with the matching **verified email** can join. Links expire after seven days and can be revoked. No invitation email is sent by this version.
+
+A shared expense has one payer and any selection of circle members as participants, including just one person. Choose **Equal**, **Percentage**, or **Exact amounts**. Percentages support two decimal places and must total 100%; exact amounts must sum to the expense total using that currency’s precision. Equal and percentage splits distribute rounding remainders deterministically, so every minor unit is accounted for. The browser and PocketBase use the same calculation module.
+
+Balances and settlements remain in the original currency of each expense. The app shows approximate conversions on foreign-currency expenses, but exchange-rate changes never change a debt. Record full or partial repayments made elsewhere from the Balances tab. The server rejects overpayments and stale edits. Settlements record history; they do not transfer money. Shared expenses have their own circle ledger and do not create personal expense records.
+
+The owner can rename the circle, choose an icon, change its default currency, invite/remove members, transfer ownership to an active member, or permanently delete the circle after typing its name. Members can add expenses and edit/delete their own entries; owners can manage all entries. A member can record a repayment they participate in, and the owner can record one for any pair. Only the author or owner can undo a repayment. Members must settle all currencies before leaving or being removed; their historical identities remain in the ledger. Changes to history cannot alter a former member’s balance.
+
+Install **all** updated `pb_hooks` files, including `circles-core.cjs`, and the new migration `1793103600_circles.js`, then restart PocketBase and redeploy the frontend. Existing personal records and OAuth settings are preserved. See [the backend guide](pocketbase/README.md#circles-api) for routes, limits, and payloads. Circle data refreshes on focus, after changes, and every 20 seconds while visible.
 
 ## Timezone
 
@@ -105,6 +120,6 @@ POCKETBASE_BINARY=/absolute/path/to/pocketbase pnpm test:backend
 
 `format` applies ESLint's layout fixes. The style rules match tkkr.dev: four-space indentation, double quotes, semicolons, and consistent JSX formatting. `pnpm lint` checks all JavaScript and TypeScript source, configuration, tests, PocketBase hooks, and migrations. Only dependencies, generated output, and PocketBase runtime data are excluded. PocketBase files use their own runtime globals and CommonJS loading.
 
-`validate` runs ESLint, TypeScript, domain and export tests, and a production build. The backend tests start a separate PocketBase process with a fresh temporary database and two disposable users; they never contact `e.tkkr.dev`. They cover ownership isolation, locked key collections, secret hashing, input validation, scopes, retry deduplication (including concurrent requests), timezone boundaries, currency precision, custom categories and category renames, main-currency totals, cached-rate outages, existing-database upgrades, budget uniqueness, expiration, revocation, and user deletion.
+`validate` runs ESLint, TypeScript, domain and export tests, and a production build. The backend tests start a separate PocketBase process with a fresh temporary database and two disposable users; they never contact `e.tkkr.dev`. They cover ownership isolation, locked key collections, secret hashing, input validation, scopes, retry deduplication (including concurrent requests), timezone boundaries, currency precision, custom categories and category renames, main-currency totals, cached-rate outages, existing-database upgrades, budget uniqueness, expiration, revocation, and user deletion. Circles checks additionally cover verified invitations, allocation rounding, ownership transfer, cross-circle isolation, concurrent repayments/edits/removal, and history preservation.
 
 Validated locally against PocketBase 0.40.6. Hosted tkID login and installation on `e.tkkr.dev` still require your deployment and a real interactive sign-in.

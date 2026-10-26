@@ -1,0 +1,761 @@
+const core = require(`${__hooks}/circles-core.cjs`);
+const configuration = require(`${__hooks}/configuration.js`);
+
+function body(e, allowed) {
+    const data = e.requestInfo().body;
+    if (!data || typeof data !== "object" || Array.isArray(data))
+        throw new BadRequestError("Send a JSON object.");
+    Object.keys(data).forEach((key) => {
+        if (allowed.indexOf(key) < 0) throw new BadRequestError(`Unexpected field: ${key}.`);
+    });
+    return data;
+}
+
+function text(value, label, maximum, required) {
+    if (value === undefined && !required) return "";
+    if (typeof value !== "string" || value.length > maximum || (required && !value.trim()))
+        throw new BadRequestError(
+            `${label} must be ${required ? "non-empty text" : "text"} of at most ${maximum} characters.`,
+        );
+    return required ? value.trim() : value;
+}
+
+function currency(code) {
+    if (typeof code !== "string" || !configuration.currency(code))
+        throw new BadRequestError("Choose a supported currency.");
+    return code;
+}
+
+function amount(value) {
+    if (!Number.isSafeInteger(value) || value < 1 || value > core.MAX_AMOUNT)
+        throw new BadRequestError("Amount must be a positive integer in currency minor units.");
+    return value;
+}
+
+function occurredAt(value) {
+    if (value === undefined) return new Date().toISOString();
+    if (
+        typeof value !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(
+            value,
+        ) ||
+        !isFinite(Date.parse(value))
+    )
+        throw new BadRequestError("Use an ISO date with a timezone.");
+    const local = value.slice(0, 16) + ":" + (value.match(/T\d{2}:\d{2}:(\d{2})/) || ["", "00"])[1];
+    if (
+        !isFinite(Date.parse(local + "Z")) ||
+        new Date(local + "Z").toISOString().slice(0, 19) !== local
+    )
+        throw new BadRequestError("Choose a valid calendar date.");
+    return new Date(value).toISOString();
+}
+
+function checkVersion(record, expected) {
+    if (!Number.isSafeInteger(expected) || expected !== record.getInt("version"))
+        throw new ApiError(409, "This item changed. Reload it before saving again.");
+}
+
+function reply(e, data, status) {
+    e.response.header().set("Cache-Control", "no-store");
+    return e.json(status || 200, data);
+}
+
+function write(e, callback, status) {
+    let result;
+    e.app.runInTransaction((app) => {
+        result = callback(app);
+    });
+    return reply(e, result, status);
+}
+
+function record(app, collection, fields) {
+    const result = new Record(app.findCollectionByNameOrId(collection));
+    result.load(fields);
+    app.save(result);
+    return result;
+}
+
+function find(app, collection, id) {
+    if (typeof id !== "string" || !/^[a-z0-9]{15}$/.test(id))
+        throw new NotFoundError("Item not found.");
+    try {
+        return app.findRecordById(collection, id);
+    } catch {
+        throw new NotFoundError("Item not found.");
+    }
+}
+
+function memberRecords(app, circle) {
+    return app.findRecordsByFilter("circle_members", "circle = {:circle}", "created,id", 0, 0, {
+        circle,
+    });
+}
+
+function access(app, circleId, user, ownerOnly) {
+    const circle = find(app, "circles", circleId);
+    let member;
+    try {
+        member = app.findFirstRecordByFilter(
+            "circle_members",
+            "circle = {:circle} && user = {:user} && active = true",
+            { circle: circle.id, user },
+        );
+    } catch {
+        throw new NotFoundError("Circle not found.");
+    }
+
+    const isOwner = circle.getString("owner") === user;
+    if (ownerOnly && !isOwner) throw new ForbiddenError("Only the circle owner can do this.");
+    return { circle, member, isOwner };
+}
+
+function displayName(user) {
+    return (
+        user.getString("name") ||
+        user.getString("username") ||
+        user.getString("email").split("@")[0] ||
+        "Member"
+    ).slice(0, 80);
+}
+
+function memberDTO(app, member) {
+    let user = null;
+    if (member.getString("user")) {
+        try {
+            const account = app.findRecordById("users", member.getString("user"));
+            user = {
+                id: account.id,
+                collectionId: account.collection().id,
+                avatar: account.getString("avatar"),
+                name: displayName(account),
+            };
+        } catch {
+            /* The saved membership name survives account deletion. */
+        }
+    }
+
+    return {
+        id: member.id,
+        name: user ? user.name : member.getString("name"),
+        user,
+        active: member.getBool("active") && !!user,
+    };
+}
+
+function circleDTO(app, circle, user) {
+    return {
+        ...circle.publicExport(),
+        is_owner: circle.getString("owner") === user,
+        member_count: app.countRecords(
+            "circle_members",
+            $dbx.exp("circle = {:circle} AND active = true AND user != ''", { circle: circle.id }),
+        ),
+    };
+}
+
+function sharesOf(expense) {
+    return JSON.parse(expense.getString("shares"));
+}
+
+function expenseDTO(expense) {
+    return { ...expense.publicExport(), shares: sharesOf(expense) };
+}
+
+function balances(app, circle) {
+    const rows = arrayOf(new DynamicModel({ member: "", currency: "", net: 0 }));
+    app.db()
+        .newQuery(
+            `
+        SELECT member, currency, SUM(delta) AS net FROM (
+            SELECT paid_by AS member, currency, amount_minor AS delta FROM circle_expenses WHERE circle = {:circle}
+            UNION ALL
+            SELECT json_extract(part.value, '$.member') AS member, expense.currency,
+                -CAST(json_extract(part.value, '$.amount_minor') AS INTEGER) AS delta
+            FROM circle_expenses AS expense, json_each(expense.shares) AS part WHERE expense.circle = {:circle}
+            UNION ALL
+            SELECT from_member AS member, currency, amount_minor AS delta FROM circle_settlements WHERE circle = {:circle}
+            UNION ALL
+            SELECT to_member AS member, currency, -amount_minor AS delta FROM circle_settlements WHERE circle = {:circle}
+        ) GROUP BY member, currency
+    `,
+        )
+        .bind({ circle })
+        .all(rows);
+    return rows.map((row) => ({ member: row.member, currency: row.currency, net: row.net }));
+}
+
+function balanceMap(rows) {
+    const result = Object.create(null);
+    rows.forEach((row) => {
+        result[row.member + ":" + row.currency] = row.net;
+    });
+    return result;
+}
+
+function preserveFormerBalances(app, circle, members, before) {
+    const former = members
+        .filter((member) => !member.getBool("active") || !member.getString("user"))
+        .map((member) => member.id);
+    if (!former.length) return;
+    const previous = balanceMap(before),
+        current = balanceMap(balances(app, circle));
+    Array.from(new Set(Object.keys(previous).concat(Object.keys(current)))).forEach((key) => {
+        if (former.indexOf(key.split(":")[0]) >= 0 && (previous[key] || 0) !== (current[key] || 0))
+            throw new BadRequestError(
+                "This change would alter a former member's balance. Invite them back before changing this history.",
+            );
+    });
+}
+
+function memberInCircle(members, id, formerAllowed) {
+    const member = members.find((item) => item.id === id);
+    if (
+        !member ||
+        ((!member.getBool("active") || !member.getString("user")) &&
+            (formerAllowed || []).indexOf(id) < 0)
+    )
+        throw new BadRequestError("Choose active members of this circle.");
+    return member;
+}
+
+function page(app, collection, circle, requested, mapper) {
+    const total = app.countRecords(collection, $dbx.hashExp({ circle }));
+    const pageNumber = Math.max(
+        1,
+        Math.min(Math.max(1, Math.ceil(total / 25)), parseInt(requested, 10) || 1),
+    );
+    return {
+        items: app
+            .findRecordsByFilter(
+                collection,
+                "circle = {:circle}",
+                "-occurred_at,-created,-id",
+                25,
+                (pageNumber - 1) * 25,
+                { circle },
+            )
+            .map(mapper || ((r) => r.publicExport())),
+        page: pageNumber,
+        totalItems: total,
+        totalPages: Math.max(1, Math.ceil(total / 25)),
+    };
+}
+
+function safeInvitation(invitation) {
+    return {
+        id: invitation.id,
+        email: invitation.getString("email"),
+        expires_at: invitation.getString("expires_at"),
+    };
+}
+
+function invitationFor(app, id, auth) {
+    const invitation = find(app, "circle_invitations", id);
+    if (!auth.getBool("verified"))
+        throw new ForbiddenError("Use an account with a verified email to accept invitations.");
+    if (invitation.getString("email") !== auth.getString("email").toLowerCase())
+        throw new ForbiddenError("Sign in with the account this invitation was sent to.");
+    if (
+        invitation.getString("revoked_at") ||
+        invitation.getString("accepted_at") ||
+        Date.parse(invitation.getString("expires_at")) <= Date.now()
+    )
+        throw new BadRequestError("This invitation has expired or is no longer available.");
+    return invitation;
+}
+
+function invitationDTO(app, invitation) {
+    const circle = find(app, "circles", invitation.getString("circle"));
+    return {
+        ...safeInvitation(invitation),
+        circle: {
+            id: circle.id,
+            name: circle.getString("name"),
+            icon: circle.getString("icon"),
+            currency: circle.getString("currency"),
+        },
+    };
+}
+
+function list(e) {
+    const memberships = e.app.findRecordsByFilter(
+        "circle_members",
+        "user = {:user} && active = true",
+        "-created",
+        0,
+        0,
+        { user: e.auth.id },
+    );
+    const circles = memberships.map((member) =>
+        circleDTO(e.app, find(e.app, "circles", member.getString("circle")), e.auth.id),
+    );
+    let invitations = [];
+    if (e.auth.getBool("verified")) {
+        const pending = e.app.findRecordsByFilter(
+            "circle_invitations",
+            "email = {:email} && accepted_at = '' && revoked_at = '' && expires_at > {:now}",
+            "-created",
+            100,
+            0,
+            {
+                email: e.auth.getString("email").toLowerCase(),
+                now: new Date().toISOString().replace("T", " "),
+            },
+        );
+        invitations = pending.map((invitation) => invitationDTO(e.app, invitation));
+    }
+
+    return reply(e, { circles, invitations });
+}
+
+function create(e) {
+    const data = body(e, ["name", "icon", "currency"]);
+    const name = text(data.name, "Circle name", 80, true);
+    const code = currency(
+        data.currency === undefined ?
+            configuration.preferences(e.app, e.auth.id).currency :
+            data.currency,
+    );
+    const icon = data.icon === undefined ? "users" : data.icon;
+    if (core.ICONS.indexOf(icon) < 0) throw new BadRequestError("Choose a supported circle icon.");
+    return write(
+        e,
+        (app) => {
+            if (app.countRecords("circles", $dbx.hashExp({ owner: e.auth.id })) >= 50)
+                throw new BadRequestError("You can own up to 50 circles.");
+            if (
+                app.countRecords(
+                    "circle_members",
+                    $dbx.hashExp({ user: e.auth.id, active: true }),
+                ) >= 100
+            )
+                throw new BadRequestError("You can belong to up to 100 circles.");
+            const circle = record(app, "circles", {
+                name,
+                icon,
+                currency: code,
+                owner: e.auth.id,
+                version: 1,
+            });
+            record(app, "circle_members", {
+                circle: circle.id,
+                user: e.auth.id,
+                name: displayName(e.auth),
+                active: true,
+            });
+            return circleDTO(app, circle, e.auth.id);
+        },
+        201,
+    );
+}
+
+function detail(e) {
+    const { circle, member, isOwner } = access(e.app, e.request.pathValue("id"), e.auth.id);
+    const members = memberRecords(e.app, circle.id).map((row) => memberDTO(e.app, row));
+    const totals = arrayOf(new DynamicModel({ currency: "", total: 0, count: 0 }));
+    e.app
+        .db()
+        .newQuery(
+            "SELECT currency, SUM(amount_minor) AS total, COUNT(*) AS count FROM circle_expenses WHERE circle = {:circle} GROUP BY currency",
+        )
+        .bind({ circle: circle.id })
+        .all(totals);
+    const net = balances(e.app, circle.id);
+    const query = e.request.url.query();
+    const invitations = isOwner ?
+            e.app
+                .findRecordsByFilter(
+                    "circle_invitations",
+                    "circle = {:circle} && accepted_at = '' && revoked_at = '' && expires_at > {:now}",
+                    "-created",
+                    100,
+                    0,
+                    { circle: circle.id, now: new Date().toISOString().replace("T", " ") },
+                )
+                .map(safeInvitation) :
+            [];
+    return reply(e, {
+        circle: circleDTO(e.app, circle, e.auth.id),
+        me: member.id,
+        members,
+        balances: net,
+        suggestions: core.suggestions(net),
+        totals: totals.map((row) => ({
+            currency: row.currency,
+            total: row.total,
+            count: row.count,
+        })),
+        invitations,
+        expenses: page(e.app, "circle_expenses", circle.id, query.get("expense_page"), expenseDTO),
+        settlements: page(e.app, "circle_settlements", circle.id, query.get("settlement_page")),
+    });
+}
+
+function update(e) {
+    const data = body(e, ["name", "icon", "currency", "owner_member", "version"]);
+    return write(e, (app) => {
+        const { circle } = access(app, e.request.pathValue("id"), e.auth.id, true);
+        checkVersion(circle, data.version);
+        if (data.name !== undefined) circle.set("name", text(data.name, "Circle name", 80, true));
+        if (data.icon !== undefined) {
+            if (core.ICONS.indexOf(data.icon) < 0)
+                throw new BadRequestError("Choose a supported icon.");
+            circle.set("icon", data.icon);
+        }
+
+        if (data.currency !== undefined) circle.set("currency", currency(data.currency));
+        if (data.owner_member !== undefined) {
+            const next = memberInCircle(memberRecords(app, circle.id), data.owner_member);
+            if (next.getString("user") === e.auth.id)
+                throw new BadRequestError("Choose another member as owner.");
+            circle.set("owner", next.getString("user"));
+        }
+
+        circle.set("version", circle.getInt("version") + 1);
+        app.save(circle);
+        return circleDTO(app, circle, e.auth.id);
+    });
+}
+
+function remove(e) {
+    const data = body(e, ["confirmation", "version"]);
+    return write(e, (app) => {
+        const { circle } = access(app, e.request.pathValue("id"), e.auth.id, true);
+        checkVersion(circle, data.version);
+        if (data.confirmation !== circle.getString("name"))
+            throw new BadRequestError("Enter the circle name to confirm deletion.");
+        app.delete(circle);
+        return { deleted: true };
+    });
+}
+
+function invite(e) {
+    const data = body(e, ["email"]);
+    const email = text(data.email, "Email", 254, true).toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+        throw new BadRequestError("Enter a valid email address.");
+    return write(
+        e,
+        (app) => {
+            const { circle } = access(app, e.request.pathValue("id"), e.auth.id, true);
+            if (
+                memberRecords(app, circle.id).filter(
+                    (m) => m.getBool("active") && m.getString("user"),
+                ).length >= 50
+            )
+                throw new BadRequestError("A circle can have up to 50 active members.");
+            if (email === e.auth.getString("email").toLowerCase())
+                throw new BadRequestError("You already belong to this circle.");
+            const matching = app.findRecordsByFilter("users", "email = {:email}", "", 1, 0, {
+                email,
+            });
+            if (
+                matching.length &&
+                app.countRecords(
+                    "circle_members",
+                    $dbx.hashExp({ circle: circle.id, user: matching[0].id, active: true }),
+                )
+            )
+                throw new BadRequestError("This person already belongs to the circle.");
+            const pending = app.findRecordsByFilter(
+                "circle_invitations",
+                "circle = {:circle} && email = {:email} && accepted_at = '' && revoked_at = ''",
+                "-created",
+                0,
+                0,
+                { circle: circle.id, email },
+            );
+            // A fresh invitation replaces older links for the same address.
+            pending.forEach((old) => {
+                old.set("revoked_at", new Date().toISOString());
+                app.save(old);
+            });
+            if (
+                app.countRecords(
+                    "circle_invitations",
+                    $dbx.exp(
+                        "circle = {:circle} AND accepted_at = '' AND revoked_at = '' AND expires_at > {:now}",
+                        { circle: circle.id, now: new Date().toISOString().replace("T", " ") },
+                    ),
+                ) >= 100
+            )
+                throw new BadRequestError("Revoke an invitation before creating another.");
+            return safeInvitation(
+                record(app, "circle_invitations", {
+                    circle: circle.id,
+                    email,
+                    expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+                }),
+            );
+        },
+        201,
+    );
+}
+
+function previewInvitation(e) {
+    return reply(
+        e,
+        invitationDTO(e.app, invitationFor(e.app, e.request.pathValue("invitation"), e.auth)),
+    );
+}
+
+function acceptInvitation(e) {
+    return write(e, (app) => {
+        const invitation = invitationFor(app, e.request.pathValue("invitation"), e.auth);
+        const circle = find(app, "circles", invitation.getString("circle"));
+        const members = memberRecords(app, circle.id);
+        if (members.filter((m) => m.getBool("active") && m.getString("user")).length >= 50)
+            throw new BadRequestError("This circle is full.");
+        if (
+            app.countRecords("circle_members", $dbx.hashExp({ user: e.auth.id, active: true })) >=
+            100
+        )
+            throw new BadRequestError("You can belong to up to 100 circles.");
+        let member = members.find((m) => m.getString("user") === e.auth.id);
+        if (member) {
+            if (member.getBool("active"))
+                throw new BadRequestError("You already belong to this circle.");
+            member.set("active", true);
+            member.set("name", displayName(e.auth));
+            app.save(member);
+        } else {
+            member = record(app, "circle_members", {
+                circle: circle.id,
+                user: e.auth.id,
+                name: displayName(e.auth),
+                active: true,
+            });
+        }
+
+        invitation.set("accepted_at", new Date().toISOString());
+        app.save(invitation);
+        return { circle: circle.id, member: member.id };
+    });
+}
+
+function revokeInvitation(e) {
+    return write(e, (app) => {
+        const invitation = find(app, "circle_invitations", e.request.pathValue("invitation"));
+        const recipient =
+            e.auth.getBool("verified") &&
+            invitation.getString("email") === e.auth.getString("email").toLowerCase();
+        if (!recipient) access(app, invitation.getString("circle"), e.auth.id, true);
+        invitation.set("revoked_at", new Date().toISOString());
+        app.save(invitation);
+        return { revoked: true };
+    });
+}
+
+function removeMember(e) {
+    return write(e, (app) => {
+        const { circle, member: actor } = access(app, e.request.pathValue("id"), e.auth.id);
+        const target = find(app, "circle_members", e.request.pathValue("member"));
+        if (target.getString("circle") !== circle.id) throw new NotFoundError("Member not found.");
+        if (actor.id !== target.id && circle.getString("owner") !== e.auth.id)
+            throw new ForbiddenError("Only the owner can remove another member.");
+        if (target.getString("user") === circle.getString("owner"))
+            throw new BadRequestError("Transfer ownership before leaving the circle.");
+        if (balances(app, circle.id).some((row) => row.member === target.id && row.net !== 0))
+            throw new BadRequestError("Settle this member's balances in every currency first.");
+        target.set("active", false);
+        app.save(target);
+        return { removed: true };
+    });
+}
+
+function saveExpense(e) {
+    const data = body(e, [
+        "title",
+        "amount_minor",
+        "currency",
+        "paid_by",
+        "split_mode",
+        "shares",
+        "payment_method",
+        "notes",
+        "occurred_at",
+        "version",
+    ]);
+    const editing = e.request.pathValue("expense");
+    return write(
+        e,
+        (app) => {
+            const { circle, member, isOwner } = access(app, e.request.pathValue("id"), e.auth.id);
+            let expense = null;
+            if (editing) {
+                expense = find(app, "circle_expenses", editing);
+                if (expense.getString("circle") !== circle.id)
+                    throw new NotFoundError("Expense not found.");
+                if (!isOwner && expense.getString("created_by") !== member.id)
+                    throw new ForbiddenError("Only the author or owner can edit this expense.");
+                checkVersion(expense, data.version);
+            } else if (
+                app.countRecords("circle_expenses", $dbx.hashExp({ circle: circle.id })) >= 10000
+            ) {
+                throw new BadRequestError("This circle has reached its expense limit.");
+            }
+
+            const members = memberRecords(app, circle.id),
+                before = balances(app, circle.id);
+            const formerAllowed = expense ?
+                    sharesOf(expense)
+                        .map((share) => share.member)
+                        .concat(expense.getString("paid_by")) :
+                    [];
+            const code = currency(data.currency),
+                total = amount(data.amount_minor);
+            memberInCircle(members, data.paid_by, formerAllowed);
+            let shares;
+            try {
+                shares = core.allocate(
+                    total,
+                    data.split_mode,
+                    data.shares,
+                    configuration.currency(code).digits,
+                );
+            } catch (error) {
+                throw new BadRequestError(String(error.message || error));
+            }
+
+            shares.forEach((share) => memberInCircle(members, share.member, formerAllowed));
+            const fields = {
+                circle: circle.id,
+                title: text(data.title, "Title", 160, true),
+                amount_minor: total,
+                currency: code,
+                paid_by: data.paid_by,
+                split_mode: data.split_mode,
+                shares,
+                payment_method: text(data.payment_method, "Payment method", 80, false),
+                notes: text(data.notes, "Notes", 2000, false),
+                occurred_at: occurredAt(data.occurred_at),
+                version: expense ? expense.getInt("version") + 1 : 1,
+            };
+            if (expense) {
+                expense.load(fields);
+                app.save(expense);
+            } else expense = record(app, "circle_expenses", { ...fields, created_by: member.id });
+            preserveFormerBalances(app, circle.id, members, before);
+            return expenseDTO(expense);
+        },
+        editing ? 200 : 201,
+    );
+}
+
+function deleteExpense(e) {
+    const data = body(e, ["version"]);
+    return write(e, (app) => {
+        const { circle, member, isOwner } = access(app, e.request.pathValue("id"), e.auth.id);
+        const expense = find(app, "circle_expenses", e.request.pathValue("expense"));
+        if (expense.getString("circle") !== circle.id)
+            throw new NotFoundError("Expense not found.");
+        if (!isOwner && expense.getString("created_by") !== member.id)
+            throw new ForbiddenError("Only the author or owner can delete this expense.");
+        checkVersion(expense, data.version);
+        const before = balances(app, circle.id),
+            members = memberRecords(app, circle.id);
+        app.delete(expense);
+        preserveFormerBalances(app, circle.id, members, before);
+        return { deleted: true };
+    });
+}
+
+function settle(e) {
+    const data = body(e, [
+        "from_member",
+        "to_member",
+        "currency",
+        "amount_minor",
+        "notes",
+        "occurred_at",
+    ]);
+    return write(
+        e,
+        (app) => {
+            const { circle, member, isOwner } = access(app, e.request.pathValue("id"), e.auth.id);
+            const members = memberRecords(app, circle.id);
+            const from = members.find((m) => m.id === data.from_member),
+                to = members.find((m) => m.id === data.to_member);
+            if (!from || !to || from.id === to.id)
+                throw new BadRequestError("Choose two different circle members.");
+            if (!isOwner && member.id !== from.id && member.id !== to.id)
+                throw new ForbiddenError(
+                    "Only a participant or the owner can record this settlement.",
+                );
+            const code = currency(data.currency),
+                total = amount(data.amount_minor);
+            const rows = balanceMap(balances(app, circle.id));
+            const debt = -(rows[from.id + ":" + code] || 0),
+                credit = rows[to.id + ":" + code] || 0;
+            if (total > Math.min(debt, credit))
+                throw new BadRequestError(
+                    "Settlement exceeds the remaining balance in this currency.",
+                );
+            if (
+                app.countRecords("circle_settlements", $dbx.hashExp({ circle: circle.id })) >= 10000
+            )
+                throw new BadRequestError("This circle has reached its settlement limit.");
+            return record(app, "circle_settlements", {
+                circle: circle.id,
+                from_member: from.id,
+                to_member: to.id,
+                currency: code,
+                amount_minor: total,
+                notes: text(data.notes, "Notes", 1000, false),
+                occurred_at: occurredAt(data.occurred_at),
+                created_by: member.id,
+                version: 1,
+            }).publicExport();
+        },
+        201,
+    );
+}
+
+function deleteSettlement(e) {
+    const data = body(e, ["version"]);
+    return write(e, (app) => {
+        const { circle, member, isOwner } = access(app, e.request.pathValue("id"), e.auth.id);
+        const settlement = find(app, "circle_settlements", e.request.pathValue("settlement"));
+        if (settlement.getString("circle") !== circle.id)
+            throw new NotFoundError("Settlement not found.");
+        if (!isOwner && settlement.getString("created_by") !== member.id)
+            throw new ForbiddenError("Only the author or owner can undo this settlement.");
+        checkVersion(settlement, data.version);
+        const before = balances(app, circle.id),
+            members = memberRecords(app, circle.id);
+        app.delete(settlement);
+        preserveFormerBalances(app, circle.id, members, before);
+        return { deleted: true };
+    });
+}
+
+function deleteContents(app, circle) {
+    // Delete ledger references before members, including when an owner account
+    // deletion cascades into this circle. The caller's transaction owns all work.
+    ["circle_settlements", "circle_expenses", "circle_invitations", "circle_members"].forEach(
+        (collection) => {
+            app.findRecordsByFilter(collection, "circle = {:circle}", "", 0, 0, { circle }).forEach(
+                (item) => app.delete(item),
+            );
+        },
+    );
+}
+
+module.exports = {
+    list,
+    create,
+    detail,
+    update,
+    remove,
+    invite,
+    previewInvitation,
+    acceptInvitation,
+    revokeInvitation,
+    removeMember,
+    saveExpense,
+    deleteExpense,
+    settle,
+    deleteSettlement,
+    deleteContents,
+};

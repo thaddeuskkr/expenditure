@@ -1,0 +1,424 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Expenditure automation API",
+    "version": "2.0.0",
+    "description": "Personal API keys authorize only these endpoints. Create and revoke keys after signing in to Expenditure. Ownership always comes from the key. Normal PocketBase collection APIs require PocketBase user authentication. Amounts use currency minor units. Enable currencies and customize categories in the signed-in app. Conversions are separate latest-reference-rate estimates; originals are preserved."
+  },
+  "servers": [
+    {
+      "url": "https://e.tkkr.dev"
+    }
+  ],
+  "security": [
+    {
+      "ApiKey": []
+    }
+  ],
+  "paths": {
+    "/api/expenses/transactions": {
+      "post": {
+        "summary": "Add an expense",
+        "description": "Requires expenses:write. An exact retry returns the original record. Use a new Idempotency-Key for each purchase. Omit user.",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_.:-]+$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpenseInput"
+              },
+              "example": {
+                "merchant": "Apartment Coffee",
+                "currency": "SGD",
+                "category": "Food & drinks",
+                "amount_minor": 650
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Expense created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Expense"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Idempotent replay",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Expense"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input"
+          },
+          "401": {
+            "description": "Invalid, expired or revoked key"
+          },
+          "403": {
+            "description": "Missing expenses:write scope"
+          },
+          "409": {
+            "description": "Idempotency key conflicts with another payload"
+          }
+        }
+      },
+      "get": {
+        "summary": "List the key owner\u2019s expenses",
+        "description": "Requires expenses:read. Ordered by occurred_at, then created, newest first.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000,
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "perPage",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 30
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated expenses",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Expense"
+                      }
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "perPage": {
+                      "type": "integer"
+                    },
+                    "totalItems": {
+                      "type": "integer"
+                    },
+                    "totalPages": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid, expired or revoked key"
+          },
+          "403": {
+            "description": "Missing expenses:read scope"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      }
+    },
+    "schemas": {
+      "ExpenseInput": {
+        "type": "object",
+        "required": [
+          "merchant"
+        ],
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "amount_cents": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999,
+            "deprecated": true,
+            "description": "Legacy input alias, accepted only for currencies with two decimal places. Use amount_minor for all currencies."
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "Must be enabled in the user account. Defaults to the user main currency."
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "An active category belonging to the user; case-insensitive. Defaults to active Other, otherwise the first active category. Responses use the configured casing."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Defaults to server time; include Z or a timezone offset when supplied."
+          },
+          "card": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "amount_minor": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999,
+            "description": "Positive integer currency minor units. SGD 6.50 = 650, JPY 1000 = 1000, KWD 1.234 = 1234. If amount_cents is also present both must agree."
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "amount_minor"
+            ]
+          },
+          {
+            "required": [
+              "amount_cents"
+            ]
+          }
+        ]
+      },
+      "Expense": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExpenseInput"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "user": {
+                "type": "string"
+              },
+              "source": {
+                "type": "string",
+                "enum": [
+                  "manual",
+                  "api"
+                ]
+              },
+              "created": {
+                "type": "string"
+              },
+              "updated": {
+                "type": "string"
+              },
+              "replay": {
+                "type": "boolean"
+              },
+              "amount_cents": {
+                "type": "integer",
+                "description": "Native compatibility field containing the same currency minor-unit value as amount_minor, for every currency."
+              },
+              "amount_minor": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 99999999999
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,1244 @@
+"use client";
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import type { RecordModel } from "pocketbase";
+import {
+  ArrowDownLeft,
+  ArrowDownRight,
+  ArrowRight,
+  ArrowUpRight,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  FolderOpen,
+  KeyRound,
+  LayoutDashboard,
+  Loader2,
+  LogOut,
+  Menu,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings2,
+  Target,
+  Wallet,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "./ui/button";
+import { Input } from "./ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
+import { useAuth } from "./auth-provider";
+import { SignIn } from "./sign-in";
+import { Brand } from "./brand";
+import { CategoryIcon } from "./category-icon";
+import { ExpenseEditor } from "./expense-editor";
+import { Transactions } from "./transactions";
+import { CategoryBreakdown } from "./category-breakdown";
+import { EmptyState } from "./empty-state";
+import { BudgetEditor } from "./budget-editor";
+import { SpendingChart } from "./spending-chart";
+import { ApiKeys } from "./api-keys";
+import { WorkspaceContext } from "./workspace-context";
+import { WorkspaceSettings } from "./workspace-settings";
+import { pb } from "@/lib/pocketbase";
+import { downloadExpenses, type ExportFormat } from "@/lib/export";
+import {
+  errorMessage,
+  money,
+  monthBounds,
+  monthTitle,
+  rateDate,
+  EMPTY_RATES,
+  type WorkspaceConfig,
+  type ExchangeRates,
+  pocketbaseTimestamp,
+  shiftMonth,
+  zonedDate,
+  type Budget,
+  type Expense,
+  type ExpenseInput,
+  type Overview,
+  type Preferences,
+} from "@/lib/domain";
+
+type Section =
+  | "Overview"
+  | "Transactions"
+  | "Categories"
+  | "Budgets"
+  | "API keys"
+  | "Settings";
+const navigation = [
+  { name: "Overview", icon: LayoutDashboard },
+  { name: "Transactions", icon: ArrowDownLeft },
+  { name: "Categories", icon: FolderOpen },
+  { name: "Budgets", icon: Target },
+] as const;
+function subscribeDesktop(callback: () => void) {
+  const media = window.matchMedia("(min-width: 1024px)");
+  media.addEventListener("change", callback);
+  return () => media.removeEventListener("change", callback);
+}
+const blank: Overview = {
+  total: 0,
+  count: 0,
+  previous: 0,
+  categories: [],
+  activity: [],
+  missing_count: 0,
+  previous_missing_count: 0,
+  missing_currencies: [],
+  currency: "SGD",
+  original_totals: [],
+};
+
+export function ExpenseApp() {
+  const { user, ready, signOut } = useAuth();
+  if (!ready)
+    return (
+      <div className="grid min-h-svh place-items-center">
+        <div className="flex flex-col items-center gap-6">
+          <Brand />
+          <Loader2 className="size-4 animate-spin text-muted-foreground" />
+        </div>
+      </div>
+    );
+  if (!user) return <SignIn />;
+  return <AccountWorkspace key={user.id} user={user} onSignOut={signOut} />;
+}
+
+function AccountWorkspace({
+  user,
+  onSignOut,
+}: {
+  user: RecordModel;
+  onSignOut: () => void;
+}) {
+  const [configuration, setConfiguration] = useState<WorkspaceConfig | null>(
+    null,
+  );
+  const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      try {
+        await pb.send("/api/expenditure/status", { method: "GET" });
+        const result = await pb.send<WorkspaceConfig>(
+          "/api/expenditure/config",
+          { method: "GET" },
+        );
+        if (active) {
+          setConfiguration(result);
+          setError("");
+        }
+      } catch (e) {
+        if (active) setError(errorMessage(e));
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [revision]);
+  if (!configuration)
+    return (
+      <main className="flex min-h-svh flex-col items-center justify-center px-6">
+        <Brand />
+        {error ? (
+          <div className="mt-10 max-w-md text-center">
+            <h1 className="font-display text-3xl">Backend unavailable</h1>
+            <p className="mt-4 text-sm leading-7 text-muted-foreground">
+              The Expenditure API is not available yet. Install this project’s
+              PocketBase migrations and hooks, then restart PocketBase.
+            </p>
+            <p role="alert" className="mt-4 text-xs text-destructive">
+              {error}
+            </p>
+            <div className="mt-6 flex justify-center gap-3">
+              <Button
+                onClick={() => {
+                  setError("");
+                  setRevision((r) => r + 1);
+                }}
+              >
+                <RefreshCw /> Try again
+              </Button>
+              <Button variant="ghost" onClick={onSignOut}>
+                Sign out
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Loader2 className="mt-10 size-5 animate-spin text-primary" />
+        )}
+      </main>
+    );
+  return (
+    <Workspace
+      user={user}
+      initialConfiguration={configuration}
+      onSignOut={onSignOut}
+    />
+  );
+}
+
+function Workspace({
+  user,
+  initialConfiguration,
+  onSignOut,
+}: {
+  user: RecordModel;
+  initialConfiguration: WorkspaceConfig;
+  onSignOut: () => void;
+}) {
+  const [section, setSection] = useState<Section>("Overview");
+  const [configuration, setConfiguration] = useState(initialConfiguration);
+  const preferences = configuration.preferences;
+  const [rates, setRates] = useState<ExchangeRates>(EMPTY_RATES);
+  const [currency, setCurrency] = useState("all");
+  const mainCurrency = preferences.currency;
+  const filterCurrency = section === "Transactions" ? currency : "all";
+  const [month, setMonth] = useState(() =>
+    zonedDate(new Date(), initialConfiguration.preferences.timezone).slice(
+      0,
+      7,
+    ),
+  );
+  const [mobileNav, setMobileNav] = useState(false);
+  const [editor, setEditor] = useState<Expense | "new" | null>(null);
+  const [deleting, setDeleting] = useState<Expense | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [budgetEditor, setBudgetEditor] = useState<Budget | "new" | null>(null);
+  const [overview, setOverview] = useState<Overview>(blank);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [category, setCategory] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [exporting, setExporting] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const desktop = useSyncExternalStore(
+    subscribeDesktop,
+    () => window.matchMedia("(min-width: 1024px)").matches,
+    () => false,
+  );
+  const timezone = preferences.timezone;
+  const name = String(user.name || user.email || "Account");
+  const refresh = useCallback(() => setRevision((r) => r + 1), []);
+  const range = useMemo(() => monthBounds(month, timezone), [month, timezone]);
+  const reloadConfiguration = useCallback(async () => {
+    const result = await pb.send<WorkspaceConfig>("/api/expenditure/config", {
+      method: "GET",
+    });
+    setConfiguration(result);
+  }, []);
+  const categoryNames = configuration.categories.map((c) => c.name);
+  const visibleCurrencies = Array.from(
+    new Set([...preferences.currencies, ...configuration.used_currencies]),
+  ).sort();
+  const filter = useMemo(() => {
+    let expression = pb.filter(
+      "occurred_at >= {:from} && occurred_at < {:to}",
+      {
+        from: pocketbaseTimestamp(range.from),
+        to: pocketbaseTimestamp(range.to),
+      },
+    );
+    if (filterCurrency !== "all")
+      expression +=
+        " && " +
+        pb.filter("currency = {:currency}", { currency: filterCurrency });
+    if (category !== "all")
+      expression += " && " + pb.filter("category = {:category}", { category });
+    if (debouncedSearch.trim())
+      expression +=
+        " && " +
+        pb.filter(
+          "(merchant ~ {:query} || notes ~ {:query} || card ~ {:query})",
+          { query: debouncedSearch.trim() },
+        );
+    return expression;
+  }, [range, filterCurrency, category, debouncedSearch]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(1);
+    }, 220);
+    return () => clearTimeout(timer);
+  }, [search]);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileNav(false);
+      if (
+        event.key.toLowerCase() === "n" &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !["INPUT", "TEXTAREA", "SELECT"].includes(
+          (event.target as HTMLElement).tagName,
+        ) &&
+        !document.querySelector('[role="dialog"]')
+      ) {
+        event.preventDefault();
+        setEditor("new");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  useEffect(() => {
+    const onFocus = () => {
+      refresh();
+      void reloadConfiguration().catch(() => {});
+    };
+    window.addEventListener("focus", onFocus);
+    const subscription = pb
+      .collection("expenses")
+      .subscribe("*", () => refresh());
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 300000);
+    subscription.catch(() => {}); // Focus refresh remains available if realtime is blocked.
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      void subscription.then((unsubscribe) => unsubscribe()).catch(() => {});
+    };
+  }, [refresh, reloadConfiguration]);
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setLoading(true);
+      setError("");
+      try {
+        const snapshot = await pb.send<ExchangeRates>(
+          "/api/expenditure/rates",
+          { method: "GET" },
+        );
+        if (active) setRates(snapshot);
+        const params = new URLSearchParams({
+          ...range,
+          currency: filterCurrency,
+        });
+        const [summary, records, limits] = await Promise.all([
+          pb.send<Overview>(`/api/expenditure/overview?${params}`, {
+            method: "GET",
+          }),
+          pb
+            .collection<Expense>("expenses")
+            .getList(page, 15, { filter, sort: "-occurred_at,-created" }),
+          pb.collection<Budget>("budgets").getFullList({
+            filter: pb.filter("month = {:month} && currency = {:currency}", {
+              month,
+              currency: mainCurrency,
+            }),
+          }),
+        ]);
+        if (active) {
+          setOverview(summary);
+          setExpenses(records.items);
+          setTotal(records.totalItems);
+          if (page > Math.max(1, records.totalPages))
+            setPage(Math.max(1, records.totalPages));
+          setBudgets(limits);
+        }
+      } catch (e) {
+        if (active) setError(errorMessage(e));
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [
+    month,
+    filterCurrency,
+    mainCurrency,
+    timezone,
+    category,
+    debouncedSearch,
+    page,
+    range,
+    filter,
+    revision,
+  ]);
+
+  function navigate(next: Section) {
+    setSection(next);
+    setMobileNav(false);
+    setSearch("");
+    setCurrency("all");
+    setCategory("all");
+    setPage(1);
+  }
+  function changeMonth(next: string) {
+    if (/^(20\d{2}|21\d{2})-(0[1-9]|1[0-2])$/.test(next)) {
+      setMonth(next);
+      setPage(1);
+    }
+  }
+  async function saveExpense(data: ExpenseInput, id?: string) {
+    if (id) await pb.collection("expenses").update(id, data);
+    else
+      await pb
+        .collection("expenses")
+        .create({ ...data, user: user.id, source: "manual" });
+    refresh();
+    toast.success(id ? "Expense updated" : "Expense added");
+  }
+  async function deleteExpense() {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    try {
+      await pb.collection("expenses").delete(deleting.id);
+      refresh();
+      setDeleting(null);
+      if (expenses.length === 1 && page > 1) setPage(page - 1);
+      toast.success("Expense deleted");
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+  async function saveBudget(
+    data: { category: string; amount_cents: number },
+    existing?: Budget,
+  ) {
+    if (
+      budgets.some((b) => b.category === data.category && b.id !== existing?.id)
+    ) {
+      throw new Error(
+        "A budget already exists for this category. Edit it instead.",
+      );
+    }
+    if (existing) await pb.collection("budgets").update(existing.id, data);
+    else
+      await pb
+        .collection("budgets")
+        .create({ ...data, currency: mainCurrency, month, user: user.id });
+    refresh();
+    toast.success("Budget saved");
+  }
+  async function removeBudget(budget: Budget) {
+    await pb.collection("budgets").delete(budget.id);
+    refresh();
+    toast.success("Budget removed");
+  }
+  async function exportExpenses(format: ExportFormat) {
+    setExporting(true);
+    try {
+      const rows = await pb
+        .collection<Expense>("expenses")
+        .getFullList({ filter, sort: "-occurred_at,-created" });
+      await downloadExpenses(rows, {
+        format,
+        month,
+        currency: filterCurrency,
+        timezone,
+        mainCurrency,
+        rates,
+      });
+      toast.success(`Exported ${rows.length} expenses`);
+    } catch (e) {
+      toast.error(errorMessage(e));
+    } finally {
+      setExporting(false);
+    }
+  }
+  const overall = budgets.find((b) => b.category === "Overall");
+  const remaining = overall ? overall.amount_cents - overview.total : null;
+  const foreignCurrencies = overview.original_totals
+    .map((item) => item.currency)
+    .filter((code) => code !== mainCurrency);
+  const rateDates = foreignCurrencies
+    .map((code) => rateDate(code, mainCurrency, rates))
+    .filter(Boolean)
+    .sort();
+  const firstRateDate = rateDates[0];
+  const lastRateDate = rateDates.at(-1);
+  const rateDateLabel = firstRateDate === lastRateDate
+    ? firstRateDate
+    : `${firstRateDate} – ${lastRateDate}`;
+  const today = zonedDate(new Date(), timezone);
+  const elapsed =
+    month === today.slice(0, 7)
+      ? Number(today.slice(8))
+      : new Date(
+          Number(month.slice(0, 4)),
+          Number(month.slice(5)),
+          0,
+        ).getDate();
+  const difference =
+    overview.previous > 0 &&
+    !overview.previous_missing_count &&
+    !overview.missing_count
+      ? ((overview.total - overview.previous) / overview.previous) * 100
+      : null;
+  const isDataPage = [
+    "Overview",
+    "Transactions",
+    "Categories",
+    "Budgets",
+  ].includes(section);
+  return (
+    <WorkspaceContext.Provider value={{ ...configuration, rates }}>
+      <div className="min-h-svh">
+        {mobileNav && (
+          <button
+            className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm lg:hidden"
+            aria-label="Close navigation"
+            onClick={() => setMobileNav(false)}
+          />
+        )}
+        <aside
+          inert={!desktop && !mobileNav}
+          aria-hidden={!desktop && !mobileNav}
+          className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r bg-[#151914] px-5 py-8 transition-transform duration-250 lg:translate-x-0 ${mobileNav ? "translate-x-0" : "-translate-x-full"}`}
+        >
+          <div className="mb-11 px-1">
+            <Brand compact />
+          </div>
+          <p className="eyebrow mb-4 px-3 text-[9px]">Workspace</p>
+          <nav aria-label="Main navigation" className="space-y-1">
+            {navigation.map(({ name: label, icon: Icon }) => (
+              <button
+                key={label}
+                aria-current={section === label ? "page" : undefined}
+                onClick={() => navigate(label)}
+                className={`group flex h-11 w-full items-center gap-3 rounded-lg px-3 text-[12px] transition-colors ${section === label ? "bg-[#c2cbb0]/9 text-[#d7dfc8]" : "text-muted-foreground hover:bg-white/3 hover:text-foreground"}`}
+              >
+                <Icon className="size-4" strokeWidth={1.5} />
+                {label}
+                {section === label && (
+                  <span className="ml-auto size-1 rounded-full bg-primary" />
+                )}
+              </button>
+            ))}
+          </nav>
+          <p className="eyebrow mt-9 mb-4 px-3 text-[9px]">Connections</p>
+          <button
+            aria-current={section === "API keys" ? "page" : undefined}
+            onClick={() => navigate("API keys")}
+            className={`flex h-11 items-center gap-3 rounded-lg px-3 text-[12px] transition-colors ${section === "API keys" ? "bg-primary/9 text-primary" : "text-muted-foreground hover:bg-white/3 hover:text-foreground"}`}
+          >
+            <KeyRound className="size-4" strokeWidth={1.5} />
+            API keys
+            <ArrowUpRight className="ml-auto size-3 opacity-50" />
+          </button>
+          <div className="mt-auto pt-12">
+            <button
+              onClick={() => navigate("Settings")}
+              className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-xs ${section === "Settings" ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Settings2 className="size-4" strokeWidth={1.5} />
+              Settings
+            </button>
+            <div className="mt-5 border-t pt-5">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex w-full items-center gap-3 rounded-lg px-1 text-left">
+                    <span className="flex size-8 items-center justify-center rounded-full bg-[#363e30] text-[11px] text-[#d4dcc6]">
+                      {name.slice(0, 2).toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs">{name}</span>
+                    </span>
+                    <ChevronDown className="size-3 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" align="start" className="w-48">
+                  <DropdownMenuItem onClick={() => navigate("Settings")}>
+                    <Settings2 /> Preferences
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={onSignOut}>
+                    <LogOut />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </aside>
+        <div inert={!desktop && mobileNav} className="lg:pl-60">
+          <header className="flex h-18 items-center justify-between border-b px-5 sm:px-9 xl:px-12">
+            <div className="flex items-center gap-3">
+              <button
+                className="lg:hidden"
+                aria-label="Open navigation"
+                onClick={() => setMobileNav(true)}
+              >
+                <Menu className="size-5" />
+              </button>
+              <span className="hidden text-[11px] text-muted-foreground sm:inline">
+                Personal workspace
+              </span>
+              <span className="hidden text-xs text-muted-foreground/35 sm:inline">
+                /
+              </span>
+              <span className="text-[11px] text-foreground/80">{section}</span>
+            </div>
+          </header>
+          <main
+            id="main-content"
+            className="mx-auto max-w-355 px-5 py-7 sm:px-9 sm:py-9 xl:px-12"
+          >
+            <div className="mb-9 flex flex-wrap items-end justify-between gap-5">
+              <div>
+                <h1 className="font-display text-[42px] leading-none tracking-[-1px] sm:text-5xl">
+                  {section}
+                </h1>
+              </div>
+              <div className="flex gap-2">
+                {isDataPage && (
+                  <>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          aria-label="Export expenses"
+                          className="h-10 px-3.5"
+                          disabled={exporting || loading || !!error}
+                        >
+                          {exporting ? (
+                            <Loader2 className="animate-spin" />
+                          ) : (
+                            <Download />
+                          )}
+                          <span className="hidden sm:inline">Export</span>
+                          <ChevronDown className="size-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => void exportExpenses("xlsx")}
+                        >
+                          Excel (.xlsx)
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={() => void exportExpenses("csv")}
+                        >
+                          CSV (Google Sheets)
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <Button
+                      className="h-10 px-4"
+                      onClick={() => setEditor("new")}
+                    >
+                      <Plus /> Add expense
+                    </Button>
+                  </>
+                )}
+              </div>
+            </div>
+            {isDataPage && (
+              <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-1 rounded-lg border bg-white/1 p-1">
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Previous month"
+                    onClick={() => changeMonth(shiftMonth(month, -1))}
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </Button>
+                  <input
+                    aria-label="Month"
+                    type="month"
+                    value={month}
+                    min="2000-01"
+                    max="2199-12"
+                    onChange={(e) => changeMonth(e.target.value)}
+                    className="w-35 border-0 bg-transparent px-2 py-1 text-[11px] outline-none"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label="Next month"
+                    onClick={() => changeMonth(shiftMonth(month, 1))}
+                  >
+                    <ChevronRight className="size-3.5" />
+                  </Button>
+                </div>
+                {section === "Transactions" ? (
+                  <Select
+                    value={currency}
+                    onValueChange={(value) => {
+                      setCurrency(value);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger
+                      aria-label="Filter currency"
+                      className="h-9! min-w-30 text-[11px]"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All currencies</SelectItem>
+                      {visibleCurrencies.map((code) => (
+                        <SelectItem key={code} value={code}>
+                          {code}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <span className="text-[11px] text-muted-foreground">
+                    Main currency · {mainCurrency}
+                  </span>
+                )}
+              </div>
+            )}
+            {isDataPage && overview.missing_count > 0 && (
+              <p
+                role="alert"
+                className="mb-5 rounded-lg border border-destructive/20 bg-destructive/5 p-4 text-xs leading-6 text-destructive"
+              >
+                {overview.missing_count} expenses have no usable conversion rate
+                ({overview.missing_currencies.join(", ")}). Converted totals are
+                incomplete.
+              </p>
+            )}
+            {isDataPage && foreignCurrencies.length > 0 && (
+              <p className="mb-5 text-[10px] leading-5 text-muted-foreground">
+                Estimated conversions
+                {rateDateLabel
+                  ? ` · rates dated ${rateDateLabel}.`
+                  : "."}
+                {rates.stale
+                  ? " Rates are unavailable or the cache is stale."
+                  : ""}
+              </p>
+            )}
+            {isDataPage && error && (
+              <div
+                role="alert"
+                className="mb-7 rounded-xl border border-destructive/20 bg-destructive/5 p-5"
+              >
+                <p className="text-sm text-destructive">
+                  Couldn’t load expenses.
+                </p>
+                <p className="mt-2 text-xs text-muted-foreground">{error}</p>
+                <Button variant="outline" className="mt-4" onClick={refresh}>
+                  <RefreshCw />
+                  Try again
+                </Button>
+              </div>
+            )}
+            {isDataPage && loading && (
+              <div
+                className="flex items-center gap-2 pb-4 text-xs text-muted-foreground"
+                role="status"
+              >
+                <Loader2 className="size-3.5 animate-spin" />
+                Loading…
+              </div>
+            )}
+            {section === "Overview" && !error && (
+              <div
+                className={`animate-enter transition-opacity ${loading ? "opacity-40" : "opacity-100"}`}
+              >
+                <section className="mb-9 grid gap-7 border-b pb-9 md:grid-cols-[1.2fr_1fr] xl:grid-cols-[1fr_1.2fr]">
+                  <div>
+                    <p className="eyebrow">
+                      {overview.missing_count
+                        ? "Converted subtotal"
+                        : "Total spent"}{" "}
+                      <span className="ml-1 tracking-normal text-muted-foreground/50">
+                        / {mainCurrency}
+                      </span>
+                    </p>
+                    <div className="mt-3 flex items-baseline gap-2">
+                      <span className="font-display text-[clamp(48px,5vw,72px)] leading-none tracking-[-2px]">
+                        {money(overview.total, mainCurrency)}
+                      </span>
+                    </div>
+                    <div className="mt-4 flex items-center gap-2 text-[10px]">
+                      {difference !== null ? (
+                        <>
+                          <span
+                            className={`flex items-center gap-1 rounded-full px-2 py-1 ${difference <= 0 ? "bg-primary/8 text-primary" : "bg-[#d6b79a]/8 text-[#d6b79a]"}`}
+                          >
+                            {difference <= 0 ? (
+                              <ArrowDownRight className="size-3" />
+                            ) : (
+                              <ArrowUpRight className="size-3" />
+                            )}
+                            {Math.abs(difference).toFixed(1)}%
+                          </span>
+                          <span className="text-muted-foreground">
+                            vs. last month
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-muted-foreground">
+                          {overview.previous_missing_count
+                            ? "Previous-month conversion incomplete"
+                            : overview.count
+                              ? "No previous-month data"
+                              : "No expenses this month"}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-5 self-center md:border-l md:pl-8">
+                    <div>
+                      <p className="eyebrow text-[9px]">
+                        {remaining !== null
+                          ? "Budget remaining"
+                          : "Monthly budget"}
+                      </p>
+                      <p
+                        className={`mt-3 text-[24px] font-light tracking-[-0.5px] ${remaining !== null && remaining < 0 ? "text-destructive" : "text-foreground/90"}`}
+                      >
+                        {remaining !== null
+                          ? money(remaining, mainCurrency)
+                          : "Not set"}
+                      </p>
+                      {overall ? (
+                        <div className="mt-3 h-1 max-w-35 overflow-hidden rounded-full bg-white/5">
+                          <div
+                            className="h-full rounded-full bg-primary/65 transition-all duration-500"
+                            style={{
+                              width: `${Math.min(100, (overview.total / overall.amount_cents) * 100)}%`,
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            navigate("Budgets");
+                            setBudgetEditor("new");
+                          }}
+                          className="mt-3 flex items-center gap-1 text-[10px] text-primary"
+                        >
+                          Set a budget <ArrowRight className="size-3" />
+                        </button>
+                      )}
+                    </div>
+                    <div>
+                      <p className="eyebrow text-[9px]">Daily average</p>
+                      <p className="mt-3 text-[24px] font-light tracking-[-0.5px]">
+                        {money(
+                          Math.round(overview.total / elapsed),
+                          mainCurrency,
+                        )}
+                      </p>
+                      <p className="mt-3 text-[10px] text-muted-foreground">
+                        Across {elapsed} calendar days
+                      </p>
+                    </div>
+                    <div className="col-span-2 flex items-center gap-2 pt-1 text-[10px] text-muted-foreground">
+                      <span className="flex size-5 items-center justify-center rounded-full bg-white/4">
+                        <Wallet className="size-2.5" />
+                      </span>
+                      {overview.count} transactions this month
+                      <span className="mx-1 text-white/15">·</span>
+                      {mainCurrency} · converted total
+                    </div>
+                  </div>
+                </section>
+                <div className="grid gap-8 border-b pb-8 xl:grid-cols-[1.65fr_1fr]">
+                  <section className="min-w-0">
+                    <div className="mb-2 flex items-center justify-between">
+                      <h2 className="text-sm font-medium">Spending activity</h2>
+                      <span className="flex items-center gap-1.5 text-[9px] text-muted-foreground">
+                        <span className="size-1.5 rounded-full bg-primary" />
+                        Daily spending
+                      </span>
+                    </div>
+                    <SpendingChart
+                      overview={overview}
+                      month={month}
+                      timezone={timezone}
+                      currency={mainCurrency}
+                    />
+                  </section>
+                  <section className="xl:border-l xl:pl-8">
+                    <div className="mb-6 flex items-center justify-between">
+                      <h2 className="text-sm font-medium">By category</h2>
+                      <button
+                        onClick={() => navigate("Categories")}
+                        aria-label="View all categories"
+                        className="text-muted-foreground hover:text-primary"
+                      >
+                        <ArrowUpRight className="size-4" />
+                      </button>
+                    </div>
+                    <CategoryBreakdown
+                      overview={overview}
+                      currency={mainCurrency}
+                      compact
+                    />
+                  </section>
+                </div>
+                <section className="pt-8">
+                  <div className="mb-5 flex items-center justify-between">
+                    <h2 className="text-sm font-medium">Recent transactions</h2>
+                    <button
+                      onClick={() => navigate("Transactions")}
+                      className="flex items-center gap-1.5 text-[10px] text-muted-foreground hover:text-primary"
+                    >
+                      View all <ArrowRight className="size-3" />
+                    </button>
+                  </div>
+                  <Transactions
+                    rows={expenses.slice(0, 5)}
+                    timezone={timezone}
+                    onEdit={setEditor}
+                    onDelete={setDeleting}
+                    emptyAction={() => setEditor("new")}
+                  />
+                </section>
+              </div>
+            )}
+            {section === "Transactions" && (
+              <section className="animate-enter">
+                <div className="mb-6 flex flex-wrap gap-3">
+                  <div className="relative min-w-50 flex-1">
+                    <Search className="absolute top-3 left-3 size-3.5 text-muted-foreground" />
+                    <Input
+                      aria-label="Search transactions"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Search merchants, notes, payment methods…"
+                      className="h-10 pl-9 text-xs"
+                    />
+                    {search && (
+                      <button
+                        className="absolute top-3 right-3"
+                        aria-label="Clear search"
+                        onClick={() => setSearch("")}
+                      >
+                        <X className="size-3.5 text-muted-foreground" />
+                      </button>
+                    )}
+                  </div>
+                  <Select
+                    value={category}
+                    onValueChange={(value) => {
+                      setCategory(value);
+                      setPage(1);
+                    }}
+                  >
+                    <SelectTrigger
+                      aria-label="Filter category"
+                      className="h-10! w-44 text-xs"
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All categories</SelectItem>
+                      {categoryNames.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {!error && (
+                  <Transactions
+                    rows={expenses}
+                    timezone={timezone}
+                    onEdit={setEditor}
+                    onDelete={setDeleting}
+                    emptyAction={() => setEditor("new")}
+                    filtered={!!debouncedSearch || category !== "all"}
+                  />
+                )}
+                <div className="mt-5 flex items-center justify-between text-[10px] text-muted-foreground">
+                  <span>
+                    {total} {total === 1 ? "transaction" : "transactions"}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={page <= 1 || loading}
+                      aria-label="Previous page"
+                      onClick={() => setPage(page - 1)}
+                    >
+                      <ChevronLeft />
+                    </Button>
+                    <span>
+                      {page} / {Math.max(1, Math.ceil(total / 15))}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      disabled={page * 15 >= total || loading}
+                      aria-label="Next page"
+                      onClick={() => setPage(page + 1)}
+                    >
+                      <ChevronRight />
+                    </Button>
+                  </div>
+                </div>
+              </section>
+            )}
+            {section === "Categories" && !error && (
+              <section className="animate-enter">
+                <div className="mb-8 flex items-baseline justify-between border-b pb-6">
+                  <div>
+                    <h2 className="text-sm">
+                      {overview.categories.length} categories this month
+                    </h2>
+                    <button
+                      className="mt-2 text-xs text-primary"
+                      onClick={() => navigate("Settings")}
+                    >
+                      Manage categories
+                    </button>
+                  </div>
+                  <span className="text-sm text-muted-foreground">
+                    {money(overview.total, mainCurrency)}
+                  </span>
+                </div>
+                <div className="max-w-3xl">
+                  <CategoryBreakdown
+                    overview={overview}
+                    currency={mainCurrency}
+                  />
+                </div>
+              </section>
+            )}
+            {section === "Budgets" && !error && (
+              <section className="animate-enter">
+                <div className="mb-6 flex items-center justify-between border-b pb-5">
+                  <h2 className="text-sm">
+                    Monthly limits{" "}
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {budgets.length} set
+                    </span>
+                  </h2>
+                  <Button
+                    variant="outline"
+                    className="h-9"
+                    onClick={() => setBudgetEditor("new")}
+                  >
+                    <Plus />
+                    Add budget
+                  </Button>
+                </div>
+                {budgets.length ? (
+                  <div className="divide-y">
+                    {[...budgets]
+                      .sort((a, b) =>
+                        a.category === "Overall"
+                          ? -1
+                          : b.category === "Overall"
+                            ? 1
+                            : a.category.localeCompare(b.category),
+                      )
+                      .map((budget) => {
+                        const spent =
+                          budget.category === "Overall"
+                            ? overview.total
+                            : overview.categories.find(
+                                (c) => c.category === budget.category,
+                              )?.total || 0;
+                        const percent = (spent / budget.amount_cents) * 100;
+                        return (
+                          <button
+                            key={budget.id}
+                            onClick={() => setBudgetEditor(budget)}
+                            className="grid w-full gap-4 py-6 text-left transition-colors hover:bg-white/1 sm:grid-cols-[1fr_1fr] sm:gap-10"
+                          >
+                            <div className="flex items-center gap-4">
+                              {budget.category === "Overall" ? (
+                                <span className="flex size-10 items-center justify-center rounded-xl border bg-primary/5 text-primary">
+                                  <Target className="size-4" />
+                                </span>
+                              ) : (
+                                <CategoryIcon category={budget.category} />
+                              )}
+                              <div>
+                                <p className="text-sm">
+                                  {budget.category === "Overall"
+                                    ? "Monthly spending"
+                                    : budget.category}
+                                </p>
+                                <p className="mt-1 text-[10px] text-muted-foreground">
+                                  {money(budget.amount_cents, mainCurrency)}{" "}
+                                  budget
+                                </p>
+                              </div>
+                            </div>
+                            <div className="self-center">
+                              <div className="mb-2.5 flex justify-between text-xs">
+                                <span
+                                  className={
+                                    percent > 100
+                                      ? "text-destructive"
+                                      : "text-foreground"
+                                  }
+                                >
+                                  {money(spent, mainCurrency)}{" "}
+                                  <span className="text-muted-foreground">
+                                    spent
+                                  </span>
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {Math.round(percent)}%
+                                </span>
+                              </div>
+                              <div className="h-1.5 overflow-hidden rounded-full bg-white/5">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-500 ${percent > 100 ? "bg-destructive/70" : "bg-primary/70"}`}
+                                  style={{
+                                    width: `${Math.min(100, percent)}%`,
+                                  }}
+                                />
+                              </div>
+                              <p className="mt-2 text-[10px] text-muted-foreground">
+                                {money(
+                                  Math.abs(budget.amount_cents - spent),
+                                  mainCurrency,
+                                )}{" "}
+                                {percent > 100
+                                  ? "over budget"
+                                  : "left to spend"}
+                              </p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <EmptyState
+                    icon="budget"
+                    title="No budgets"
+                    detail="Set an overall limit or a budget for an individual category."
+                    action="Add budget"
+                    onAction={() => setBudgetEditor("new")}
+                  />
+                )}
+                <p className="mt-8 text-[10px] leading-6 text-muted-foreground">
+                  Budgets apply to {monthTitle(month)} in {mainCurrency}.
+                  Category limits are independent of the overall budget and do
+                  not roll over.
+                </p>
+              </section>
+            )}
+            {section === "API keys" && <ApiKeys timezone={timezone} />}
+            {section === "Settings" && (
+              <WorkspaceSettings
+                key={preferences.id || "defaults"}
+                onSave={async (data) => {
+                  if (preferences.id)
+                    await pb
+                      .collection<Preferences>("preferences")
+                      .update(preferences.id, data);
+                  else
+                    await pb
+                      .collection<Preferences>("preferences")
+                      .create({ ...data, user: user.id });
+                  await reloadConfiguration();
+                  refresh();
+                  toast.success("Preferences saved");
+                }}
+                onCategoriesChanged={async () => {
+                  await reloadConfiguration();
+                  refresh();
+                }}
+              />
+            )}
+          </main>
+        </div>
+        {editor && (
+          <ExpenseEditor
+            key={typeof editor === "string" ? "new" : editor.id}
+            expense={editor === "new" ? null : editor}
+            currency={mainCurrency}
+            timezone={timezone}
+            onClose={() => setEditor(null)}
+            onSave={saveExpense}
+          />
+        )}
+        {budgetEditor && (
+          <BudgetEditor
+            budget={budgetEditor === "new" ? null : budgetEditor}
+            month={month}
+            currency={mainCurrency}
+            onClose={() => setBudgetEditor(null)}
+            onSave={saveBudget}
+            onDelete={removeBudget}
+          />
+        )}
+        <AlertDialog
+          open={!!deleting}
+          onOpenChange={(open) => {
+            if (!open && !deleteBusy) setDeleting(null);
+          }}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this expense?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {deleting?.merchant} ·{" "}
+                {deleting && money(deleting.amount_cents, deleting.currency)}.
+                This removes the expense permanently.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleteBusy}>
+                Keep expense
+              </AlertDialogCancel>
+              <AlertDialogAction
+                disabled={deleteBusy}
+                onClick={(e) => {
+                  e.preventDefault();
+                  void deleteExpense();
+                }}
+              >
+                {deleteBusy ? "Deleting…" : "Delete expense"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
+    </WorkspaceContext.Provider>
+  );
+}

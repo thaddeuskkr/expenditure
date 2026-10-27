@@ -15,7 +15,7 @@ function summarize(app, user, range) {
     app
         .db()
         .newQuery(
-            "SELECT amount, kind, currency, category, occurred_at FROM expenses WHERE user = {:user} AND occurred_at >= {:previous} AND occurred_at < {:to}" +
+            "SELECT amount, kind, currency, category, occurred_at FROM expenses WHERE user = {:user} AND moved_to = '' AND occurred_at >= {:previous} AND occurred_at < {:to}" +
             (range.currency === "all" ? "" : " AND currency = {:currency}"),
         )
         .bind({ ...range, user })

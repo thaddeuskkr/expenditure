@@ -44,11 +44,13 @@ export function ExpenseEditor({
     timezone,
     onClose,
     onSave,
+    onMove,
 }: {
     expense: Expense | null;
     kind?: "expense" | "income";
     currency: string;
     timezone: string;
+    onMove?: (expense: Expense) => void;
     onClose: () => void;
     onSave: (data: ExpenseInput, id?: string) => Promise<void>;
 }) {
@@ -246,6 +248,7 @@ export function ExpenseEditor({
                         </p>
                     )}
                     <DialogFooter>
+                        {expense && entryKind === "expense" && onMove && <Button type="button" variant="outline" disabled={busy} onClick={() => onMove(expense)}>Move to Circle</Button>}
                         <Button
                             type="button"
                             variant="ghost"

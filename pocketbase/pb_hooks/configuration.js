@@ -125,6 +125,8 @@ function validate(record, app) {
 }
 
 module.exports = {
+    defaultNames,
+    colors,
     catalog,
     currency,
     preferences,

@@ -1,5 +1,5 @@
 import core from "../../pocketbase/pb_hooks/circles-core.cjs";
-import type { RecurringFields, Recurrence } from "./domain";
+import type { Expense, CategoryDefinition, RecurringFields, Recurrence } from "./domain";
 import { pb } from "./pocketbase";
 
 export { core as circleCore };
@@ -30,6 +30,9 @@ export interface CircleExpense extends RecurringFields {
     kind: "expense" | "income";
     id: string;
     title: string;
+    category: string;
+    source: "manual" | "api";
+    origin_expense: string;
     currency: string;
     amount: number;
     paid_by: string;
@@ -74,12 +77,14 @@ export interface CircleDetail {
     expenses: CirclePage<CircleExpense>;
     settlements: CirclePage<CircleSettlement>;
     invitations: CircleInvitation[];
+    categories: CategoryDefinition[];
 }
 export interface CircleIndex {
     circles: Circle[];
     invitations: IncomingInvitation[];
 }
 export interface CircleExpenseInput {
+    category: string;
     kind: "expense" | "income";
     recurrence: Recurrence;
     title: string;
@@ -127,6 +132,12 @@ export const circlesApi = {
     revoke: (id: string) => pb.send(`${invitations}/${id}`, { method: "DELETE" }),
     removeMember: (circle: string, member: string) =>
         pb.send(`${base}/${circle}/members/${member}`, { method: "DELETE" }),
+    moveExpense: (circle: string, expense: Expense, category: string) =>
+        pb.send<CircleExpense>(`${base}/${circle}/expenses/move`, {
+            method: "POST", body: { expense: expense.id, previous_updated: expense.updated, category },
+        }),
+    copyCategories: (circle: string, previous_ids: string[]) =>
+        pb.send<{ items: CategoryDefinition[] }>(`${base}/${circle}/categories/copy`, { method: "POST", body: { previous_ids } }),
     saveExpense: (circle: string, data: CircleExpenseInput, id?: string) =>
         pb.send<CircleExpense>(`${base}/${circle}/expenses${id ? "/" + id : ""}`, {
             method: id ? "PATCH" : "POST",

@@ -323,6 +323,7 @@ function create(e) {
                 name: displayName(e.auth),
                 active: true,
             });
+            require(`${__hooks}/circle-categories.js`).initialize(app, circle.id);
             return circleDTO(app, circle, e.auth.id);
         },
         201,
@@ -367,6 +368,7 @@ function detail(e) {
             count: row.count,
         })),
         invitations,
+        categories: require(`${__hooks}/circle-categories.js`).list(e.app, circle.id),
         recurring: e.app.findRecordsByFilter("circle_expenses", "circle = {:circle} && recurrence != ''", "recurrence_next,id", 0, 0, { circle: circle.id }).map((r) => r.publicExport()),
         expenses: page(e.app, "circle_expenses", circle.id, query.get("expense_page")),
         settlements: page(e.app, "circle_settlements", circle.id, query.get("settlement_page")),
@@ -551,6 +553,7 @@ function removeMember(e) {
 function saveExpense(e) {
     const data = body(e, [
         "title",
+        "category",
         "kind",
         "recurrence",
         "amount",
@@ -609,6 +612,8 @@ function saveExpense(e) {
                 kind: data.kind === undefined ? (expense ? expense.getString("kind") : "expense") : data.kind,
                 recurrence: data.recurrence === undefined ? (expense ? expense.getString("recurrence") : "") : data.recurrence,
                 title: text(data.title, "Title", 160, true),
+                category: require(`${__hooks}/circle-categories.js`).select(app, circle.id, data.category, expense),
+                source: expense ? expense.getString("source") : "manual",
                 amount: total,
                 currency: code,
                 paid_by: data.paid_by,
@@ -720,7 +725,7 @@ function deleteSettlement(e) {
 function deleteContents(app, circle) {
     // Delete ledger references before members, including when an owner account
     // deletion cascades into this circle. The caller's transaction owns all work.
-    ["circle_settlements", "circle_expenses", "circle_invitations", "circle_members"].forEach(
+    ["circle_settlements", "circle_expenses", "circle_invitations", "circle_categories", "circle_members"].forEach(
         (collection) => {
             app.findRecordsByFilter(collection, "circle = {:circle}", "", 0, 0, { circle }).forEach(
                 (item) => app.delete(item),

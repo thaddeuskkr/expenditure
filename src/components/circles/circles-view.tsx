@@ -38,6 +38,7 @@ import {
     InviteDialog,
     TransferDialog,
 } from "./circle-dialogs";
+import { CircleCategorySettings } from "./circle-category-settings";
 import { CircleExpenseEditor } from "./circle-expense-editor";
 import { SettlementDialog } from "./settlement-dialog";
 
@@ -60,7 +61,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
     const [revision, setRevision] = useState(0),
         [loading, setLoading] = useState(true),
         [error, setError] = useState("");
-    const [dialog, setDialog] = useState<"create" | "settings" | "invite" | "transfer" | null>(
+    const [dialog, setDialog] = useState<"create" | "settings" | "categories" | "invite" | "transfer" | null>(
         null,
     );
     const [editor, setEditor] = useState<CircleExpense | "new" | "income" | null>(null),
@@ -396,6 +397,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                                     <DropdownMenuItem onClick={() => setDialog("settings")}>
                                                         Rename, icon & currency
                                                     </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => setDialog("categories")}>Categories</DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => setDialog("invite")}>
                                                         Invite member
                                                     </DropdownMenuItem>
@@ -557,6 +559,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                     }}
                 />
             )}
+            {detail && dialog === "categories" && <CircleCategorySettings data={detail} onClose={() => setDialog(null)} onSaved={refresh} />}
             {detail && dialog === "settings" && (
                 <CircleSettingsDialog
                     circle={detail.circle}
@@ -614,6 +617,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                     description={`${name(viewing.paid_by)} ${viewing.kind === "income" ? "received" : "paid"} ${money(viewing.amount, viewing.currency)} ${viewing.currency} · ${SPLIT_LABELS[viewing.split_mode]}`}
                     onClose={() => setViewing(null)}>
                     <div className="space-y-5 pt-2">
+                        <p className="text-xs text-muted-foreground">{viewing.category}{viewing.source === "api" ? " · Via API" : ""}</p>
                         <div className="divide-y">
                             {viewing.shares.map((share) => (
                                 <div

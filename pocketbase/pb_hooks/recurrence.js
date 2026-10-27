@@ -100,10 +100,11 @@ function generate(app, collection, id, now) {
                 service.memberInCircle(members, seed.getString("paid_by"), []);
                 JSON.parse(seed.getString("shares")).forEach((share) => service.memberInCircle(members, share.member, []));
                 if (tx.countRecords(collection, $dbx.hashExp({ circle: seed.getString("circle") })) >= 10000) throw new Error("This circle has reached its entry limit.");
+                require(`${__hooks}/circle-categories.js`).select(tx, seed.getString("circle"), seed.getString("category"), null);
                 before = service.balances(tx, seed.getString("circle"));
             } else tx.findRecordById("users", seed.getString("user"));
             const copy = new Record(tx.findCollectionByNameOrId(collection));
-            const fields = shared ? ["circle", "title", "paid_by", "created_by", "split_mode", "shares"] : ["user", "merchant", "category"];
+            const fields = shared ? ["circle", "title", "category", "source", "paid_by", "created_by", "split_mode", "shares"] : ["user", "merchant", "category"];
             fields.concat(["kind", "amount", "currency", "notes", "payment_method"]).forEach((field) => copy.set(field, seed.get(field)));
             copy.set("occurred_at", next);
             if (shared) copy.set("version", 1);

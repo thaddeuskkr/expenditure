@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "7.0.0",
+    "version": "8.0.0",
     "description": "Personal API keys authorize the personal expense automation endpoints. Category ordering and Circles require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring expenses run on the PocketBase server every minute, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -1296,6 +1296,304 @@
           }
         }
       }
+    },
+    "/api/expenditure/circles/{id}/categories": {
+      "post": {
+        "summary": "Create a Circle category",
+        "description": "",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleCategory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or category limit"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Only the owner can manage categories"
+          },
+          "404": {
+            "description": "Circle or record not found"
+          },
+          "409": {
+            "description": "Stale state or conflicting transfer"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/categories/{category}": {
+      "patch": {
+        "summary": "Rename, recolour, archive or restore a Circle category",
+        "description": "Owner only. Renames atomically update matching entries and increment expense versions without changing amounts, dates, balances or recurring cursors. At least one category must stay active.",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "category",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleCategory"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or category limit"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Only the owner can manage categories"
+          },
+          "404": {
+            "description": "Circle or record not found"
+          },
+          "409": {
+            "description": "Stale state or conflicting transfer"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/categories/reorder": {
+      "post": {
+        "summary": "Reorder all Circle categories, including archived categories",
+        "description": "Owner only. previous_ids must match the complete current order; stale requests return 409.",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleCategoryOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleCategoryList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or category limit"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Only the owner can manage categories"
+          },
+          "404": {
+            "description": "Circle or record not found"
+          },
+          "409": {
+            "description": "Stale state or conflicting transfer"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/categories/copy": {
+      "post": {
+        "summary": "Replace Circle categories from the owner personal settings",
+        "description": "",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleCategoryCopy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleCategoryList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or category limit"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Only the owner can manage categories"
+          },
+          "404": {
+            "description": "Circle or record not found"
+          },
+          "409": {
+            "description": "Stale state or conflicting transfer"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/expenses/move": {
+      "post": {
+        "summary": "Move an owned personal expense to a Circle",
+        "description": "Every active member may transfer their own expense. Income cannot be moved. Atomically excludes the original from the personal ledger and creates a Circle expense with the same ID, amount, currency, occurrence, created/updated timestamps, notes, payment method and provenance. Payer and author are the moving membership ID. Initial percentage split is 10000 basis points to that member, adding no debt. Recurrence and its saved timezone, anchor, next cursor and pause state transfer intact; existing generated personal entries stay in place. Retries to the same Circle return the existing entry without duplicating or overwriting it. A retained owner-protected receipt preserves API idempotency for the original 24-hour window, even if the Circle entry is later deleted. Transfers do not return to the personal ledger when a Circle is deleted.",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveExpenseInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleExpense"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or category limit"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "Transfer requires an active Circle membership."
+          },
+          "404": {
+            "description": "Circle or record not found"
+          },
+          "409": {
+            "description": "Stale state or conflicting transfer"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1778,6 +2076,16 @@
             "type": "string",
             "readOnly": true,
             "description": "Non-empty means generation is paused. Resolve the issue and save the schedule to retry."
+          },
+          "moved_to": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Transferred Circle expense ID. Non-empty only on an API-key idempotency replay receipt; transferred rows are excluded from personal lists, reports and exports."
+          },
+          "moved_circle": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Destination Circle ID on a transfer receipt."
           }
         },
         "required": [
@@ -3397,6 +3705,11 @@
             ],
             "description": "Empty disables recurrence. Only expenses can recur. The schedule is stored on the original entry; generated copies have empty recurrence.",
             "default": ""
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 60,
+            "description": "An active category name from the target Circle. Omission on creation selects Other or the first active category; unchanged archived categories remain valid on edit."
           }
         },
         "required": [
@@ -3698,6 +4011,22 @@
             "type": "string",
             "readOnly": true,
             "description": "Non-empty means generation is paused. Resolve the issue and save the schedule to retry."
+          },
+          "category": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "api"
+            ],
+            "readOnly": true
+          },
+          "origin_expense": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Original personal expense ID when transferred; empty for entries created directly in the Circle."
           }
         },
         "required": [
@@ -3710,7 +4039,10 @@
           "split_mode",
           "shares",
           "occurred_at",
-          "version"
+          "version",
+          "category",
+          "source",
+          "origin_expense"
         ]
       },
       "CircleSettlementInput": {
@@ -4392,6 +4724,12 @@
               "$ref": "#/components/schemas/CircleExpense"
             },
             "description": "All recurring originals, including paused schedules, independent of transaction pagination."
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CircleCategory"
+            }
           }
         },
         "required": [
@@ -4403,7 +4741,8 @@
           "totals",
           "invitations",
           "expenses",
-          "settlements"
+          "settlements",
+          "categories"
         ]
       },
       "InviteEmail": {
@@ -4936,6 +5275,143 @@
           },
           "rates_fetched_at": {
             "type": "string"
+          }
+        }
+      },
+      "CircleCategory": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CategoryDefinition"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "circle": {
+                "type": "string",
+                "description": "Stored Circle ID."
+              }
+            }
+          }
+        ]
+      },
+      "MoveExpenseInput": {
+        "type": "object",
+        "required": [
+          "expense",
+          "previous_updated",
+          "category"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "expense": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "previous_updated": {
+            "type": "string",
+            "description": "Exact updated value from the personal record, checked inside the transaction."
+          },
+          "category": {
+            "type": "string",
+            "description": "Active category name in the destination Circle."
+          }
+        }
+      },
+      "CategoryInput": {
+        "type": "object",
+        "required": [
+          "name",
+          "color"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[a-fA-F0-9]{6}$"
+          }
+        }
+      },
+      "CategoryUpdate": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[a-fA-F0-9]{6}$"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CircleCategoryOrder": {
+        "type": "object",
+        "required": [
+          "ids",
+          "previous_ids"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{15}$"
+            }
+          },
+          "previous_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{15}$"
+            }
+          }
+        }
+      },
+      "CircleCategoryCopy": {
+        "type": "object",
+        "required": [
+          "previous_ids"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "previous_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{15}$"
+            }
+          }
+        },
+        "description": "Owner-only replacement from the authenticated owner personal settings. Copies names, colours, active status and order. Reuses matching Circle category IDs, removes unused unmatched categories, and archives unmatched categories used in history. Historical entries, monetary amounts and balances are preserved. The combined list is limited to 100 categories."
+      },
+      "CircleCategoryList": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CircleCategory"
+            }
           }
         }
       }

@@ -1,5 +1,5 @@
 /// <reference path="../pb_data/types.d.ts" />
-routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 7 }));
+routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 8 }));
 
 routerAdd(
     "GET",
@@ -219,7 +219,7 @@ routerAdd("GET", "/api/expenses/transactions", (e) => {
     const params = { user: identity.user.id };
     const records = e.app.findRecordsByFilter(
         "expenses",
-        "user = {:user}",
+        "user = {:user} && moved_to = ''",
         "-occurred_at,-created",
         perPage,
         (page - 1) * perPage,
@@ -227,7 +227,7 @@ routerAdd("GET", "/api/expenses/transactions", (e) => {
     );
     const total = e.app.countRecords(
         "expenses",
-        $dbx.hashExp({ user: identity.user.id }),
+        $dbx.hashExp({ user: identity.user.id, moved_to: "" }),
     );
     lib.touch(e.app, identity.key);
     return e.json(200, {
@@ -260,6 +260,7 @@ routerAdd(
 onRecordCreateRequest((e) => {
     if (!e.hasSuperuserAuth()) {
         require(`${__hooks}/recurrence.js`).protect(e.record);
+        for (const field of ["moved_to", "moved_circle"]) e.record.set(field, e.record.isNew() ? "" : e.record.original().getString(field));
         e.record.set("source", "manual");
         e.record.set("idempotency_key", "");
     }
@@ -270,6 +271,7 @@ onRecordCreateRequest((e) => {
 onRecordUpdateRequest((e) => {
     if (!e.hasSuperuserAuth()) {
         require(`${__hooks}/recurrence.js`).protect(e.record);
+        for (const field of ["moved_to", "moved_circle"]) e.record.set(field, e.record.isNew() ? "" : e.record.original().getString(field));
         e.record.set("source", e.record.original().getString("source"));
         e.record.set(
             "idempotency_key",

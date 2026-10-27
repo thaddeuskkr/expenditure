@@ -75,6 +75,7 @@ import { ApiKeys } from "./api-keys";
 import { WorkspaceContext } from "./workspace-context";
 import { WorkspaceSettings } from "./workspace-settings";
 import { CirclesView } from "./circles/circles-view";
+import { MoveExpenseDialog } from "./circles/move-expense-dialog";
 import { CircleInvitationGate } from "./circles/circle-invitation";
 import { pb } from "@/lib/pocketbase";
 import { downloadExpenses, type ExportFormat } from "@/lib/export";
@@ -164,8 +165,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 7)
-                    throw new Error("This app requires backend version 7. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 8)
+                    throw new Error("This app requires backend version 8. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -253,6 +254,7 @@ function Workspace({
     const [mobileNav, setMobileNav] = useState(false);
     const [editor, setEditor] = useState<Expense | "new" | "income" | null>(null);
     const [deleting, setDeleting] = useState<Expense | null>(null);
+    const [moving, setMoving] = useState<Expense | null>(null);
     const [deleteBusy, setDeleteBusy] = useState(false);
     const [budgetEditor, setBudgetEditor] = useState<Budget | "new" | null>(null);
     const [overview, setOverview] = useState<Overview>(blank);
@@ -920,6 +922,7 @@ function Workspace({
                                         timezone={timezone}
                                         onEdit={setEditor}
                                         onDelete={setDeleting}
+                                        onMove={setMoving}
                                         emptyAction={() => setEditor("new")}
                                     />
                                 </section>
@@ -973,6 +976,7 @@ function Workspace({
                                         timezone={timezone}
                                         onEdit={setEditor}
                                         onDelete={setDeleting}
+                                        onMove={setMoving}
                                         emptyAction={() => setEditor("new")}
                                         filtered={!!debouncedSearch || category !== "all"}
                                     />
@@ -1182,6 +1186,19 @@ function Workspace({
                     navigate("Circles");
                 }}
                 />
+                {moving && (
+                    <MoveExpenseDialog
+                        expense={moving}
+                        onClose={() => setMoving(null)}
+                        onMoved={(circle) => {
+                            refresh();
+                            void reloadConfiguration();
+                            setFocusedCircle(circle);
+                            navigate("Circles");
+                            toast.success("Expense moved to Circle");
+                        }}
+                    />
+                )}
                 {editor && (
                     <ExpenseEditor
                         key={typeof editor === "string" ? editor : editor.id}
@@ -1191,6 +1208,10 @@ function Workspace({
                         timezone={timezone}
                         onClose={() => setEditor(null)}
                         onSave={saveExpense}
+                        onMove={(expense) => {
+                            setEditor(null);
+                            setMoving(expense);
+                        }}
                     />
                 )}
                 {budgetEditor && (

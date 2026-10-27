@@ -249,6 +249,8 @@ test(
         );
         assert.equal(after.amount, 850);
         assert.equal(after.kind, "expense");
+        assert.equal(after.moved_to, "");
+        assert.equal(after.moved_circle, "");
         assert.equal(after.recurrence, "");
         assert.equal(storedPreferences.default_tab, "Overview");
         assert.equal(after.payment_method, "Stored Visa");
@@ -316,9 +318,13 @@ test(
         assert.equal(replay.id, expense.id);
         assert.equal(replay.replay, true);
         const detail = await request(`/api/expenditure/circles/${circle.id}`, auth.token);
+        assert.equal(detail.categories.length, 8);
+        assert.deepEqual(detail.categories.map((row) => row.sort_order), [0, 1, 2, 3, 4, 5, 6, 7]);
         for (const original of shared) {
             const migrated = detail.expenses.items.find((item) => item.id === original.id);
             assert.equal(migrated.amount, original.amount_minor);
+            assert.equal(migrated.category, "Other");
+            assert.equal(migrated.source, "manual");
             assert.equal(migrated.amount_minor, undefined);
             assert.deepEqual(migrated.shares, original.shares.map(({ amount_minor, ...share }) => ({ ...share, amount: amount_minor })));
             assert.equal(migrated.payment_method, original.payment_method);

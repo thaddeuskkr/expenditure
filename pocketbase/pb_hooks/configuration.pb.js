@@ -12,7 +12,7 @@ routerAdd(
         e.app
             .db()
             .newQuery(
-                "SELECT DISTINCT currency FROM expenses WHERE user = {:user} UNION SELECT DISTINCT currency FROM budgets WHERE user = {:user}",
+                "SELECT DISTINCT currency FROM expenses WHERE user = {:user} AND moved_to = '' UNION SELECT DISTINCT currency FROM budgets WHERE user = {:user}",
             )
             .bind({ user: e.auth.id })
             .all(used);

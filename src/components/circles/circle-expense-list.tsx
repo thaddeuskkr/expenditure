@@ -51,6 +51,10 @@ export function CircleExpenseList({
                                     {dayLabel(expense.occurred_at, preferences.timezone)} ·{" "}
                                     {SPLIT_LABELS[expense.split_mode]}
                                 </span>
+                                <span className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                                    <span className="size-1.5 rounded-full" style={{ backgroundColor: detail.categories.find((item) => item.name === expense.category)?.color }} />
+                                    {expense.category}
+                                </span>
                                 <span className="mt-1 block text-[10px] text-muted-foreground">
                                     Your share: {money(myShare, expense.currency)}{" "}
                                     {expense.currency}

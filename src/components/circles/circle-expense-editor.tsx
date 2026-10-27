@@ -45,6 +45,8 @@ export function CircleExpenseEditor({
 }) {
     const { preferences } = useWorkspace();
     const entryKind = expense?.kind || kind;
+    const categories = data.categories.filter((item) => item.active || item.name === expense?.category);
+    const [category, setCategory] = useState(expense?.category || categories.find((item) => item.name === "Other")?.name || categories[0]?.name || "");
     const [recurrence, setRecurrence] = useState<Recurrence>(expense?.recurrence || "");
     const eligible = data.members.filter(
         (member) =>
@@ -138,6 +140,7 @@ export function CircleExpenseEditor({
                     kind: entryKind,
                     recurrence: entryKind === "expense" ? recurrence : "",
                     title: String(form.get("title")).trim(),
+                    category,
                     amount: parseMinorUnits(amount, code),
                     currency: code,
                     paid_by: payer,
@@ -240,6 +243,13 @@ export function CircleExpenseEditor({
                             className="h-10"
                         />
                     </div>
+                </div>
+                <div>
+                    <label htmlFor="shared-category" className="field-label">Category</label>
+                    <Select value={category} onValueChange={setCategory}>
+                        <SelectTrigger id="shared-category" className="h-10! w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>{categories.map((item) => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}</SelectContent>
+                    </Select>
                 </div>
                 <fieldset className="border-t pt-5">
                     <legend className="field-label pt-5">Split between</legend>

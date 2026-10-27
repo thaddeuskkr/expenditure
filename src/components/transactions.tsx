@@ -24,6 +24,7 @@ export function Transactions({
     timezone,
     onEdit,
     onDelete,
+    onMove,
     emptyAction,
     filtered = false,
 }: {
@@ -31,6 +32,7 @@ export function Transactions({
     timezone: string;
     onEdit: (expense: Expense) => void;
     onDelete: (expense: Expense) => void;
+    onMove: (expense: Expense) => void;
     emptyAction: () => void;
     filtered?: boolean;
 }) {
@@ -115,6 +117,7 @@ export function Transactions({
                                         <DropdownMenuItem onClick={() => onEdit(expense)}>
                                             Edit {expense.kind}
                                         </DropdownMenuItem>
+                                        {expense.kind === "expense" && <DropdownMenuItem onClick={() => onMove(expense)}>Move to Circle</DropdownMenuItem>}
                                         <DropdownMenuItem
                                             variant="destructive"
                                             onClick={() => onDelete(expense)}>

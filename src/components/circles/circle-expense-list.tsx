@@ -1,8 +1,9 @@
 "use client";
 
 import { useWorkspace } from "../workspace-context";
+import { CategoryIcon } from "../category-icon";
 import type { CircleDetail } from "@/lib/circles";
-import { convertAmount, dayLabel, money, rateDate } from "@/lib/domain";
+import { CATEGORY_COLORS, convertAmount, dayLabel, money, rateDate } from "@/lib/domain";
 import { SPLIT_LABELS, type CircleExpense } from "@/lib/circles";
 import { CirclePagination } from "./circle-pagination";
 
@@ -43,7 +44,11 @@ export function CircleExpenseList({
                         <button
                             key={expense.id}
                             onClick={() => onView(expense)}
-                            className="flex w-full items-center gap-4 py-5 text-left hover:bg-white/2">
+                            className="flex w-full items-center gap-3 py-5 text-left hover:bg-white/2 sm:gap-4">
+                            <CategoryIcon
+                                category={expense.category}
+                                color={detail.categories.find((item) => item.name === expense.category)?.color || CATEGORY_COLORS[7]}
+                            />
                             <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm">{expense.title}</span>
                                 <span className="mt-2 block text-[10px] text-muted-foreground">
@@ -51,8 +56,7 @@ export function CircleExpenseList({
                                     {dayLabel(expense.occurred_at, preferences.timezone)} ·{" "}
                                     {SPLIT_LABELS[expense.split_mode]}
                                 </span>
-                                <span className="mt-1 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-                                    <span className="size-1.5 rounded-full" style={{ backgroundColor: detail.categories.find((item) => item.name === expense.category)?.color }} />
+                                <span className="mt-1 block text-[10px] text-muted-foreground">
                                     {expense.category}
                                 </span>
                                 <span className="mt-1 block text-[10px] text-muted-foreground">

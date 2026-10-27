@@ -248,10 +248,11 @@ export function ExpenseEditor({
                         </p>
                     )}
                     <DialogFooter>
-                        {expense && entryKind === "expense" && onMove && <Button type="button" variant="outline" disabled={busy} onClick={() => onMove(expense)}>Move to Circle</Button>}
+                        {expense && entryKind === "expense" && onMove && <Button type="button" variant="outline" className="h-10" disabled={busy} onClick={() => onMove(expense)}>Move to Circle</Button>}
                         <Button
                             type="button"
                             variant="ghost"
+                            className="h-10"
                             onClick={onClose}
                             disabled={busy}>
                             Cancel

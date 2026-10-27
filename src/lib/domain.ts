@@ -34,21 +34,21 @@ export const CATEGORY_COLORS = [
 ];
 export interface Expense extends RecordModel {
     merchant: string;
-    /** Currency minor units; the PocketBase column keeps its original name. */
-    amount_cents: number;
+    /** Integer currency minor units (cents for SGD). */
+    amount: number;
     currency: string;
     category: Category;
     occurred_at: string;
     notes: string;
-    card: string;
+    payment_method: string;
     source: "manual" | "api";
 }
 export interface Budget extends RecordModel {
     month: string;
     category: Category | "Overall";
     currency: string;
-    /** Currency minor units; the PocketBase column keeps its original name. */
-    amount_cents: number;
+    /** Integer currency minor units (cents for SGD). */
+    amount: number;
 }
 export interface Preferences extends RecordModel {
     currency: string;
@@ -111,12 +111,12 @@ export interface Overview {
 export type ExpenseInput = Pick<
     Expense,
     | "merchant" |
-    "amount_cents" |
+    "amount" |
     "currency" |
     "category" |
     "occurred_at" |
     "notes" |
-    "card"
+    "payment_method"
 >;
 
 export function money(minorUnits: number, currency = "SGD") {

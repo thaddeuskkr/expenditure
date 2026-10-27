@@ -12,10 +12,9 @@ function timestamp(ms) {
 
 function read(app) {
     const record = app.findRecordById("exchange_rates", cacheId);
-    const data = JSON.parse(record.getString("data"));
     return {
-        quotes: data.quotes,
-        dates: data.dates,
+        quotes: JSON.parse(record.getString("quotes")),
+        dates: JSON.parse(record.getString("dates")),
         fetched_at: record.getString("fetched_at"),
         attempted_at: record.getString("attempted_at"),
         provider: "Frankfurter",
@@ -86,7 +85,8 @@ function refresh(app) {
         if (Object.keys(seen).length < 2 || !seen.USD || !seen.SGD)
             throw new Error("Incomplete exchange-rate response.");
         const record = app.findRecordById("exchange_rates", cacheId);
-        record.set("data", { quotes, dates });
+        record.set("quotes", quotes);
+        record.set("dates", dates);
         record.set("fetched_at", timestamp(now));
         record.set("locked_until", "");
         app.save(record);

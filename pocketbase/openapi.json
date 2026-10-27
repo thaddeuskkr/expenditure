@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "4.1.0",
-    "description": "Personal API keys authorize the personal expense automation endpoints. Category ordering and Circles require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server."
+    "version": "6.0.0",
+    "description": "Personal API keys authorize the personal expense automation endpoints. Category ordering and Circles require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted."
   },
   "servers": [
     {
@@ -44,7 +44,7 @@
                 "merchant": "Apartment Coffee",
                 "currency": "SGD",
                 "category": "Food & drinks",
-                "amount_minor": 650,
+                "amount": 650,
                 "payment_method": "Visa",
                 "notes": "Afternoon coffee"
               }
@@ -73,7 +73,7 @@
             }
           },
           "400": {
-            "description": "Invalid field type or length, unsupported or disabled currency, unknown or inactive category, or conflicting payment_method/card aliases"
+            "description": "Unsupported fields, invalid types or lengths, invalid integer amount, unsupported or disabled currency, or unknown/inactive category"
           },
           "401": {
             "description": "Invalid, expired or revoked key"
@@ -87,7 +87,7 @@
         }
       },
       "get": {
-        "summary": "List the key owner’s expenses",
+        "summary": "List the key owner\u2019s expenses",
         "description": "Requires expenses:read. Ordered by occurred_at, then created, newest first.",
         "parameters": [
           {
@@ -1041,6 +1041,162 @@
           }
         }
       }
+    },
+    "/api/expenditure/keys": {
+      "get": {
+        "summary": "List personal API keys",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ApiKeyRecord"
+                      }
+                    }
+                  },
+                  "required": [
+                    "items"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a personal API key",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "description": "Secret returned only once."
+                    },
+                    "record": {
+                      "$ref": "#/components/schemas/ApiKeyRecord"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "record"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, scopes, expiry or active key limit reached"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiKeyInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/expenditure/keys/{id}": {
+      "delete": {
+        "summary": "Revoke a personal API key",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "revoked"
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Key is not owned by the authenticated user"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/expenditure/rates": {
+      "get": {
+        "summary": "Read cached reference exchange rates",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExchangeRates"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1061,20 +1217,14 @@
       "ExpenseInput": {
         "type": "object",
         "required": [
-          "merchant"
+          "merchant",
+          "amount"
         ],
         "properties": {
           "merchant": {
             "type": "string",
             "minLength": 1,
             "maxLength": 160
-          },
-          "amount_cents": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 99999999999,
-            "deprecated": true,
-            "description": "Legacy input alias, accepted only for currencies with two decimal places. Use amount_minor for all currencies."
           },
           "currency": {
             "type": "string",
@@ -1248,93 +1398,263 @@
             "format": "date-time",
             "description": "Defaults to server time; include Z or a timezone offset when supplied."
           },
-          "card": {
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Optional text, preserved as supplied, up to 2000 characters. Defaults to an empty string."
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999,
+            "description": "Positive integer currency minor units, stored unchanged as amount in PocketBase. SGD 6.50 = 650, JPY 1000 = 1000, KWD 1.234 = 1234."
+          },
+          "payment_method": {
             "type": "string",
             "maxLength": 80,
-            "description": "Legacy request alias for payment_method. Must match exactly when both are supplied. Native PocketBase records continue to store this field."
+            "description": "Optional free-text payment label, such as Cash or Visa, stored unchanged as payment_method. Defaults to an empty string."
+          }
+        },
+        "additionalProperties": false
+      },
+      "Expense": {
+        "type": "object",
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "A supported uppercase currency code enabled in the user account. Defaults to the user main currency only when omitted; null, empty strings and non-string values are rejected."
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "A non-empty string naming an active category belonging to the user; surrounding whitespace is trimmed and matching is case-insensitive. Defaults to active Other, otherwise the first active category, only when omitted."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Defaults to server time; include Z or a timezone offset when supplied."
           },
           "notes": {
             "type": "string",
             "maxLength": 2000,
             "description": "Optional text, preserved as supplied, up to 2000 characters. Defaults to an empty string."
           },
-          "amount_minor": {
+          "amount": {
             "type": "integer",
             "minimum": 1,
             "maximum": 99999999999,
-            "description": "Positive integer currency minor units. SGD 6.50 = 650, JPY 1000 = 1000, KWD 1.234 = 1234. If amount_cents is also present both must agree."
+            "description": "Positive integer currency minor units, stored unchanged as amount in PocketBase. SGD 6.50 = 650, JPY 1000 = 1000, KWD 1.234 = 1234."
           },
           "payment_method": {
             "type": "string",
             "maxLength": 80,
-            "description": "Optional free-text payment method, such as Cash or Visa. Defaults to an empty string. The legacy card alias is accepted; if both are supplied they must match exactly."
+            "description": "Optional free-text payment label, such as Cash or Visa, stored unchanged as payment_method. Defaults to an empty string."
+          },
+          "id": {
+            "type": "string"
+          },
+          "user": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "api"
+            ]
+          },
+          "created": {
+            "type": "string"
+          },
+          "updated": {
+            "type": "string"
+          },
+          "replay": {
+            "type": "boolean"
+          },
+          "idempotency_expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "POST responses only: fixed retry-window end in UTC, 24 hours after server creation; null when the request had no Idempotency-Key. Retries do not extend this timestamp."
           }
         },
-        "anyOf": [
-          {
-            "required": [
-              "amount_minor"
-            ]
-          },
-          {
-            "required": [
-              "amount_cents"
-            ]
-          }
-        ]
-      },
-      "Expense": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/ExpenseInput"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "user": {
-                "type": "string"
-              },
-              "source": {
-                "type": "string",
-                "enum": [
-                  "manual",
-                  "api"
-                ]
-              },
-              "created": {
-                "type": "string"
-              },
-              "updated": {
-                "type": "string"
-              },
-              "replay": {
-                "type": "boolean"
-              },
-              "amount_cents": {
-                "type": "integer",
-                "description": "Native compatibility field containing the same currency minor-unit value as amount_minor, for every currency."
-              },
-              "amount_minor": {
-                "type": "integer",
-                "minimum": 1,
-                "maximum": 99999999999
-              },
-              "payment_method": {
-                "type": "string",
-                "maxLength": 80,
-                "description": "Payment method; returned with the native compatibility field card on create, replay and list responses."
-              },
-              "idempotency_expires_at": {
-                "type": "string",
-                "format": "date-time",
-                "nullable": true,
-                "description": "POST responses only: fixed retry-window end in UTC, 24 hours after server creation; null when the request had no Idempotency-Key. Retries do not extend this timestamp."
-              }
-            }
-          }
+        "required": [
+          "id",
+          "user",
+          "merchant",
+          "amount",
+          "currency",
+          "category",
+          "payment_method",
+          "notes",
+          "occurred_at",
+          "source",
+          "created",
+          "updated"
         ]
       },
       "CircleInput": {
@@ -1925,20 +2245,21 @@
               "ZWG"
             ]
           },
-          "owner_member": {
-            "type": "string",
-            "pattern": "^[a-z0-9]{15}$",
-            "description": "Active membership id of the new owner."
-          },
           "version": {
             "type": "integer",
             "minimum": 1,
             "description": "Current record version; stale writes return 409."
+          },
+          "owner": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$",
+            "description": "User ID of an active member of this circle. Same relation value stored in circles.owner; membership IDs are rejected."
           }
         },
         "required": [
           "version"
-        ]
+        ],
+        "additionalProperties": false
       },
       "CircleDeletion": {
         "type": "object",
@@ -1985,30 +2306,46 @@
             "type": "boolean"
           },
           "user": {
+            "type": "string",
+            "pattern": "^([a-z0-9]{15})?$",
+            "description": "Stored users relation ID; empty if the account was deleted."
+          },
+          "expand": {
             "type": "object",
             "properties": {
-              "id": {
-                "type": "string",
-                "pattern": "^[a-z0-9]{15}$"
-              },
-              "collectionId": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "avatar": {
-                "type": "string"
+              "user": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9]{15}$"
+                  },
+                  "collectionId": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "avatar": {
+                    "type": "string"
+                  }
+                }
               }
             },
-            "nullable": true
+            "description": "Public profile fields only; email and authentication data are excluded."
+          },
+          "circle": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
           }
         },
         "required": [
           "id",
           "name",
           "active",
-          "user"
+          "user",
+          "expand",
+          "circle"
         ]
       },
       "CircleInvitation": {
@@ -2042,202 +2379,215 @@
             "type": "object",
             "properties": {
               "circle": {
+                "type": "string",
+                "pattern": "^[a-z0-9]{15}$"
+              },
+              "expand": {
                 "type": "object",
                 "properties": {
-                  "id": {
-                    "type": "string",
-                    "pattern": "^[a-z0-9]{15}$"
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "icon": {
-                    "type": "string",
-                    "enum": [
-                      "users",
-                      "plane",
-                      "home",
-                      "utensils",
-                      "coffee",
-                      "gift",
-                      "briefcase",
-                      "car",
-                      "music",
-                      "heart"
-                    ],
-                    "default": "users"
-                  },
-                  "currency": {
-                    "type": "string",
-                    "enum": [
-                      "AED",
-                      "AFN",
-                      "ALL",
-                      "AMD",
-                      "ANG",
-                      "AOA",
-                      "ARS",
-                      "AUD",
-                      "AWG",
-                      "AZN",
-                      "BAM",
-                      "BBD",
-                      "BDT",
-                      "BHD",
-                      "BIF",
-                      "BMD",
-                      "BND",
-                      "BOB",
-                      "BRL",
-                      "BSD",
-                      "BTN",
-                      "BWP",
-                      "BYN",
-                      "BZD",
-                      "CAD",
-                      "CDF",
-                      "CHF",
-                      "CLP",
-                      "CNY",
-                      "COP",
-                      "CRC",
-                      "CUP",
-                      "CVE",
-                      "CZK",
-                      "DJF",
-                      "DKK",
-                      "DOP",
-                      "DZD",
-                      "EGP",
-                      "ERN",
-                      "ETB",
-                      "EUR",
-                      "FJD",
-                      "FKP",
-                      "GBP",
-                      "GEL",
-                      "GHS",
-                      "GIP",
-                      "GMD",
-                      "GNF",
-                      "GTQ",
-                      "GYD",
-                      "HKD",
-                      "HNL",
-                      "HTG",
-                      "HUF",
-                      "IDR",
-                      "ILS",
-                      "INR",
-                      "IQD",
-                      "IRR",
-                      "ISK",
-                      "JMD",
-                      "JOD",
-                      "JPY",
-                      "KES",
-                      "KGS",
-                      "KHR",
-                      "KMF",
-                      "KPW",
-                      "KRW",
-                      "KWD",
-                      "KYD",
-                      "KZT",
-                      "LAK",
-                      "LBP",
-                      "LKR",
-                      "LRD",
-                      "LSL",
-                      "LYD",
-                      "MAD",
-                      "MDL",
-                      "MGA",
-                      "MKD",
-                      "MMK",
-                      "MNT",
-                      "MOP",
-                      "MRU",
-                      "MUR",
-                      "MVR",
-                      "MWK",
-                      "MXN",
-                      "MYR",
-                      "MZN",
-                      "NAD",
-                      "NGN",
-                      "NIO",
-                      "NOK",
-                      "NPR",
-                      "NZD",
-                      "OMR",
-                      "PAB",
-                      "PEN",
-                      "PGK",
-                      "PHP",
-                      "PKR",
-                      "PLN",
-                      "PYG",
-                      "QAR",
-                      "RON",
-                      "RSD",
-                      "RUB",
-                      "RWF",
-                      "SAR",
-                      "SBD",
-                      "SCR",
-                      "SDG",
-                      "SEK",
-                      "SGD",
-                      "SHP",
-                      "SLE",
-                      "SOS",
-                      "SRD",
-                      "SSP",
-                      "STN",
-                      "SVC",
-                      "SYP",
-                      "SZL",
-                      "THB",
-                      "TJS",
-                      "TMT",
-                      "TND",
-                      "TOP",
-                      "TRY",
-                      "TTD",
-                      "TWD",
-                      "TZS",
-                      "UAH",
-                      "UGX",
-                      "USD",
-                      "UYU",
-                      "UZS",
-                      "VES",
-                      "VND",
-                      "VUV",
-                      "WST",
-                      "XAF",
-                      "XCD",
-                      "XCG",
-                      "XOF",
-                      "XPF",
-                      "YER",
-                      "ZAR",
-                      "ZMW",
-                      "ZWG"
+                  "circle": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "pattern": "^[a-z0-9]{15}$"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "icon": {
+                        "type": "string",
+                        "enum": [
+                          "users",
+                          "plane",
+                          "home",
+                          "utensils",
+                          "coffee",
+                          "gift",
+                          "briefcase",
+                          "car",
+                          "music",
+                          "heart"
+                        ],
+                        "default": "users"
+                      },
+                      "currency": {
+                        "type": "string",
+                        "enum": [
+                          "AED",
+                          "AFN",
+                          "ALL",
+                          "AMD",
+                          "ANG",
+                          "AOA",
+                          "ARS",
+                          "AUD",
+                          "AWG",
+                          "AZN",
+                          "BAM",
+                          "BBD",
+                          "BDT",
+                          "BHD",
+                          "BIF",
+                          "BMD",
+                          "BND",
+                          "BOB",
+                          "BRL",
+                          "BSD",
+                          "BTN",
+                          "BWP",
+                          "BYN",
+                          "BZD",
+                          "CAD",
+                          "CDF",
+                          "CHF",
+                          "CLP",
+                          "CNY",
+                          "COP",
+                          "CRC",
+                          "CUP",
+                          "CVE",
+                          "CZK",
+                          "DJF",
+                          "DKK",
+                          "DOP",
+                          "DZD",
+                          "EGP",
+                          "ERN",
+                          "ETB",
+                          "EUR",
+                          "FJD",
+                          "FKP",
+                          "GBP",
+                          "GEL",
+                          "GHS",
+                          "GIP",
+                          "GMD",
+                          "GNF",
+                          "GTQ",
+                          "GYD",
+                          "HKD",
+                          "HNL",
+                          "HTG",
+                          "HUF",
+                          "IDR",
+                          "ILS",
+                          "INR",
+                          "IQD",
+                          "IRR",
+                          "ISK",
+                          "JMD",
+                          "JOD",
+                          "JPY",
+                          "KES",
+                          "KGS",
+                          "KHR",
+                          "KMF",
+                          "KPW",
+                          "KRW",
+                          "KWD",
+                          "KYD",
+                          "KZT",
+                          "LAK",
+                          "LBP",
+                          "LKR",
+                          "LRD",
+                          "LSL",
+                          "LYD",
+                          "MAD",
+                          "MDL",
+                          "MGA",
+                          "MKD",
+                          "MMK",
+                          "MNT",
+                          "MOP",
+                          "MRU",
+                          "MUR",
+                          "MVR",
+                          "MWK",
+                          "MXN",
+                          "MYR",
+                          "MZN",
+                          "NAD",
+                          "NGN",
+                          "NIO",
+                          "NOK",
+                          "NPR",
+                          "NZD",
+                          "OMR",
+                          "PAB",
+                          "PEN",
+                          "PGK",
+                          "PHP",
+                          "PKR",
+                          "PLN",
+                          "PYG",
+                          "QAR",
+                          "RON",
+                          "RSD",
+                          "RUB",
+                          "RWF",
+                          "SAR",
+                          "SBD",
+                          "SCR",
+                          "SDG",
+                          "SEK",
+                          "SGD",
+                          "SHP",
+                          "SLE",
+                          "SOS",
+                          "SRD",
+                          "SSP",
+                          "STN",
+                          "SVC",
+                          "SYP",
+                          "SZL",
+                          "THB",
+                          "TJS",
+                          "TMT",
+                          "TND",
+                          "TOP",
+                          "TRY",
+                          "TTD",
+                          "TWD",
+                          "TZS",
+                          "UAH",
+                          "UGX",
+                          "USD",
+                          "UYU",
+                          "UZS",
+                          "VES",
+                          "VND",
+                          "VUV",
+                          "WST",
+                          "XAF",
+                          "XCD",
+                          "XCG",
+                          "XOF",
+                          "XPF",
+                          "YER",
+                          "ZAR",
+                          "ZMW",
+                          "ZWG"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "icon",
+                      "currency"
                     ]
                   }
                 },
                 "required": [
-                  "id",
-                  "name",
-                  "icon",
-                  "currency"
+                  "circle"
                 ]
               }
             },
             "required": [
-              "circle"
+              "circle",
+              "expand"
             ]
           }
         ]
@@ -2612,7 +2962,7 @@
               "ZWG"
             ]
           },
-          "amount_minor": {
+          "amount": {
             "type": "integer",
             "minimum": 1,
             "maximum": 99999999999,
@@ -2623,7 +2973,7 @@
           "from_member",
           "to_member",
           "currency",
-          "amount_minor"
+          "amount"
         ]
       },
       "CircleExpenseInput": {
@@ -2634,7 +2984,7 @@
             "minLength": 1,
             "maxLength": 160
           },
-          "amount_minor": {
+          "amount": {
             "type": "integer",
             "minimum": 1,
             "maximum": 99999999999,
@@ -2816,19 +3166,61 @@
           "shares": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "member": {
-                  "type": "string",
-                  "pattern": "^[a-z0-9]{15}$"
+              "description": "Use member alone for even splits, member + amount for exact splits, or member + percentage_bp for percentage splits. These are the stored share field names; allocation math is validated server-side.",
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "member": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9]{15}$"
+                    }
+                  },
+                  "required": [
+                    "member"
+                  ]
                 },
-                "value": {
-                  "type": "string",
-                  "description": "Omit for even splits. Percentage: decimal string with up to 2 decimals, all values total 100. Exact: decimal currency string; all values total the expense amount."
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "member": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9]{15}$"
+                    },
+                    "amount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 99999999999,
+                      "description": "Exact allocation in integer currency minor units; all shares must sum to the expense amount."
+                    }
+                  },
+                  "required": [
+                    "member",
+                    "amount"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "member": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9]{15}$"
+                    },
+                    "percentage_bp": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 10000,
+                      "description": "Percentage in basis points: 2500 = 25%. All shares must total 10000."
+                    }
+                  },
+                  "required": [
+                    "member",
+                    "percentage_bp"
+                  ]
                 }
-              },
-              "required": [
-                "member"
               ]
             },
             "minItems": 1,
@@ -2850,7 +3242,7 @@
         },
         "required": [
           "title",
-          "amount_minor",
+          "amount",
           "currency",
           "paid_by",
           "split_mode",
@@ -2875,7 +3267,7 @@
             "minLength": 1,
             "maxLength": 160
           },
-          "amount_minor": {
+          "amount": {
             "type": "integer",
             "minimum": 1,
             "maximum": 99999999999,
@@ -3063,7 +3455,7 @@
                   "type": "string",
                   "pattern": "^[a-z0-9]{15}$"
                 },
-                "amount_minor": {
+                "amount": {
                   "type": "integer",
                   "minimum": 0
                 },
@@ -3075,7 +3467,7 @@
               },
               "required": [
                 "member",
-                "amount_minor"
+                "amount"
               ]
             }
           },
@@ -3114,7 +3506,7 @@
           "id",
           "title",
           "currency",
-          "amount_minor",
+          "amount",
           "paid_by",
           "created_by",
           "split_mode",
@@ -3294,7 +3686,7 @@
               "ZWG"
             ]
           },
-          "amount_minor": {
+          "amount": {
             "type": "integer",
             "minimum": 1,
             "maximum": 99999999999,
@@ -3314,7 +3706,7 @@
           "from_member",
           "to_member",
           "currency",
-          "amount_minor"
+          "amount"
         ]
       },
       "CircleSettlement": {
@@ -3488,7 +3880,7 @@
               "ZWG"
             ]
           },
-          "amount_minor": {
+          "amount": {
             "type": "integer",
             "minimum": 1,
             "maximum": 99999999999,
@@ -3526,7 +3918,7 @@
           "from_member",
           "to_member",
           "currency",
-          "amount_minor",
+          "amount",
           "occurred_at",
           "created_by",
           "version"
@@ -3864,6 +4256,136 @@
             "minimum": 0
           }
         }
+      },
+      "ApiKeyInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "scopes",
+          "expires_at"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "scopes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "expenses:read",
+                "expenses:write"
+              ]
+            }
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "Future ISO 8601 timestamp with Z or an explicit timezone offset; empty string means no expiration. Stored directly as expires_at.",
+            "example": "2027-01-25T00:00:00Z"
+          }
+        }
+      },
+      "ApiKeyRecord": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "key_prefix": {
+            "type": "string"
+          },
+          "scopes": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "expenses:read",
+                "expenses:write"
+              ]
+            }
+          },
+          "created": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "description": "Future ISO 8601 timestamp with Z or an explicit timezone offset; empty string means no expiration. Stored directly as expires_at.",
+            "example": "2027-01-25T00:00:00Z"
+          },
+          "revoked_at": {
+            "type": "string"
+          },
+          "last_used": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "key_prefix",
+          "scopes",
+          "created",
+          "expires_at",
+          "revoked_at",
+          "last_used"
+        ]
+      },
+      "ExchangeRates": {
+        "type": "object",
+        "properties": {
+          "quotes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "Stored exchange_rates.quotes, units per EUR."
+          },
+          "dates": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Stored exchange_rates.dates, observation date per currency."
+          },
+          "fetched_at": {
+            "type": "string"
+          },
+          "attempted_at": {
+            "type": "string"
+          },
+          "stale": {
+            "type": "boolean",
+            "description": "Derived from fetched_at."
+          },
+          "provider": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "quotes",
+          "dates",
+          "fetched_at",
+          "attempted_at",
+          "stale",
+          "provider",
+          "source_url"
+        ]
       }
     }
   }

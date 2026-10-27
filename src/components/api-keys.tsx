@@ -95,7 +95,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
               scope === "both" ?
                       ["expenses:read", "expenses:write"] :
                       [`expenses:${scope}`],
-                        expires_in_days: days === "never" ? null : Number(days),
+                        expires_at: days === "never" ? "" : new Date(Date.now() + Number(days) * 86400000).toISOString(),
                     },
                 },
             );
@@ -140,7 +140,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
   -H 'Idempotency-Key: a-unique-transaction-id' \\
   -d '{
     "merchant": "Apartment Coffee",
-    "amount_minor": 650,
+    "amount": 650,
     "currency": "SGD",
     "category": "Food & drinks",
     "payment_method": "Visa",

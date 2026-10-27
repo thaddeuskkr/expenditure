@@ -129,6 +129,7 @@ test(
             currency: "SGD",
             category: "Food & drinks",
             amount_cents: 850,
+            card: "Stored Visa",
             occurred_at: "2026-10-26T00:00:00Z",
             source: "api",
             idempotency_key: "preserved-idempotency",
@@ -186,12 +187,59 @@ test(
 
         const previousCategories = await categoryRows(user.id, "created,name,id");
         const secondPrevious = await categoryRows(secondUser.id, "created,name,id");
+        const circle = await request("/api/collections/circles/records", admin, {
+            owner: user.id, name: "Existing circle", icon: "plane", currency: "SGD", version: 1,
+        });
+        const members = [];
+        for (const [owner, name] of [[user.id, "Owner"], [secondUser.id, "Member"]]) {
+            members.push(await request("/api/collections/circle_members/records", admin, {
+                circle: circle.id, user: owner, name, active: true,
+            }));
+        }
+
+        const shared = [];
+        for (const [currency, amount, split_mode, shares] of [
+            ["SGD", 650, "even", [{ member: members[0].id, amount_minor: 325 }, { member: members[1].id, amount_minor: 325 }]],
+            ["JPY", 1000, "percentage", [{ member: members[0].id, amount_minor: 300, percentage_bp: 3000 }, { member: members[1].id, amount_minor: 700, percentage_bp: 7000 }]],
+            ["KWD", 1234, "exact", [{ member: members[1].id, amount_minor: 1234 }]],
+        ]) {
+            shared.push(await request("/api/collections/circle_expenses/records", admin, {
+                circle: circle.id, paid_by: members[0].id, created_by: members[0].id,
+                title: "Existing shared expense", currency, amount_minor: amount,
+                split_mode, shares, payment_method: "Stored Mastercard", notes: "Keep this note",
+                occurred_at: "2026-10-27T00:00:00Z", version: 1,
+            }));
+        }
+
+        const cachedRates = { quotes: { EUR: 1, SGD: 1.5, JPY: 150 }, dates: { SGD: "2026-10-27", JPY: "2026-10-27" } };
+        await request("/api/collections/exchange_rates/records/fxlatest0000000", admin, {
+            data: cachedRates, fetched_at: "2026-10-27T00:00:00Z", attempted_at: "2026-10-27T00:00:00Z",
+        }, "PATCH");
+        const preferencesBefore = await request(`/api/collections/preferences/records/${prefs.id}`, admin);
+        assert.deepEqual(preferencesBefore.currencies, []);
+        const settlement = await request("/api/collections/circle_settlements/records", admin, {
+            circle: circle.id, from_member: members[1].id, to_member: members[0].id,
+            created_by: members[0].id, currency: "SGD", amount_minor: 100,
+            notes: "Existing repayment", occurred_at: "2026-10-27T00:00:00Z", version: 1,
+        });
         await stop();
         const upgrade = spawnSync(binary, ["migrate", "up", ...newFlags], {
             encoding: "utf8",
         });
         assert.equal(upgrade.status, 0, upgrade.stderr + upgrade.stdout);
         await start(newFlags);
+        const rates = await request("/api/collections/exchange_rates/records/fxlatest0000000", admin);
+        assert.deepEqual(rates.quotes, cachedRates.quotes);
+        assert.deepEqual(rates.dates, cachedRates.dates);
+        assert.equal(rates.data, undefined);
+        assert.equal(Date.parse(rates.fetched_at), Date.parse("2026-10-27T00:00:00Z"));
+        const storedPreferences = await request(`/api/collections/preferences/records/${prefs.id}`, admin);
+        assert.deepEqual(storedPreferences.currencies, ["SGD", "USD", "EUR", "GBP", "AUD", "MYR"]);
+        assert.equal(storedPreferences.updated, preferencesBefore.updated);
+        const rateSchema = await request("/api/collections/exchange_rates", admin);
+        assert.ok(rateSchema.fields.some((field) => field.name === "quotes"));
+        assert.ok(rateSchema.fields.some((field) => field.name === "dates"));
+        assert.ok(!rateSchema.fields.some((field) => field.name === "data"));
         const identityAfter = await request("/api/collections/users", admin);
         assert.deepEqual(identityAfter.oauth2, identityBefore.oauth2);
         assert.deepEqual(identityAfter.passwordAuth, identityBefore.passwordAuth);
@@ -199,7 +247,10 @@ test(
             `/api/collections/expenses/records/${expense.id}`,
             admin,
         );
-        assert.equal(after.amount_cents, 850);
+        assert.equal(after.amount, 850);
+        assert.equal(after.payment_method, "Stored Visa");
+        assert.equal(after.amount_cents, undefined);
+        assert.equal(after.card, undefined);
         assert.equal(after.category, "Food & drinks");
         assert.equal(after.currency, "SGD");
         assert.equal(after.source, "api");
@@ -208,7 +259,8 @@ test(
             admin,
         );
         assert.equal(preserved.category, "Food & drinks");
-        assert.equal(preserved.amount_cents, 20000);
+        assert.equal(preserved.amount, 20000);
+        assert.equal(preserved.amount_cents, undefined);
         assert.equal(
             (await request("/api/collections/budgets/records", admin)).totalItems,
             2,
@@ -234,6 +286,53 @@ test(
             { identity: "upgrade@example.com", password },
         );
         const config = await request("/api/expenditure/config", auth.token);
+        for (const name of ["expenses", "budgets", "circle_expenses", "circle_settlements"]) {
+            const collection = await request(`/api/collections/${name}`, admin);
+            const fields = collection.fields.map((field) => field.name);
+            assert.ok(fields.includes("amount"));
+            assert.ok(!fields.includes("amount_cents") && !fields.includes("amount_minor"));
+            if (name === "expenses") {
+                assert.ok(fields.includes("payment_method"));
+                assert.ok(!fields.includes("card"));
+            }
+        }
+
+        const automation = await request("/api/expenditure/keys", auth.token, {
+            name: "Migration replay check", scopes: ["expenses:write"], expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
+        });
+        const replayResponse = await fetch(base + "/api/expenses/transactions", {
+            method: "POST",
+            headers: { "X-API-Key": automation.key, "Idempotency-Key": "preserved-idempotency", "Content-Type": "application/json" },
+            body: JSON.stringify({
+                merchant: "Existing coffee", amount: 850, currency: "SGD", category: "Food & drinks",
+                payment_method: "Stored Visa", occurred_at: "2026-10-26T00:00:00Z",
+            }),
+        });
+        const replay = await replayResponse.json();
+        assert.equal(replayResponse.status, 200, JSON.stringify(replay));
+        assert.equal(replay.id, expense.id);
+        assert.equal(replay.replay, true);
+        const detail = await request(`/api/expenditure/circles/${circle.id}`, auth.token);
+        for (const original of shared) {
+            const migrated = detail.expenses.items.find((item) => item.id === original.id);
+            assert.equal(migrated.amount, original.amount_minor);
+            assert.equal(migrated.amount_minor, undefined);
+            assert.deepEqual(migrated.shares, original.shares.map(({ amount_minor, ...share }) => ({ ...share, amount: amount_minor })));
+            assert.equal(migrated.payment_method, original.payment_method);
+            assert.equal(migrated.notes, original.notes);
+            const stored = await request(`/api/collections/circle_expenses/records/${original.id}`, admin);
+            assert.equal(stored.created, original.created);
+            assert.equal(stored.updated, original.updated);
+        }
+
+        assert.equal(detail.settlements.items[0].id, settlement.id);
+        assert.equal(detail.settlements.items[0].amount, 100);
+        assert.equal(detail.settlements.items[0].amount_minor, undefined);
+        for (const [currency, net] of [["SGD", 225], ["JPY", 700], ["KWD", 1234]]) {
+            assert.equal(detail.balances.find((row) => row.member === members[0].id && row.currency === currency).net, net);
+            assert.equal(detail.balances.find((row) => row.member === members[1].id && row.currency === currency).net, -net);
+        }
+
         assert.deepEqual(config.categories.map((category) => category.id), previousCategories.map((category) => category.id));
         assert.deepEqual(config.categories.map((category) => category.sort_order), [0, 1, 2]);
         assert.deepEqual(config.categories.map((category) => category.active), previousCategories.map((category) => category.active));

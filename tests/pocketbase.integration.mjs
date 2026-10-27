@@ -140,12 +140,12 @@ test(
             bob = await user("bob@example.com");
         const expense = {
             merchant: "Coffee",
-            amount_cents: 650,
+            amount: 650,
             currency: "SGD",
             category: "Food & drinks",
             occurred_at: "2026-10-26T08:00:00+08:00",
             notes: "",
-            card: "Visa",
+            payment_method: "Visa",
         };
         let first, writeKey, readKey;
         await t.test(
@@ -276,7 +276,7 @@ test(
                         await request("/api/expenditure/keys", {
                             token: alice.token,
                             method: "POST",
-                            body: { name: "Bad", scopes: ["admin"], expires_in_days: 90 },
+                            body: { name: "Bad", scopes: ["admin"], expires_at: new Date(Date.now() + 90 * 86400000).toISOString() },
                         })
                     ).status,
                     400,
@@ -287,7 +287,7 @@ test(
                     body: {
                         name: "iPhone",
                         scopes: ["expenses:write"],
-                        expires_in_days: 90,
+                        expires_at: new Date(Date.now() + 90 * 86400000).toISOString(),
                     },
                 });
                 assert.equal(result.status, 201, JSON.stringify(result.data));
@@ -333,9 +333,12 @@ test(
                     401,
                 );
                 for (const body of [
-                    { ...expense, amount_cents: 6.5 },
-                    { ...expense, amount_cents: -1 },
-                    { ...expense, amount_cents: "650" },
+                    { ...expense, amount: 6.5 },
+                    { ...expense, amount: -1 },
+                    { ...expense, amount: "650" },
+                    { ...expense, amount_cents: 650 },
+                    { ...expense, amount_minor: 650 },
+                    { ...expense, card: "Visa" },
                     { ...expense, currency: "XYZ" },
                     { ...expense, currency: "" },
                     { ...expense, currency: "sgd" },
@@ -388,7 +391,7 @@ test(
                         await request("/api/expenses/transactions", {
                             method: "POST",
                             key: writeKey.key,
-                            body: { ...expense, amount_cents: 700 },
+                            body: { ...expense, amount: 700 },
                             headers: { "Idempotency-Key": "wallet-transaction-1" },
                         })
                     ).status,
@@ -424,7 +427,7 @@ test(
                 body: {
                     name: "Read only",
                     scopes: ["expenses:read"],
-                    expires_in_days: 30,
+                    expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
                 },
             });
             assert.equal(result.status, 201, JSON.stringify(result.data));
@@ -445,7 +448,7 @@ test(
             assert.equal(list.status, 200, JSON.stringify(list.data));
             assert.equal(list.data.items.length, 2);
             assert.ok(list.data.items.every((r) => r.user === alice.id));
-            assert.ok(list.data.items.every((r) => r.amount_minor === r.amount_cents));
+            assert.ok(list.data.items.every((r) => typeof r.amount === "number" && !("amount_cents" in r) && !("amount_minor" in r) && !("card" in r)));
             assert.equal(list.data.totalItems, 3);
             assert.equal(
                 (await request("/api/expenditure/keys", { key: readKey.key })).status,
@@ -463,7 +466,7 @@ test(
                         user: alice.id,
                         source: "manual",
                         currency: "USD",
-                        amount_cents: 9900,
+                        amount: 9900,
                     },
                 });
                 await request("/api/collections/expenses/records", {
@@ -473,7 +476,7 @@ test(
                         ...expense,
                         user: bob.id,
                         source: "manual",
-                        amount_cents: 8800,
+                        amount: 8800,
                     },
                 });
                 await request("/api/collections/expenses/records", {
@@ -484,7 +487,7 @@ test(
                         user: alice.id,
                         source: "manual",
                         occurred_at: "2026-09-30T23:59:00+08:00",
-                        amount_cents: 1000,
+                        amount: 1000,
                     },
                 });
                 await request("/api/collections/expenses/records", {
@@ -495,7 +498,7 @@ test(
                         user: alice.id,
                         source: "manual",
                         occurred_at: "2026-10-01T00:00:00+08:00",
-                        amount_cents: 500,
+                        amount: 500,
                     },
                 });
                 const query = new URLSearchParams({
@@ -543,7 +546,7 @@ test(
                     month: "2026-10",
                     category: "Overall",
                     currency: "SGD",
-                    amount_cents: 100000,
+                    amount: 100000,
                 };
                 const result = await request("/api/collections/budgets/records", {
                     token: alice.token,
@@ -573,10 +576,12 @@ test(
                     user: alice.id,
                     currency: "SGD",
                     timezone: "Asia/Singapore",
+                    currencies: ["SGD", "USD", "EUR", "GBP", "AUD", "MYR"],
                 };
+                const configured = await request("/api/expenditure/config", { token: alice.token });
                 const preference = await request(
-                    "/api/collections/preferences/records",
-                    { token: alice.token, method: "POST", body: prefs },
+                    `/api/collections/preferences/records/${configured.data.preferences.id}`,
+                    { token: alice.token, method: "PATCH", body: prefs },
                 );
                 assert.equal(preference.status, 200, JSON.stringify(preference.data));
                 const changed = await request(
@@ -589,6 +594,9 @@ test(
                 );
                 assert.equal(changed.status, 200, JSON.stringify(changed.data));
                 assert.equal(changed.data.timezone, "America/New_York");
+                assert.equal((await request(`/api/collections/preferences/records/${preference.data.id}`, {
+                    token: alice.token, method: "PATCH", body: { currencies: [] },
+                })).status, 400);
                 assert.equal(
                     (
                         await request(
@@ -608,14 +616,11 @@ test(
                     ).status,
                     400,
                 );
-                assert.equal(
-                    (
-                        await request("/api/collections/preferences/records", {
-                            token: bob.token,
-                        })
-                    ).data.totalItems,
-                    0,
-                );
+                const bobPreferences = await request("/api/collections/preferences/records", { token: bob.token });
+                assert.equal(bobPreferences.data.totalItems, 1);
+                assert.equal(bobPreferences.data.items[0].user, bob.id);
+                assert.equal(bobPreferences.data.items[0].timezone, "Asia/Singapore");
+                assert.notEqual(bobPreferences.data.items[0].id, preference.data.id);
             },
         );
         await t.test(
@@ -714,22 +719,19 @@ test(
                     body: {
                         ...expense,
                         currency: "JPY",
-                        amount_minor: 1000,
-                        amount_cents: undefined,
+                        amount: 1000,
                         category: "Travel",
                     },
                 });
                 assert.equal(yen.status, 201, JSON.stringify(yen.data));
-                assert.equal(yen.data.amount_minor, 1000);
-                assert.equal(yen.data.amount_cents, 1000);
+                assert.equal(yen.data.amount, 1000);
                 const dinar = await request("/api/expenses/transactions", {
                     method: "POST",
                     key: writeKey.key,
                     body: {
                         ...expense,
                         currency: "KWD",
-                        amount_minor: 1234,
-                        amount_cents: undefined,
+                        amount: 1234,
                         category: "Travel",
                     },
                 });
@@ -739,7 +741,7 @@ test(
                         await request("/api/expenses/transactions", {
                             method: "POST",
                             key: writeKey.key,
-                            body: { ...expense, currency: "JPY", category: "Travel" },
+                            body: { ...expense, amount: 6.5, currency: "JPY", category: "Travel" },
                         })
                     ).status,
                     400,
@@ -762,7 +764,7 @@ test(
                         month: "2026-10",
                         currency: "SGD",
                         category: "Travel",
-                        amount_cents: 50000,
+                        amount: 50000,
                     },
                 });
                 assert.equal(budget.status, 200, JSON.stringify(budget.data));
@@ -968,7 +970,7 @@ test(
                     })
                 ).data.items;
                 assert.equal(
-                    originals.find((row) => row.currency === "JPY").amount_cents,
+                    originals.find((row) => row.currency === "JPY").amount,
                     1000,
                 );
                 fxStatus = 500;
@@ -998,7 +1000,7 @@ test(
                         token: admin,
                         method: "PATCH",
                         body: {
-                            data: { quotes: { EUR: 1, SGD: 1.5 }, dates: { SGD: rateDate } },
+                            quotes: { EUR: 1, SGD: 1.5 }, dates: { SGD: rateDate },
                         },
                     },
                 );
@@ -1024,7 +1026,7 @@ test(
             const added = await request("/api/collections/expenses/records", {
                 token: alice.token,
                 method: "POST",
-                body: { ...expense, user: alice.id, source: "manual", category: "__proto__", amount_cents: 100 },
+                body: { ...expense, user: alice.id, source: "manual", category: "__proto__", amount: 100 },
             });
             assert.equal(added.status, 200, JSON.stringify(added.data));
             const query = new URLSearchParams({ from: "2026-09-30T16:00:00Z", to: "2026-10-31T16:00:00Z", previous: "2026-08-31T16:00:00Z", currency: "all" });
@@ -1033,11 +1035,11 @@ test(
             assert.equal(summary.data.categories.find((c) => c.category === "__proto__").total, 100);
         });
         await t.test(
-            "API accepts validated request metadata and preserves legacy payment methods",
+            "API uses database field names for requests, replays and responses",
             async () => {
                 const body = {
                     merchant: "API coffee",
-                    amount_minor: 650,
+                    amount: 650,
                     currency: "USD",
                     category: "  food & DRINKS  ",
                     payment_method: "Visa",
@@ -1055,14 +1057,19 @@ test(
                 assert.equal(created.data.category, "Food & drinks");
                 assert.equal(created.data.currency, "USD");
                 assert.equal(created.data.payment_method, "Visa");
-                assert.equal(created.data.card, "Visa");
+                assert.equal(created.data.card, undefined);
+                assert.equal(created.data.amount_cents, undefined);
+                assert.equal(created.data.amount_minor, undefined);
+                const native = await request(`/api/collections/expenses/records/${created.data.id}`, { token: alice.token });
+                assert.equal(native.data.amount, created.data.amount);
+                assert.equal(native.data.payment_method, created.data.payment_method);
                 assert.equal(created.data.notes, body.notes);
 
-                // Either request field maps to the same stored value and retry.
+                // The same canonical fields identify an exact retry.
                 const replay = await request("/api/expenses/transactions", {
                     method: "POST",
                     key: writeKey.key,
-                    body: { ...body, payment_method: undefined, card: "Visa" },
+                    body,
                     headers,
                 });
                 assert.equal(replay.status, 200, JSON.stringify(replay.data));
@@ -1090,7 +1097,6 @@ test(
                     body: {
                         ...body,
                         payment_method: "x".repeat(80),
-                        card: "x".repeat(80),
                         notes: "x".repeat(2000),
                     },
                 });
@@ -1101,7 +1107,7 @@ test(
                 const defaults = await request("/api/expenses/transactions", {
                     method: "POST",
                     key: writeKey.key,
-                    body: { merchant: "Defaults", amount_minor: 100 },
+                    body: { merchant: "Defaults", amount: 100 },
                 });
                 assert.equal(defaults.status, 201, JSON.stringify(defaults.data));
                 assert.equal(defaults.data.currency, "SGD");
@@ -1114,7 +1120,7 @@ test(
                 });
                 const saved = listed.data.items.find((item) => item.id === created.data.id);
                 assert.equal(saved.payment_method, body.payment_method);
-                assert.equal(saved.card, body.payment_method);
+                assert.equal(saved.card, undefined);
                 assert.equal(saved.notes, body.notes);
             },
         );
@@ -1140,7 +1146,7 @@ test(
                 token: alice.token, method: "POST", body: { name: "Retry retention", color: "#aabbcc" },
             });
             assert.equal(category.status, 201, JSON.stringify(category.data));
-            const body = { merchant: "First random-number purchase", amount_minor: 650, currency: "SGD", category: category.data.name };
+            const body = { merchant: "First random-number purchase", amount: 650, currency: "SGD", category: category.data.name };
             const original = await request(path, { key: writeKey.key, method: "POST", headers, body });
             assert.equal(original.status, 201, JSON.stringify(original.data));
             assert.equal(Date.parse(original.data.idempotency_expires_at) - Date.parse(original.data.created.replace(" ", "T")), day);
@@ -1149,7 +1155,7 @@ test(
             assert.equal(replay.data.id, original.data.id);
             assert.equal(replay.data.idempotency_expires_at, original.data.idempotency_expires_at);
             assert.equal((await request(path, {
-                key: writeKey.key, method: "POST", headers, body: { ...body, amount_minor: 700 },
+                key: writeKey.key, method: "POST", headers, body: { ...body, amount: 700 },
             })).status, 409);
 
             const edited = await request(`/api/collections/expenses/records/${original.data.id}`, {
@@ -1159,7 +1165,7 @@ test(
             assert.equal(edited.data.created, original.data.created);
 
             const bobKey = await request("/api/expenditure/keys", {
-                token: bob.token, method: "POST", body: { name: "Independent retry namespace", scopes: ["expenses:write"], expires_in_days: 30 },
+                token: bob.token, method: "POST", body: { name: "Independent retry namespace", scopes: ["expenses:write"], expires_at: new Date(Date.now() + 30 * 86400000).toISOString() },
             });
             const bobExpense = await request(path, { key: bobKey.data.key, method: "POST", headers, body: expense });
             assert.equal(bobExpense.status, 201, JSON.stringify(bobExpense.data));
@@ -1205,11 +1211,23 @@ test(
             assert.equal(noKey.data.idempotency_expires_at, null);
         });
         await t.test("non-expiring keys retain scopes and can be revoked", async () => {
-            for (const expires_in_days of [undefined, 0, -1, 31, 366, "90", "never", false, {}, []]) {
+            const alias = await request("/api/expenditure/keys", {
+                token: alice.token, method: "POST",
+                body: { name: "Old alias", scopes: ["expenses:read"], expires_at: "", expires_in_days: 90 },
+            });
+            assert.equal(alias.status, 400, JSON.stringify(alias.data));
+            const expires_at = new Date(Date.now() + 45 * 86400000).toISOString();
+            const dated = await request("/api/expenditure/keys", {
+                token: alice.token, method: "POST", body: { name: "Direct expiry", scopes: ["expenses:read"], expires_at },
+            });
+            assert.equal(dated.status, 201, JSON.stringify(dated.data));
+            assert.equal(Date.parse(dated.data.record.expires_at), Date.parse(expires_at));
+            await request(`/api/expenditure/keys/${dated.data.record.id}`, { token: alice.token, method: "DELETE" });
+            for (const expires_at of [undefined, null, 0, -1, "90", "never", false, {}, [], "2020-01-01T00:00:00Z", "2099-02-30T00:00:00Z", "2099-01-01T00:00:00"]) {
                 const invalid = await request("/api/expenditure/keys", {
                     token: alice.token,
                     method: "POST",
-                    body: { name: "Invalid expiry", scopes: ["expenses:read"], expires_in_days },
+                    body: { name: "Invalid expiry", scopes: ["expenses:read"], expires_at },
                 });
                 assert.equal(invalid.status, 400, JSON.stringify(invalid.data));
             }
@@ -1217,7 +1235,7 @@ test(
             const result = await request("/api/expenditure/keys", {
                 token: alice.token,
                 method: "POST",
-                body: { name: "No expiry", scopes: ["expenses:read"], expires_in_days: null },
+                body: { name: "No expiry", scopes: ["expenses:read"], expires_at: "" },
             });
             assert.equal(result.status, 201, JSON.stringify(result.data));
             assert.equal(result.data.record.expires_at, "");
@@ -1290,7 +1308,7 @@ test(
                     body: {
                         name: "Delete user test",
                         scopes: ["expenses:read"],
-                        expires_in_days: null,
+                        expires_at: "",
                     },
                 });
                 await request(`/api/collections/users/records/${bob.id}`, {
@@ -1315,7 +1333,7 @@ test(
                         body: {
                             name: `Limit test ${index}`,
                             scopes: ["expenses:write"],
-                            expires_in_days: index % 2 === 0 ? null : 30,
+                            expires_at: index % 2 === 0 ? "" : new Date(Date.now() + 30 * 86400000).toISOString(),
                         },
                     });
                     assert.equal(result.status, 201, JSON.stringify(result.data));
@@ -1325,7 +1343,7 @@ test(
                 const body = {
                     name: "Over limit",
                     scopes: ["expenses:write"],
-                    expires_in_days: 30,
+                    expires_at: new Date(Date.now() + 30 * 86400000).toISOString(),
                 };
                 assert.equal(
                     (

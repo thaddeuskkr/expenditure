@@ -153,6 +153,10 @@ test(
                 aliceMember = detail.me;
                 assert.equal(detail.circle.is_owner, true);
                 assert.equal(detail.members.length, 1);
+                assert.equal(detail.members[0].user, alice.id);
+                assert.equal(detail.members[0].expand.user.id, alice.id);
+                assert.equal(detail.members[0].expand.user.email, undefined);
+                assert.equal(detail.members[0].expand.user.password, undefined);
                 await api(`${root}/${circle.id}`, outsider.token, undefined, "GET", 404);
             },
         );
@@ -180,7 +184,13 @@ test(
                     "POST",
                     403,
                 );
-                assert.equal((await api(root, bob.token)).invitations.length, 1);
+                const incoming = (await api(root, bob.token)).invitations;
+                assert.equal(incoming.length, 1);
+                assert.equal(incoming[0].circle, circle.id);
+                assert.equal(incoming[0].expand.circle.name, circle.name);
+                const preview = await api(`/api/expenditure/circle-invitations/${invitation.id}`, bob.token);
+                assert.equal(preview.circle, circle.id);
+                assert.equal(preview.expand.circle.id, circle.id);
                 bobMember = (
                     await api(
                         `/api/expenditure/circle-invitations/${invitation.id}/accept`,
@@ -275,7 +285,7 @@ test(
             async () => {
                 const input = {
                     title: "Dinner",
-                    amount_minor: 1000,
+                    amount: 1000,
                     currency: "SGD",
                     paid_by: aliceMember,
                     split_mode: "even",
@@ -288,7 +298,7 @@ test(
                 };
                 expense = await api(`${root}/${circle.id}/expenses`, bob.token, input, "POST", 201);
                 assert.equal(
-                    expense.shares.reduce((sum, row) => sum + row.amount_minor, 0),
+                    expense.shares.reduce((sum, row) => sum + row.amount, 0),
                     1000,
                 );
                 const outsidersCircle = await api(
@@ -306,9 +316,16 @@ test(
                     { paid_by: outsiderMember },
                     { shares: [{ member: outsiderMember }] },
                     { currency: "ZZZ" },
-                    { amount_minor: 1.5 },
-                    { split_mode: "percentage", shares: [{ member: bobMember, value: "99" }] },
-                    { split_mode: "exact", shares: [{ member: bobMember, value: "9.99" }] },
+                    { amount: 1.5 },
+                    { amount_minor: 1000 },
+                    { amount_cents: 1000 },
+                    { card: "Visa" },
+                    { split_mode: "exact", shares: [{ member: bobMember, value: "10.00" }] },
+                    { split_mode: "exact", shares: [{ member: bobMember, amount: "1000" }] },
+                    { split_mode: "even", shares: [{ member: bobMember, amount: 1000 }] },
+                    { split_mode: "percentage", shares: [{ member: bobMember, percentage_bp: 10000.1 }] },
+                    { split_mode: "percentage", shares: [{ member: bobMember, percentage_bp: 9900 }] },
+                    { split_mode: "exact", shares: [{ member: bobMember, amount: 999 }] },
                     { notes: [] },
                     { occurred_at: "2026-02-30T10:00:00Z" },
                 ])
@@ -327,15 +344,15 @@ test(
                         title: "Taxi",
                         split_mode: "percentage",
                         shares: [
-                            { member: bobMember, value: "25" },
-                            { member: carolMember, value: "75" },
+                            { member: bobMember, percentage_bp: 2500 },
+                            { member: carolMember, percentage_bp: 7500 },
                         ],
                     },
                     "POST",
                     201,
                 );
                 assert.deepEqual(
-                    percent.shares.map((row) => row.amount_minor),
+                    percent.shares.map((row) => row.amount),
                     [250, 750],
                 );
                 const exact = await api(
@@ -345,14 +362,14 @@ test(
                         ...input,
                         title: "Solo ticket",
                         currency: "KWD",
-                        amount_minor: 1234,
+                        amount: 1234,
                         split_mode: "exact",
-                        shares: [{ member: bobMember, value: "1.234" }],
+                        shares: [{ member: bobMember, amount: 1234 }],
                     },
                     "POST",
                     201,
                 );
-                assert.equal(exact.shares[0].amount_minor, 1234);
+                assert.equal(exact.shares[0].amount, 1234);
                 const detail = await api(`${root}/${circle.id}`, bob.token);
                 assert.equal(
                     detail.balances
@@ -362,7 +379,7 @@ test(
                 );
                 assert.ok(
                     detail.suggestions.some(
-                        (row) => row.currency === "KWD" && row.amount_minor === 1234,
+                        (row) => row.currency === "KWD" && row.amount === 1234,
                     ),
                 );
                 await api(
@@ -409,7 +426,7 @@ test(
                 await api(
                     `${root}/${circle.id}/settlements`,
                     alice.token,
-                    { ...suggestion, amount_minor: 1235 },
+                    { ...suggestion, amount: 1235 },
                     "POST",
                     400,
                 );
@@ -495,7 +512,7 @@ test(
                 const input = {
                     title: "Shared",
                     currency: "SGD",
-                    amount_minor: 100,
+                    amount: 100,
                     paid_by: ownerMember,
                     split_mode: "even",
                     shares: [{ member: joined.member }],
@@ -531,7 +548,7 @@ test(
                     from_member: joined.member,
                     to_member: ownerMember,
                     currency: "SGD",
-                    amount_minor: 100,
+                    amount: 100,
                 };
                 const payments = await Promise.all(
                     [1, 2].map(() =>
@@ -569,18 +586,23 @@ test(
                     "PATCH",
                     403,
                 );
+                for (const fields of [{ owner_member: carolMember }, { owner: carolMember }, { owner: outsider.id }, { owner: alice.id }]) {
+                    await api(`${root}/${circle.id}`, alice.token, { ...fields, version: circle.version }, "PATCH", 400);
+                }
+
                 circle = await api(
                     `${root}/${circle.id}`,
                     alice.token,
                     {
                         name: "Tokyo",
                         icon: "coffee",
-                        owner_member: carolMember,
+                        owner: carol.id,
                         version: circle.version,
                     },
                     "PATCH",
                 );
                 assert.equal(circle.is_owner, false);
+                assert.equal(circle.owner, carol.id);
                 await api(
                     `${root}/${circle.id}/invitations`,
                     alice.token,
@@ -632,7 +654,7 @@ test(
                     outsider.token,
                     {
                         title: "Personal",
-                        amount_minor: 100,
+                        amount: 100,
                         currency: "JPY",
                         paid_by: ownerMember,
                         split_mode: "even",
@@ -666,7 +688,7 @@ test(
                     alice.token,
                     {
                         title: "Preserved",
-                        amount_minor: 100,
+                        amount: 100,
                         currency: "SGD",
                         paid_by: aliceId,
                         split_mode: "even",
@@ -691,7 +713,8 @@ test(
                 );
                 const retained = await api(`${root}/${group.id}`, alice.token);
                 const former = retained.members.find((m) => m.id === joined.member);
-                assert.equal(former.user, null);
+                assert.equal(former.user, "");
+                assert.deepEqual(former.expand, {});
                 assert.equal(former.name, "Outside");
                 assert.equal(former.active, false);
                 assert.equal(

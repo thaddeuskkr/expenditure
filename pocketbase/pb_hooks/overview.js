@@ -5,7 +5,7 @@ function summarize(app, user, range) {
     const snapshot = fx.read(app);
     const rows = arrayOf(
         new DynamicModel({
-            amount_cents: 0,
+            amount: 0,
             currency: "",
             category: "",
             occurred_at: "",
@@ -14,7 +14,7 @@ function summarize(app, user, range) {
     app
         .db()
         .newQuery(
-            "SELECT amount_cents, currency, category, occurred_at FROM expenses WHERE user = {:user} AND occurred_at >= {:previous} AND occurred_at < {:to}" +
+            "SELECT amount, currency, category, occurred_at FROM expenses WHERE user = {:user} AND occurred_at >= {:previous} AND occurred_at < {:to}" +
             (range.currency === "all" ? "" : " AND currency = {:currency}"),
         )
         .bind({ ...range, user })
@@ -39,7 +39,7 @@ function summarize(app, user, range) {
     rows.forEach((row) => {
         const current = row.occurred_at >= range.from;
         const converted = fx.convert(
-            row.amount_cents,
+            row.amount,
             row.currency,
             main,
             snapshot,
@@ -47,7 +47,7 @@ function summarize(app, user, range) {
         if (current) {
             result.count++;
             originals[row.currency] =
-                (originals[row.currency] || 0) + row.amount_cents;
+                (originals[row.currency] || 0) + row.amount;
             if (converted === null) {
                 result.missing_count++;
                 missing[row.currency] = true;

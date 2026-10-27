@@ -76,7 +76,7 @@ export function Transactions({
                                             {expense.merchant}
                                         </span>
                                         <span className="mt-1 block max-w-36 truncate text-[9px] text-muted-foreground">
-                                            {expense.card ||
+                                            {expense.payment_method ||
                                                 (expense.source === "api" ? "Via API" : "Manual entry")}
                                         </span>
                                     </span>
@@ -92,7 +92,7 @@ export function Transactions({
                             </td>
                             <td className="text-right text-xs whitespace-nowrap tabular-nums">
                                 <div>
-                                    {money(expense.amount_cents, expense.currency)}{" "}
+                                    {money(expense.amount, expense.currency)}{" "}
                                     <span className="text-[9px] text-muted-foreground">
                                         {expense.currency}
                                     </span>
@@ -136,7 +136,7 @@ function ConvertedAmount({ expense }: { expense: Expense }) {
     if (expense.currency === mainCurrency) return null;
 
     const convertedAmount = convertAmount(
-        expense.amount_cents,
+        expense.amount,
         expense.currency,
         mainCurrency,
         rates,

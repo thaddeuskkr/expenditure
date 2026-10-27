@@ -1,5 +1,5 @@
 /// <reference path="../pb_data/types.d.ts" />
-routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 4 }));
+routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 6 }));
 
 routerAdd(
     "GET",
@@ -41,9 +41,15 @@ routerAdd(
             (scopes.length === 2 && scopes[0] === scopes[1])
         )
             throw new BadRequestError("Select valid scopes.");
-        const days = data.expires_in_days;
-        if (days !== null && [30, 90, 365].indexOf(days) < 0)
-            throw new BadRequestError("Expiration must be 30, 90 or 365 days, or null for no expiration.");
+        if (Object.keys(data).some((field) => ["name", "scopes", "expires_at"].indexOf(field) < 0))
+            throw new BadRequestError("Only name, scopes and expires_at are accepted.");
+        const expiresAt = data.expires_at;
+        if (expiresAt !== "") {
+            require(`${__hooks}/request.js`).timestamp(expiresAt);
+            if (typeof expiresAt !== "string" || Date.parse(expiresAt) <= Date.now())
+                throw new BadRequestError("expires_at must be a future ISO date with a timezone, or an empty string for no expiration.");
+        }
+
         let result;
         e.app.runInTransaction((app) => {
             const count = app.countRecords(
@@ -86,7 +92,7 @@ routerAdd(
                 key_hash: $security.sha256(secret),
                 key_prefix: secret.slice(0, 12),
                 scopes,
-                expires_at: days === null ? "" : new Date(Date.now() + days * 86400000).toISOString(),
+                expires_at: expiresAt,
             });
             app.save(record);
             result = { key: secret, record: lib.cleanKey(record) };
@@ -156,11 +162,11 @@ routerAdd(
                     record = existing[0];
                     const equal = [
                         "merchant",
-                        "amount_cents",
+                        "amount",
                         "currency",
                         "category",
                         "notes",
-                        "card",
+                        "payment_method",
                     ].every(
                         (field) => String(record.get(field)) === String(fields[field]),
                     );
@@ -190,7 +196,7 @@ routerAdd(
         });
         lib.touch(e.app, identity.key);
         return e.json(replay ? 200 : 201, {
-            ...lib.exportExpense(record),
+            ...record.publicExport(),
             replay,
             idempotency_expires_at: lib.idempotencyExpiresAt(record),
         });
@@ -225,7 +231,7 @@ routerAdd("GET", "/api/expenses/transactions", (e) => {
     );
     lib.touch(e.app, identity.key);
     return e.json(200, {
-        items: records.map(lib.exportExpense),
+        items: records.map((record) => record.publicExport()),
         page,
         perPage,
         totalItems: total,

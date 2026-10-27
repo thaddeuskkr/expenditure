@@ -37,24 +37,24 @@ export function CircleMembers({
                 {detail.members.map((member) => (
                     <div
                         key={member.id}
-                        className={`flex items-center gap-3 py-4 ${member.active ? "" : "opacity-55"}`}>
-                        {member.user && <UserAvatar user={member.user} name={member.name} />}
+                        className={`flex items-center gap-3 py-4 ${member.active && member.user ? "" : "opacity-55"}`}>
+                        {member.expand.user && <UserAvatar user={member.expand.user} name={member.name} />}
                         <div className="min-w-0 flex-1">
                             <p className="truncate text-xs">
                                 {member.name}
                                 {member.id === detail.me ? " (you)" : ""}
                             </p>
                             <p className="mt-1 text-[10px] text-muted-foreground">
-                                {!member.active ?
+                                {!member.active || !member.user ?
                                     "Former member" :
-                                    member.user?.id === detail.circle.owner ?
+                                    member.user === detail.circle.owner ?
                                         "Owner" :
                                         "Member"}
                             </p>
                         </div>
                         {detail.circle.is_owner &&
                             member.active &&
-                            member.user?.id !== detail.circle.owner && (
+                            member.user && member.user !== detail.circle.owner && (
                             <Button
                                 variant="ghost"
                                 size="sm"

@@ -28,7 +28,7 @@ function parseDecimal(value, digits) {
     return units;
 }
 
-function allocate(amount, mode, shares, digits) {
+function allocate(amount, mode, shares) {
     if (!Number.isSafeInteger(amount) || amount < 1 || amount > MAX_AMOUNT)
         throw new Error("Enter a positive expense amount.");
     if (["even", "percentage", "exact"].indexOf(mode) < 0)
@@ -44,36 +44,41 @@ function allocate(amount, mode, shares, digits) {
             seen[share.member]
         )
             throw new Error("Select each participant only once.");
+        const field = mode === "percentage" ? "percentage_bp" : "amount";
+        const allowed = mode === "even" ? ["member"] : ["member", field];
+        if (Object.keys(share).some((key) => allowed.indexOf(key) < 0))
+            throw new Error("Use member, amount for exact splits, or percentage_bp for percentage splits.");
         seen[share.member] = true;
-        const weight =
-            mode === "even" ? 1 : parseDecimal(share.value, mode === "percentage" ? 2 : digits);
-        return { member: share.member, weight, amount_minor: mode === "exact" ? weight : 0 };
+        const weight = mode === "even" ? 1 : share[field];
+        if (!Number.isSafeInteger(weight) || weight < 0 || weight > (mode === "percentage" ? 10000 : MAX_AMOUNT))
+            throw new Error(mode === "percentage" ? "Use integer percentage_bp between 0 and 10000." : "Use integer amount in currency minor units.");
+        return { member: share.member, weight, amount: mode === "exact" ? weight : 0 };
     });
     const total = rows.reduce((sum, row) => sum + row.weight, 0);
     if (mode === "exact") {
         if (total !== amount) throw new Error("Exact amounts must add up to the expense total.");
-        return rows.map((row) => ({ member: row.member, amount_minor: row.amount_minor }));
+        return rows.map((row) => ({ member: row.member, amount: row.amount }));
     }
 
     if (mode === "percentage" && total !== 10000)
         throw new Error("Percentages must add up to exactly 100%.");
     rows.forEach((row) => {
-        row.amount_minor = Math.floor((amount * row.weight) / total);
+        row.amount = Math.floor((amount * row.weight) / total);
         row.remainder = (amount * row.weight) % total;
     });
-    let remaining = amount - rows.reduce((sum, row) => sum + row.amount_minor, 0);
+    let remaining = amount - rows.reduce((sum, row) => sum + row.amount, 0);
     // Largest remainder; member id breaks ties, so request ordering never changes a share.
     rows.slice()
         .sort((a, b) => b.remainder - a.remainder || a.member.localeCompare(b.member))
         .forEach((row) => {
             if (remaining > 0) {
-                row.amount_minor++;
+                row.amount++;
                 remaining--;
             }
         });
     return rows.map((row) => ({
         member: row.member,
-        amount_minor: row.amount_minor,
+        amount: row.amount,
         ...(mode === "percentage" ? { percentage_bp: row.weight } : {}),
     }));
 }
@@ -102,7 +107,7 @@ function suggestions(balances) {
                 from_member: debtors[debtor].member,
                 to_member: creditors[creditor].member,
                 currency,
-                amount_minor: amount,
+                amount: amount,
             });
             debtors[debtor].amount -= amount;
             creditors[creditor].amount -= amount;

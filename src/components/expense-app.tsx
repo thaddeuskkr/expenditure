@@ -161,7 +161,9 @@ function AccountWorkspace({
         let active = true;
         async function load() {
             try {
-                await pb.send("/api/expenditure/status", { method: "GET" });
+                const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
+                if (typeof status.version !== "number" || status.version < 6)
+                    throw new Error("This app requires backend version 6. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -300,7 +302,7 @@ function Workspace({
             expression +=
                 " && " +
                 pb.filter(
-                    "(merchant ~ {:query} || notes ~ {:query} || card ~ {:query})",
+                    "(merchant ~ {:query} || notes ~ {:query} || payment_method ~ {:query})",
                     { query: debouncedSearch.trim() },
                 );
         return expression;
@@ -458,7 +460,7 @@ function Workspace({
     }
 
     async function saveBudget(
-        data: { category: string; amount_cents: number },
+        data: { category: string; amount: number },
         existing?: Budget,
     ) {
         if (
@@ -507,7 +509,7 @@ function Workspace({
     }
 
     const overall = budgets.find((b) => b.category === "Overall");
-    const remaining = overall ? overall.amount_cents - overview.total : null;
+    const remaining = overall ? overall.amount - overview.total : null;
     const foreignCurrencies = overview.original_totals
         .map((item) => item.currency)
         .filter((code) => code !== mainCurrency);
@@ -826,7 +828,7 @@ function Workspace({
                                                             <div
                                                                 className="h-full rounded-full bg-primary/65 transition-all duration-500"
                                                                 style={{
-                                                                    width: `${Math.min(100, (overview.total / overall.amount_cents) * 100)}%`,
+                                                                    width: `${Math.min(100, (overview.total / overall.amount) * 100)}%`,
                                                                 }}
                                                             />
                                                         </div>
@@ -1056,7 +1058,7 @@ function Workspace({
                                                                 overview.categories.find(
                                                                     (c) => c.category === budget.category,
                                                                 )?.total || 0;
-                                                        const percent = (spent / budget.amount_cents) * 100;
+                                                        const percent = (spent / budget.amount) * 100;
                                                         return (
                                                             <button
                                                                 key={budget.id}
@@ -1079,7 +1081,7 @@ function Workspace({
                                                                                 budget.category}
                                                                         </p>
                                                                         <p className="mt-1 text-[10px] text-muted-foreground">
-                                                                            {money(budget.amount_cents, mainCurrency)}{" "}
+                                                                            {money(budget.amount, mainCurrency)}{" "}
                                                                             budget
                                                                         </p>
                                                                     </div>
@@ -1111,7 +1113,7 @@ function Workspace({
                                                                     </div>
                                                                     <p className="mt-2 text-[10px] text-muted-foreground">
                                                                         {money(
-                                                                            Math.abs(budget.amount_cents - spent),
+                                                                            Math.abs(budget.amount - spent),
                                                                             mainCurrency,
                                                                         )}{" "}
                                                                         {percent > 100 ?
@@ -1201,7 +1203,7 @@ function Workspace({
                             <AlertDialogTitle>Delete this expense?</AlertDialogTitle>
                             <AlertDialogDescription>
                                 {deleting?.merchant} ·{" "}
-                                {deleting && money(deleting.amount_cents, deleting.currency)}.
+                                {deleting && money(deleting.amount, deleting.currency)}.
                                 This removes the expense permanently.
                             </AlertDialogDescription>
                         </AlertDialogHeader>

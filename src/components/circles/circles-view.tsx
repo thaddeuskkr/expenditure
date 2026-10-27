@@ -163,7 +163,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
         setViewing(null);
         setConfirmation({
             title: "Delete shared expense?",
-            description: `${expense.title} · ${money(expense.amount_minor, expense.currency)} ${expense.currency}. Member balances will be recalculated.`,
+            description: `${expense.title} · ${money(expense.amount, expense.currency)} ${expense.currency}. Member balances will be recalculated.`,
             label: "Delete expense",
             action: async () => {
                 await circlesApi.deleteExpense(selected!, expense);
@@ -264,10 +264,10 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                     <div
                                         key={invitation.id}
                                         className="flex flex-wrap items-center gap-4 py-5">
-                                        <CircleIcon name={invitation.circle.icon} />
+                                        <CircleIcon name={invitation.expand.circle.icon} />
                                         <div className="min-w-0 flex-1">
                                             <p className="truncate text-sm">
-                                                {invitation.circle.name}
+                                                {invitation.expand.circle.name}
                                             </p>
                                             <p className="mt-1 text-[11px] text-muted-foreground">
                                                 Expires{" "}
@@ -282,7 +282,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                             onClick={() =>
                                                 setConfirmation({
                                                     title: "Decline invitation?",
-                                                    description: invitation.circle.name,
+                                                    description: invitation.expand.circle.name,
                                                     label: "Decline",
                                                     action: async () => {
                                                         await circlesApi.revoke(invitation.id);
@@ -597,7 +597,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
             {detail && viewing && (
                 <CircleModal
                     title={viewing.title}
-                    description={`${name(viewing.paid_by)} paid ${money(viewing.amount_minor, viewing.currency)} ${viewing.currency} · ${SPLIT_LABELS[viewing.split_mode]}`}
+                    description={`${name(viewing.paid_by)} paid ${money(viewing.amount, viewing.currency)} ${viewing.currency} · ${SPLIT_LABELS[viewing.split_mode]}`}
                     onClose={() => setViewing(null)}>
                     <div className="space-y-5 pt-2">
                         <div className="divide-y">
@@ -612,7 +612,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                             ""}
                                     </span>
                                     <span className="tabular-nums">
-                                        {money(share.amount_minor, viewing.currency)}{" "}
+                                        {money(share.amount, viewing.currency)}{" "}
                                         {viewing.currency}
                                     </span>
                                 </div>

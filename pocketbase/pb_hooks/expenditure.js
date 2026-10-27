@@ -20,14 +20,6 @@ function cleanKey(record) {
     };
 }
 
-function exportExpense(record) {
-    return {
-        ...record.publicExport(),
-        amount_minor: record.getInt("amount_cents"),
-        payment_method: record.getString("card"),
-    };
-}
-
 function authenticate(e, scope) {
     const secret = e.request.header.get("X-API-Key");
     if (!/^exp_[A-Za-z0-9]{48}$/.test(secret))
@@ -92,6 +84,9 @@ function validateExpense(data, app, user) {
         throw new BadRequestError(
             "Ownership is determined by your API key; omit user.",
         );
+    const allowed = ["merchant", "amount", "currency", "category", "occurred_at", "payment_method", "notes"];
+    if (Object.keys(data).some((field) => allowed.indexOf(field) < 0))
+        throw new BadRequestError("Only merchant, amount, currency, category, occurred_at, payment_method and notes are accepted.");
     const config = require(`${__hooks}/configuration.js`);
     const preferences = config.preferences(app, user);
     const code = data.currency === undefined ? preferences.currency : data.currency;
@@ -104,18 +99,7 @@ function validateExpense(data, app, user) {
         data.merchant.trim().length > 160
     )
         throw new BadRequestError("Merchant is required (up to 160 characters).");
-    if (
-        data.amount_cents !== undefined &&
-        data.amount_minor !== undefined &&
-        data.amount_cents !== data.amount_minor
-    )
-        throw new BadRequestError("amount_minor and amount_cents must agree.");
-    if (data.amount_minor === undefined && definition && definition.digits !== 2)
-        throw new BadRequestError(
-            "Use amount_minor for currencies that do not have two decimal places.",
-        );
-    const amount =
-        data.amount_minor === undefined ? data.amount_cents : data.amount_minor;
+    const amount = data.amount;
     if (
         typeof amount !== "number" ||
         !isFinite(amount) ||
@@ -124,7 +108,7 @@ function validateExpense(data, app, user) {
         amount > 99999999999
     )
         throw new BadRequestError(
-            "amount_minor must be a positive integer, up to 99999999999.",
+            "amount must be a positive integer, up to 99999999999.",
         );
     if (!definition) throw new BadRequestError("Unsupported currency.");
     if (preferences.currencies.indexOf(code) < 0)
@@ -146,42 +130,18 @@ function validateExpense(data, app, user) {
 
     const category = config.category(app, user, categoryName.trim(), false);
     const paymentMethod = optionalText(data.payment_method, "Payment method", 80);
-    const legacyCard = optionalText(data.card, "Card", 80);
-    if (
-        data.payment_method !== undefined &&
-        data.card !== undefined &&
-        paymentMethod !== legacyCard
-    )
-        throw new BadRequestError("payment_method and card must agree when both are supplied.");
     const notes = optionalText(data.notes, "Notes", 2000);
-    const occurred =
-        data.occurred_at === undefined ?
-                new Date().toISOString() :
-            data.occurred_at;
-    const match =
-        typeof occurred === "string" &&
-        occurred.match(
-            /^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:\d{2})$/,
-        );
-    if (!match || !isFinite(new Date(occurred).getTime()))
-        throw new BadRequestError(
-            "occurred_at must be an ISO 8601 date with a timezone.",
-        );
-    const local = match[1] + "T" + match[2] + ":" + (match[3] || "00");
-    const localDate = new Date(local + "Z");
-    if (
-        !isFinite(localDate.getTime()) ||
-        localDate.toISOString().slice(0, 19) !== local
-    )
-        throw new BadRequestError("occurred_at contains an invalid calendar date.");
+    const occurred = data.occurred_at === undefined ?
+            new Date().toISOString() :
+            require(`${__hooks}/request.js`).timestamp(data.occurred_at);
     return {
         merchant: data.merchant.trim(),
-        amount_cents: amount,
+        amount: amount,
         currency: code,
         category,
-        occurred_at: new Date(occurred).toISOString(),
+        occurred_at: occurred,
         notes,
-        card: data.payment_method === undefined ? legacyCard : paymentMethod,
+        payment_method: paymentMethod,
     };
 }
 
@@ -227,7 +187,6 @@ module.exports = {
     IDEMPOTENCY_TTL_MS,
     idempotencyExpiresAt,
     cleanKey,
-    exportExpense,
     authenticate,
     touch,
     validateExpense,

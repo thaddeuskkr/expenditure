@@ -369,9 +369,9 @@ export function TransferDialog({
     onSaved: () => void;
 }) {
     const eligible = data.members.filter(
-        (member) => member.active && member.user?.id !== data.circle.owner,
+        (member) => member.active && member.user && member.user !== data.circle.owner,
     );
-    const [member, setMember] = useState(eligible[0]?.id || "");
+    const [owner, setOwner] = useState(eligible[0]?.user || "");
     const [version] = useState(data.circle.version);
     const [busy, setBusy] = useState(false),
         [error, setError] = useState("");
@@ -389,7 +389,7 @@ export function TransferDialog({
                     setError("");
                     try {
                         await circlesApi.update(data.circle.id, {
-                            owner_member: member,
+                            owner,
                             version,
                         });
                         onSaved();
@@ -404,13 +404,13 @@ export function TransferDialog({
                     <label htmlFor="new-owner" className="field-label">
                         New owner
                     </label>
-                    <Select value={member} onValueChange={setMember}>
+                    <Select value={owner} onValueChange={setOwner}>
                         <SelectTrigger id="new-owner" className="w-full">
                             <SelectValue placeholder="Invite another member first" />
                         </SelectTrigger>
                         <SelectContent>
                             {eligible.map((item) => (
-                                <SelectItem key={item.id} value={item.id}>
+                                <SelectItem key={item.id} value={item.user}>
                                     {item.name}
                                 </SelectItem>
                             ))}
@@ -419,7 +419,7 @@ export function TransferDialog({
                 </div>
                 <FormError error={error} />
                 <DialogFooter>
-                    <Button type="submit" disabled={busy || !member}>
+                    <Button type="submit" disabled={busy || !owner}>
                         {busy && <Loader2 className="animate-spin" />}Transfer ownership
                     </Button>
                 </DialogFooter>

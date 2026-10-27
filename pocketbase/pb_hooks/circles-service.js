@@ -33,22 +33,7 @@ function amount(value) {
 }
 
 function occurredAt(value) {
-    if (value === undefined) return new Date().toISOString();
-    if (
-        typeof value !== "string" ||
-        !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,3})?)?(?:Z|[+-]\d{2}:\d{2})$/.test(
-            value,
-        ) ||
-        !isFinite(Date.parse(value))
-    )
-        throw new BadRequestError("Use an ISO date with a timezone.");
-    const local = value.slice(0, 16) + ":" + (value.match(/T\d{2}:\d{2}:(\d{2})/) || ["", "00"])[1];
-    if (
-        !isFinite(Date.parse(local + "Z")) ||
-        new Date(local + "Z").toISOString().slice(0, 19) !== local
-    )
-        throw new BadRequestError("Choose a valid calendar date.");
-    return new Date(value).toISOString();
+    return value === undefined ? new Date().toISOString() : require(`${__hooks}/request.js`).timestamp(value);
 }
 
 function checkVersion(record, expected) {
@@ -113,7 +98,6 @@ function access(app, circleId, user, ownerOnly) {
 function displayName(user) {
     return (
         user.getString("name") ||
-        user.getString("username") ||
         user.getString("email").split("@")[0] ||
         "Member"
     ).slice(0, 80);
@@ -128,7 +112,7 @@ function memberDTO(app, member) {
                 id: account.id,
                 collectionId: account.collection().id,
                 avatar: account.getString("avatar"),
-                name: displayName(account),
+                name: account.getString("name"),
             };
         } catch {
             /* The saved membership name survives account deletion. */
@@ -136,10 +120,8 @@ function memberDTO(app, member) {
     }
 
     return {
-        id: member.id,
-        name: user ? user.name : member.getString("name"),
-        user,
-        active: member.getBool("active") && !!user,
+        ...member.publicExport(),
+        expand: user ? { user } : {},
     };
 }
 
@@ -158,25 +140,21 @@ function sharesOf(expense) {
     return JSON.parse(expense.getString("shares"));
 }
 
-function expenseDTO(expense) {
-    return { ...expense.publicExport(), shares: sharesOf(expense) };
-}
-
 function balances(app, circle) {
     const rows = arrayOf(new DynamicModel({ member: "", currency: "", net: 0 }));
     app.db()
         .newQuery(
             `
         SELECT member, currency, SUM(delta) AS net FROM (
-            SELECT paid_by AS member, currency, amount_minor AS delta FROM circle_expenses WHERE circle = {:circle}
+            SELECT paid_by AS member, currency, amount AS delta FROM circle_expenses WHERE circle = {:circle}
             UNION ALL
             SELECT json_extract(part.value, '$.member') AS member, expense.currency,
-                -CAST(json_extract(part.value, '$.amount_minor') AS INTEGER) AS delta
+                -CAST(json_extract(part.value, '$.amount') AS INTEGER) AS delta
             FROM circle_expenses AS expense, json_each(expense.shares) AS part WHERE expense.circle = {:circle}
             UNION ALL
-            SELECT from_member AS member, currency, amount_minor AS delta FROM circle_settlements WHERE circle = {:circle}
+            SELECT from_member AS member, currency, amount AS delta FROM circle_settlements WHERE circle = {:circle}
             UNION ALL
-            SELECT to_member AS member, currency, -amount_minor AS delta FROM circle_settlements WHERE circle = {:circle}
+            SELECT to_member AS member, currency, -amount AS delta FROM circle_settlements WHERE circle = {:circle}
         ) GROUP BY member, currency
     `,
         )
@@ -269,12 +247,13 @@ function invitationDTO(app, invitation) {
     const circle = find(app, "circles", invitation.getString("circle"));
     return {
         ...safeInvitation(invitation),
-        circle: {
+        circle: circle.id,
+        expand: { circle: {
             id: circle.id,
             name: circle.getString("name"),
             icon: circle.getString("icon"),
             currency: circle.getString("currency"),
-        },
+        } },
     };
 }
 
@@ -357,7 +336,7 @@ function detail(e) {
     e.app
         .db()
         .newQuery(
-            "SELECT currency, SUM(amount_minor) AS total, COUNT(*) AS count FROM circle_expenses WHERE circle = {:circle} GROUP BY currency",
+            "SELECT currency, SUM(amount) AS total, COUNT(*) AS count FROM circle_expenses WHERE circle = {:circle} GROUP BY currency",
         )
         .bind({ circle: circle.id })
         .all(totals);
@@ -387,13 +366,13 @@ function detail(e) {
             count: row.count,
         })),
         invitations,
-        expenses: page(e.app, "circle_expenses", circle.id, query.get("expense_page"), expenseDTO),
+        expenses: page(e.app, "circle_expenses", circle.id, query.get("expense_page")),
         settlements: page(e.app, "circle_settlements", circle.id, query.get("settlement_page")),
     });
 }
 
 function update(e) {
-    const data = body(e, ["name", "icon", "currency", "owner_member", "version"]);
+    const data = body(e, ["name", "icon", "currency", "owner", "version"]);
     return write(e, (app) => {
         const { circle } = access(app, e.request.pathValue("id"), e.auth.id, true);
         checkVersion(circle, data.version);
@@ -405,11 +384,14 @@ function update(e) {
         }
 
         if (data.currency !== undefined) circle.set("currency", currency(data.currency));
-        if (data.owner_member !== undefined) {
-            const next = memberInCircle(memberRecords(app, circle.id), data.owner_member);
-            if (next.getString("user") === e.auth.id)
+        if (data.owner !== undefined) {
+            const next = memberRecords(app, circle.id).find((member) =>
+                member.getBool("active") && member.getString("user") && member.getString("user") === data.owner,
+            );
+            if (!next) throw new BadRequestError("Choose an active circle member's user ID as owner.");
+            if (data.owner === e.auth.id)
                 throw new BadRequestError("Choose another member as owner.");
-            circle.set("owner", next.getString("user"));
+            circle.set("owner", data.owner);
         }
 
         circle.set("version", circle.getInt("version") + 1);
@@ -567,7 +549,7 @@ function removeMember(e) {
 function saveExpense(e) {
     const data = body(e, [
         "title",
-        "amount_minor",
+        "amount",
         "currency",
         "paid_by",
         "split_mode",
@@ -604,7 +586,7 @@ function saveExpense(e) {
                         .concat(expense.getString("paid_by")) :
                     [];
             const code = currency(data.currency),
-                total = amount(data.amount_minor);
+                total = amount(data.amount);
             memberInCircle(members, data.paid_by, formerAllowed);
             let shares;
             try {
@@ -612,7 +594,6 @@ function saveExpense(e) {
                     total,
                     data.split_mode,
                     data.shares,
-                    configuration.currency(code).digits,
                 );
             } catch (error) {
                 throw new BadRequestError(String(error.message || error));
@@ -622,7 +603,7 @@ function saveExpense(e) {
             const fields = {
                 circle: circle.id,
                 title: text(data.title, "Title", 160, true),
-                amount_minor: total,
+                amount: total,
                 currency: code,
                 paid_by: data.paid_by,
                 split_mode: data.split_mode,
@@ -637,7 +618,7 @@ function saveExpense(e) {
                 app.save(expense);
             } else expense = record(app, "circle_expenses", { ...fields, created_by: member.id });
             preserveFormerBalances(app, circle.id, members, before);
-            return expenseDTO(expense);
+            return expense.publicExport();
         },
         editing ? 200 : 201,
     );
@@ -666,7 +647,7 @@ function settle(e) {
         "from_member",
         "to_member",
         "currency",
-        "amount_minor",
+        "amount",
         "notes",
         "occurred_at",
     ]);
@@ -684,7 +665,7 @@ function settle(e) {
                     "Only a participant or the owner can record this settlement.",
                 );
             const code = currency(data.currency),
-                total = amount(data.amount_minor);
+                total = amount(data.amount);
             const rows = balanceMap(balances(app, circle.id));
             const debt = -(rows[from.id + ":" + code] || 0),
                 credit = rows[to.id + ":" + code] || 0;
@@ -701,7 +682,7 @@ function settle(e) {
                 from_member: from.id,
                 to_member: to.id,
                 currency: code,
-                amount_minor: total,
+                amount: total,
                 notes: text(data.notes, "Notes", 1000, false),
                 occurred_at: occurredAt(data.occurred_at),
                 created_by: member.id,

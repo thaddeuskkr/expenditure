@@ -33,7 +33,7 @@ export function SettlementDialog({
         [from, setFrom] = useState(suggestion.from_member),
         [to, setTo] = useState(suggestion.to_member);
     const [amount, setAmount] = useState(
-        formatAmountInput(suggestion.amount_minor, suggestion.currency),
+        formatAmountInput(suggestion.amount, suggestion.currency),
     );
     const [busy, setBusy] = useState(false),
         [error, setError] = useState("");
@@ -51,7 +51,7 @@ export function SettlementDialog({
                 from_member: from,
                 to_member: to,
                 currency,
-                amount_minor: parseMinorUnits(amount, currency),
+                amount: parseMinorUnits(amount, currency),
                 notes: String(form.get("notes") || ""),
                 occurred_at: fromZonedInput(String(form.get("occurred_at")), preferences.timezone),
             });
@@ -84,7 +84,7 @@ export function SettlementDialog({
                             const next = data.suggestions.find((row) => row.currency === code)!;
                             setFrom(next.from_member);
                             setTo(next.to_member);
-                            setAmount(formatAmountInput(next.amount_minor, code));
+                            setAmount(formatAmountInput(next.amount, code));
                         }}
                     />
                 </div>

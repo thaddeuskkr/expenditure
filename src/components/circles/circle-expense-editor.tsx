@@ -48,7 +48,7 @@ export function CircleExpenseEditor({
     );
     const [code, setCode] = useState(expense?.currency || data.circle.currency);
     const [amount, setAmount] = useState(
-        expense ? formatAmountInput(expense.amount_minor, expense.currency) : "",
+        expense ? formatAmountInput(expense.amount, expense.currency) : "",
     );
     const [payer, setPayer] = useState(expense?.paid_by || data.me);
     const [mode, setMode] = useState<SplitMode>(expense?.split_mode || "even");
@@ -62,7 +62,7 @@ export function CircleExpenseEditor({
                 share.member,
                 expense?.split_mode === "percentage" ?
                         ((share.percentage_bp || 0) / 100).toFixed(2) :
-                        formatAmountInput(share.amount_minor, expense!.currency),
+                        formatAmountInput(share.amount, expense!.currency),
             ]),
         ),
     );
@@ -70,12 +70,20 @@ export function CircleExpenseEditor({
         [error, setError] = useState("");
     let preview: CircleShare[] = [],
         splitError = "";
+    function splitInputs() {
+        return selected.map((member) => ({
+            member,
+            ...(mode === "percentage" ?
+                    { percentage_bp: circleCore.parseDecimal(values[member] || "0", 2) } :
+                mode === "exact" ? { amount: circleCore.parseDecimal(values[member] || "0", currencyDigits(code)) } : {}),
+        }));
+    }
+
     try {
         preview = circleCore.allocate(
             parseMinorUnits(amount, code),
             mode,
-            selected.map((member) => ({ member, value: values[member] || "0" })),
-            currencyDigits(code),
+            splitInputs(),
         );
     } catch (e) {
         splitError = errorMessage(e);
@@ -91,9 +99,8 @@ export function CircleExpenseEditor({
                             10000,
                             "even",
                             selected.map((member) => ({ member })),
-                            2,
                         )
-                        .map((share) => [share.member, (share.amount_minor / 100).toFixed(2)]),
+                        .map((share) => [share.member, (share.amount / 100).toFixed(2)]),
                 ),
             );
         } else if (next === "exact" && preview.length) {
@@ -101,7 +108,7 @@ export function CircleExpenseEditor({
                 Object.fromEntries(
                     preview.map((share) => [
                         share.member,
-                        formatAmountInput(share.amount_minor, code),
+                        formatAmountInput(share.amount, code),
                     ]),
                 ),
             );
@@ -123,14 +130,11 @@ export function CircleExpenseEditor({
                 data.circle.id,
                 {
                     title: String(form.get("title")).trim(),
-                    amount_minor: parseMinorUnits(amount, code),
+                    amount: parseMinorUnits(amount, code),
                     currency: code,
                     paid_by: payer,
                     split_mode: mode,
-                    shares: selected.map((member) => ({
-                        member,
-                        ...(mode === "even" ? {} : { value: values[member] || "0" }),
-                    })),
+                    shares: splitInputs(),
                     payment_method: String(form.get("payment_method") || ""),
                     notes: String(form.get("notes") || ""),
                     occurred_at: fromZonedInput(
@@ -275,8 +279,8 @@ export function CircleExpenseEditor({
                                                             previous.filter((id) => id !== member.id),
                                                 )}
                                         />
-                                        {member.user && (
-                                            <UserAvatar user={member.user} name={member.name} />
+                                        {member.expand.user && (
+                                            <UserAvatar user={member.expand.user} name={member.name} />
                                         )}
                                         <span className="min-w-0 truncate text-xs">
                                             {member.name}
@@ -307,7 +311,7 @@ export function CircleExpenseEditor({
                                     )}
                                     {checked && mode === "even" && (
                                         <span className="text-xs tabular-nums text-muted-foreground">
-                                            {share ? money(share.amount_minor, code) : "—"}
+                                            {share ? money(share.amount, code) : "—"}
                                         </span>
                                     )}
                                 </div>
@@ -320,7 +324,7 @@ export function CircleExpenseEditor({
                             aria-live="polite">
                             {splitError ||
                                 `${selected.length} participant${selected.length === 1 ? "" : "s"} · ${money(
-                                    preview.reduce((sum, share) => sum + share.amount_minor, 0),
+                                    preview.reduce((sum, share) => sum + share.amount, 0),
                                     code,
                                 )} allocated${mode === "even" ? "; rounding is distributed automatically." : "."}`}
                         </p>

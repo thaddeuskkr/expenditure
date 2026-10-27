@@ -6,12 +6,12 @@ import { EMPTY_RATES, type Expense } from "../src/lib/domain.ts";
 
 const expense = {
     merchant: "=HYPERLINK(\"bad\")",
-    amount_cents: 850,
+    amount: 850,
     currency: "SGD",
     category: "Other",
     occurred_at: "2026-09-30 16:05:30.000Z",
     notes: "line1\nline2",
-    card: "Visa",
+    payment_method: "Visa",
     source: "api",
 } as Expense;
 
@@ -60,7 +60,7 @@ test("exports follow a changed timezone across daylight-saving boundaries", asyn
 test("mixed-currency exports keep original precision and include dated conversion estimates", async () => {
     const date = new Date().toISOString().slice(0, 10);
     const rates = { ...EMPTY_RATES, quotes: { EUR: 1, SGD: 1.5, JPY: 150, KWD: 0.3 }, dates: { SGD: date, JPY: date, KWD: date }, fetched_at: `${date}T12:00:00Z` };
-    const rows = [{ ...expense, currency: "JPY", amount_cents: 1000 }, { ...expense, currency: "KWD", amount_cents: 1234 }];
+    const rows = [{ ...expense, currency: "JPY", amount: 1000 }, { ...expense, currency: "KWD", amount: 1234 }];
     const workbook = await expenseWorkbook(rows, "Asia/Singapore", "SGD", rates);
     const sheet = workbook.getWorksheet("Expenses")!;
     assert.equal(sheet.getCell("B2").value, 1000);

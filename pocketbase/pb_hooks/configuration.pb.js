@@ -33,6 +33,8 @@ routerAdd(
         const config = require(`${__hooks}/configuration.js`);
         config.initialize(e.app, e.auth.id);
         const data = e.requestInfo().body;
+        if (Object.keys(data).some((field) => ["name", "color"].indexOf(field) < 0))
+            throw new BadRequestError("Only name and color are accepted.");
         if (
             typeof data.name !== "string" ||
             !data.name.trim() ||
@@ -124,6 +126,8 @@ routerAdd(
     "/api/expenditure/categories/{id}",
     (e) => {
         const data = e.requestInfo().body;
+        if (Object.keys(data).some((field) => ["name", "color", "active"].indexOf(field) < 0))
+            throw new BadRequestError("Only name, color and active are accepted.");
         if (
             data.name !== undefined &&
             (typeof data.name !== "string" ||

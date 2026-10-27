@@ -41,7 +41,7 @@ export function BudgetEditor({
     currency: string;
     onClose: () => void;
     onSave: (
-        data: { category: string; amount_cents: number },
+        data: { category: string; amount: number },
         existing?: Budget,
     ) => Promise<void>;
     onDelete: (budget: Budget) => Promise<void>;
@@ -64,7 +64,7 @@ export function BudgetEditor({
             await onSave(
                 {
                     category,
-                    amount_cents: parseMinorUnits(String(form.get("amount")), currency),
+                    amount: parseMinorUnits(String(form.get("amount")), currency),
                 },
                 budget || undefined,
             );
@@ -123,7 +123,7 @@ export function BudgetEditor({
                             required
                             placeholder="0.00"
                             defaultValue={
-                                budget ? formatAmountInput(budget.amount_cents, currency) : ""
+                                budget ? formatAmountInput(budget.amount, currency) : ""
                             }
                             autoFocus
                             className="h-11"

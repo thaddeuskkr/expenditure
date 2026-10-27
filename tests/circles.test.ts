@@ -7,17 +7,17 @@ const a = "aaaaaaaaaaaaaaa",
     c = "ccccccccccccccc";
 
 test("equal splits allocate every minor unit deterministically, including a single participant", () => {
-    assert.deepEqual(core.allocate(100, "even", [{ member: c }, { member: b }, { member: a }], 2), [
-        { member: c, amount_minor: 33 },
-        { member: b, amount_minor: 33 },
-        { member: a, amount_minor: 34 },
+    assert.deepEqual(core.allocate(100, "even", [{ member: c }, { member: b }, { member: a }]), [
+        { member: c, amount: 33 },
+        { member: b, amount: 33 },
+        { member: a, amount: 34 },
     ]);
-    assert.deepEqual(core.allocate(1, "even", [{ member: b }, { member: a }], 0), [
-        { member: b, amount_minor: 0 },
-        { member: a, amount_minor: 1 },
+    assert.deepEqual(core.allocate(1, "even", [{ member: b }, { member: a }]), [
+        { member: b, amount: 0 },
+        { member: a, amount: 1 },
     ]);
-    assert.deepEqual(core.allocate(1234, "exact", [{ member: a, value: "1.234" }], 3), [
-        { member: a, amount_minor: 1234 },
+    assert.deepEqual(core.allocate(1234, "exact", [{ member: a, amount: 1234 }]), [
+        { member: a, amount: 1234 },
     ]);
 });
 test("percentage splits use basis points and largest remainders without float drift", () => {
@@ -25,28 +25,27 @@ test("percentage splits use basis points and largest remainders without float dr
         99999999999,
         "percentage",
         [
-            { member: a, value: "33.33" },
-            { member: b, value: "33.33" },
-            { member: c, value: "33.34" },
+            { member: a, percentage_bp: 3333 },
+            { member: b, percentage_bp: 3333 },
+            { member: c, percentage_bp: 3334 },
         ],
-        2,
     );
     assert.equal(
-        result.reduce((sum, row) => sum + row.amount_minor, 0),
+        result.reduce((sum, row) => sum + row.amount, 0),
         99999999999,
     );
     assert.equal(result.find((row) => row.member === c)!.percentage_bp, 3334);
-    assert.throws(() => core.allocate(100, "percentage", [{ member: a, value: "99.99" }], 2));
-    assert.throws(() => core.allocate(100, "percentage", [{ member: a, value: "100.001" }], 2));
+    assert.throws(() => core.allocate(100, "percentage", [{ member: a, percentage_bp: 9999 }]));
+    assert.throws(() => core.allocate(100, "percentage", [{ member: a, percentage_bp: 10000.1 }]));
 });
 test("exact splits and participants are validated, including currency precision", () => {
     assert.equal(core.parseDecimal("0.29", 2), 29);
     assert.throws(() => core.parseDecimal("1.1", 0));
     assert.throws(() => core.parseDecimal("1e2", 2));
-    assert.throws(() => core.allocate(100, "exact", [{ member: a, value: "0.99" }], 2));
-    assert.throws(() => core.allocate(100, "even", [{ member: a }, { member: a }], 2));
-    assert.throws(() => core.allocate(100, "even", [], 2));
-    assert.throws(() => core.allocate(0, "even", [{ member: a }], 2));
+    assert.throws(() => core.allocate(100, "exact", [{ member: a, amount: 99 }]));
+    assert.throws(() => core.allocate(100, "even", [{ member: a }, { member: a }]));
+    assert.throws(() => core.allocate(100, "even", []));
+    assert.throws(() => core.allocate(0, "even", [{ member: a }]));
 });
 test("suggested settlements clear every member balance without mixing currencies", () => {
     const balances = [
@@ -60,11 +59,11 @@ test("suggested settlements clear every member balance without mixing currencies
     core.suggestions(balances).forEach((row) => {
         net.set(
             row.from_member + row.currency,
-            net.get(row.from_member + row.currency)! + row.amount_minor,
+            net.get(row.from_member + row.currency)! + row.amount,
         );
         net.set(
             row.to_member + row.currency,
-            net.get(row.to_member + row.currency)! - row.amount_minor,
+            net.get(row.to_member + row.currency)! - row.amount,
         );
     });
     assert.ok([...net.values()].every((value) => value === 0));

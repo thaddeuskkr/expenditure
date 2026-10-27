@@ -58,11 +58,11 @@ function exportValues(
 ): ExportCell[] {
     const row: ExportCell[] = [
         expense.merchant,
-        expense.amount_cents / 10 ** currencyDigits(expense.currency),
+        expense.amount / 10 ** currencyDigits(expense.currency),
         expense.currency,
         expense.category,
         localSpreadsheetDate(expense.occurred_at, timezone),
-        expense.card,
+        expense.payment_method,
         expense.notes,
         expense.source,
         asDate(expense.occurred_at).toISOString(),
@@ -70,7 +70,7 @@ function exportValues(
     if (!mainCurrency) return row;
 
     const convertedAmount = convertAmount(
-        expense.amount_cents,
+        expense.amount,
         expense.currency,
         mainCurrency,
         rates,

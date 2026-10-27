@@ -47,8 +47,8 @@ export function CircleBalances({
                             )?.net || 0;
                         return (
                             <div key={member.id} className="flex items-center gap-3 py-4">
-                                {member.user && (
-                                    <UserAvatar user={member.user} name={member.name} />
+                                {member.expand.user && (
+                                    <UserAvatar user={member.expand.user} name={member.name} />
                                 )}
                                 <span className="min-w-0 flex-1 truncate text-xs">
                                     {member.name}
@@ -84,7 +84,7 @@ export function CircleBalances({
                                     {name(suggestion.to_member)}
                                 </span>
                                 <span className="text-xs tabular-nums">
-                                    {money(suggestion.amount_minor, currency)} {currency}
+                                    {money(suggestion.amount, currency)} {currency}
                                 </span>
                                 <Button
                                     variant="outline"
@@ -119,7 +119,7 @@ export function CircleBalances({
                                 </p>
                             </div>
                             <span className="text-xs tabular-nums">
-                                {money(payment.amount_minor, payment.currency)} {payment.currency}
+                                {money(payment.amount, payment.currency)} {payment.currency}
                             </span>
                             {canModify(payment.created_by) && (
                                 <Button variant="ghost" size="sm" onClick={() => onUndo(payment)}>

@@ -22,13 +22,14 @@ export interface CircleMember {
     id: string;
     name: string;
     active: boolean;
-    user: { id: string; collectionId: string; name: string; avatar: string } | null;
+    user: string;
+    expand: { user?: { id: string; collectionId: string; name: string; avatar: string } };
 }
 export interface CircleExpense {
     id: string;
     title: string;
     currency: string;
-    amount_minor: number;
+    amount: number;
     paid_by: string;
     created_by: string;
     split_mode: SplitMode;
@@ -51,7 +52,8 @@ export interface CircleInvitation {
     expires_at: string;
 }
 export interface IncomingInvitation extends CircleInvitation {
-    circle: Pick<Circle, "id" | "name" | "icon" | "currency">;
+    circle: string;
+    expand: { circle: Pick<Circle, "id" | "name" | "icon" | "currency"> };
 }
 export interface CirclePage<T> {
     items: T[];
@@ -77,7 +79,7 @@ export interface CircleIndex {
 export interface CircleExpenseInput {
     title: string;
     currency: string;
-    amount_minor: number;
+    amount: number;
     paid_by: string;
     split_mode: SplitMode;
     shares: core.SplitInput[];
@@ -101,7 +103,7 @@ export const circlesApi = {
         id: string,
         data: Partial<Pick<Circle, "name" | "icon" | "currency">> & {
             version: number;
-            owner_member?: string;
+            owner?: string;
         },
     ) => pb.send<Circle>(`${base}/${id}`, { method: "PATCH", body: data }),
     remove: (circle: Circle, confirmation: string) =>

@@ -13,11 +13,12 @@ declare namespace circlesCore {
         "heart";
     interface SplitInput {
         member: string;
-        value?: string;
+        amount?: number;
+        percentage_bp?: number;
     }
     interface Share {
         member: string;
-        amount_minor: number;
+        amount: number;
         percentage_bp?: number;
     }
     interface Balance {
@@ -29,7 +30,7 @@ declare namespace circlesCore {
         from_member: string;
         to_member: string;
         currency: string;
-        amount_minor: number;
+        amount: number;
     }
 }
 declare const circlesCore: {
@@ -40,7 +41,6 @@ declare const circlesCore: {
         amount: number,
         mode: circlesCore.SplitMode,
         shares: circlesCore.SplitInput[],
-        digits: number,
     ): circlesCore.Share[];
     suggestions(balances: circlesCore.Balance[]): circlesCore.SettlementSuggestion[];
 };

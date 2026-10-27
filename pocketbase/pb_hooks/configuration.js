@@ -37,18 +37,12 @@ function preferences(app, user) {
         0,
         { user },
     );
-    if (!found.length)
-        return {
-            currency: "SGD",
-            timezone: "Asia/Singapore",
-            currencies: defaults.slice(),
-        };
-    const result = found[0].publicExport();
-    const selected = found[0].getStringSlice("currencies");
-    result.currencies = selected.length ?
-        selected :
-            defaults.concat(result.currency).filter((c, i, a) => a.indexOf(c) === i);
-    return result;
+    if (!found.length) {
+        initialize(app, user);
+        return preferences(app, user);
+    }
+
+    return found[0].publicExport();
 }
 
 function categories(app, user) {
@@ -60,28 +54,24 @@ function categories(app, user) {
         0,
         { user },
     );
-    return records.length ?
-            records.map((r) => r.publicExport()) :
-            defaultNames.map((name, i) => ({ name, color: colors[i], active: true, sort_order: i }));
+    if (!records.length) {
+        initialize(app, user);
+        return categories(app, user);
+    }
+
+    return records.map((record) => record.publicExport());
 }
 
 function initialize(app, user) {
     app.runInTransaction((tx) => {
+        if (tx.countRecords("preferences", $dbx.hashExp({ user })) === 0) {
+            const record = new Record(tx.findCollectionByNameOrId("preferences"));
+            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults });
+            tx.save(record);
+        }
+
         if (tx.countRecords("categories", $dbx.hashExp({ user })) > 0) return;
-        // Include preexisting names so upgrades and restored backups retain them.
-        const names = defaultNames.slice();
-        const used = arrayOf(new DynamicModel({ name: "" }));
-        tx.db()
-            .newQuery(
-                "SELECT category AS name FROM expenses WHERE user = {:user} UNION SELECT category AS name FROM budgets WHERE user = {:user} AND category != 'Overall'",
-            )
-            .bind({ user })
-            .all(used);
-        used.forEach((row) => {
-            if (names.every((name) => name.toLowerCase() !== row.name.toLowerCase()))
-                names.push(row.name);
-        });
-        names.forEach((name, i) => {
+        defaultNames.forEach((name, i) => {
             const record = new Record(tx.findCollectionByNameOrId("categories"));
             record.load({
                 user,
@@ -110,12 +100,10 @@ function validate(record, app) {
     const code = record.getString("currency");
     if (!currency(code)) throw new BadRequestError("Unsupported currency.");
     if (name === "preferences") {
-        let selected = record.getStringSlice("currencies");
-        if (!selected.length)
-            selected = defaults.concat(code).filter((c, i, a) => a.indexOf(c) === i);
+        const selected = record.getStringSlice("currencies");
+        if (!selected.length) throw new BadRequestError("Enable at least one currency.");
         if (selected.indexOf(code) < 0)
             throw new BadRequestError("The main currency must be enabled.");
-        record.set("currencies", selected);
     } else {
         const original = record.original();
         const sameCurrency =

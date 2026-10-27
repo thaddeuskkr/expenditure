@@ -47,7 +47,7 @@ export function CircleInvitationGate({ onJoined }: { onJoined: (id: string) => v
     if (!invitation && !error) return null;
     return (
         <CircleModal
-            title={invitation ? `Join ${invitation.circle.name}?` : "Circle invitation"}
+            title={invitation ? `Join ${invitation.expand.circle.name}?` : "Circle invitation"}
             onClose={close}
             busy={busy}
             description={
@@ -58,8 +58,8 @@ export function CircleInvitationGate({ onJoined }: { onJoined: (id: string) => v
             <div className="space-y-5 pt-3">
                 {invitation && (
                     <div className="flex items-center gap-3 rounded-lg border p-4">
-                        <CircleIcon name={invitation.circle.icon} />
-                        <span className="text-sm">{invitation.circle.name}</span>
+                        <CircleIcon name={invitation.expand.circle.icon} />
+                        <span className="text-sm">{invitation.expand.circle.name}</span>
                     </div>
                 )}
                 <FormError error={error} />

@@ -62,7 +62,7 @@ export function ExpenseEditor({
         ]),
     );
     const [amount, setAmount] = useState(
-        expense ? formatAmountInput(expense.amount_cents, expense.currency) : "",
+        expense ? formatAmountInput(expense.amount, expense.currency) : "",
     );
     const [category, setCategory] = useState<Category>(
         expense?.category || defaultCategory,
@@ -81,7 +81,7 @@ export function ExpenseEditor({
             await onSave(
                 {
                     merchant: String(form.get("merchant")).trim(),
-                    amount_cents: parseMinorUnits(
+                    amount: parseMinorUnits(
                         String(form.get("amount")),
                         selectedCurrency,
                     ),
@@ -91,7 +91,7 @@ export function ExpenseEditor({
                         String(form.get("occurred_at")),
                         timezone,
                     ),
-                    card: String(form.get("card") || "").trim(),
+                    payment_method: String(form.get("payment_method") || "").trim(),
                     notes: String(form.get("notes") || "").trim(),
                 },
                 expense?.id,
@@ -199,18 +199,18 @@ export function ExpenseEditor({
                         />
                     </div>
                     <div>
-                        <label className="field-label" htmlFor="card">
+                        <label className="field-label" htmlFor="payment_method">
                             Payment method{" "}
                             <span className="font-normal text-muted-foreground">
                                 (optional)
                             </span>
                         </label>
                         <Input
-                            id="card"
-                            name="card"
+                            id="payment_method"
+                            name="payment_method"
                             placeholder="e.g. DBS Live Fresh, cash"
                             maxLength={80}
-                            defaultValue={expense?.card}
+                            defaultValue={expense?.payment_method}
                             className="h-11"
                         />
                     </div>

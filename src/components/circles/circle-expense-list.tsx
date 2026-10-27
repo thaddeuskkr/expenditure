@@ -28,12 +28,12 @@ export function CircleExpenseList({
             <div className="divide-y">
                 {detail.expenses.items.map((expense) => {
                     const myShare =
-                        expense.shares.find((share) => share.member === detail.me)?.amount_minor ||
+                        expense.shares.find((share) => share.member === detail.me)?.amount ||
                         0;
                     const converted =
                         expense.currency !== detail.circle.currency ?
                                 convertAmount(
-                                    expense.amount_minor,
+                                    expense.amount,
                                     expense.currency,
                                     detail.circle.currency,
                                     rates,
@@ -57,7 +57,7 @@ export function CircleExpenseList({
                                 </span>
                             </span>
                             <span className="shrink-0 text-right text-sm tabular-nums">
-                                {money(expense.amount_minor, expense.currency)}{" "}
+                                {money(expense.amount, expense.currency)}{" "}
                                 <span className="text-[10px] text-muted-foreground">
                                     {expense.currency}
                                 </span>

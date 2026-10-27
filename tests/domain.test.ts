@@ -8,6 +8,8 @@ import {
     money,
     convertAmount,
     EMPTY_RATES,
+    dayLabel,
+    timeLabel,
 } from "../src/lib/domain.ts";
 test("decimal amounts are parsed exactly into integer cents", () => {
     assert.equal(parseMinorUnits("8.50"), 850);
@@ -64,4 +66,14 @@ test("month ranges respect Singapore, year rollover, and daylight saving", () =>
     assert.equal(march.to, "2026-04-01T04:00:00.000Z");
     assert.throws(() => fromZonedInput("2026-03-08T02:30", "America/New_York"));
     assert.throws(() => fromZonedInput("2026-02-30T12:00", "Asia/Singapore"));
+});
+
+test("transaction dates and times use the account timezone across midnight and daylight saving", () => {
+    const timestamp = "2026-10-27 16:05:00.000Z";
+    assert.equal(dayLabel(timestamp, "Asia/Singapore"), "28 Oct");
+    assert.equal(timeLabel(timestamp, "Asia/Singapore"), "00:05");
+    assert.equal(dayLabel(timestamp, "America/New_York"), "27 Oct");
+    assert.equal(timeLabel(timestamp, "America/New_York"), "12:05");
+    assert.equal(timeLabel("2026-03-08T06:59:00Z", "America/New_York"), "01:59");
+    assert.equal(timeLabel("2026-03-08T07:00:00Z", "America/New_York"), "03:00");
 });

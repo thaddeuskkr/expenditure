@@ -3,7 +3,7 @@
 import { useWorkspace } from "../workspace-context";
 import { CategoryIcon } from "../category-icon";
 import type { CircleDetail } from "@/lib/circles";
-import { CATEGORY_COLORS, convertAmount, dayLabel, money, rateDate } from "@/lib/domain";
+import { CATEGORY_COLORS, convertAmount, dayLabel, money, rateDate, timeLabel } from "@/lib/domain";
 import { SPLIT_LABELS, type CircleExpense } from "@/lib/circles";
 import { CirclePagination } from "./circle-pagination";
 
@@ -53,7 +53,7 @@ export function CircleExpenseList({
                                 <span className="block truncate text-sm">{expense.title}</span>
                                 <span className="mt-2 block text-[10px] text-muted-foreground">
                                     {name(expense.paid_by)} {expense.kind === "income" ? "received" : "paid"} ·{" "}
-                                    {dayLabel(expense.occurred_at, preferences.timezone)} ·{" "}
+                                    {dayLabel(expense.occurred_at, preferences.timezone)} · {timeLabel(expense.occurred_at, preferences.timezone)} ·{" "}
                                     {SPLIT_LABELS[expense.split_mode]}
                                 </span>
                                 <span className="mt-1 block text-[10px] text-muted-foreground">

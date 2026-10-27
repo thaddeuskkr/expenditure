@@ -16,6 +16,7 @@ import {
     dayLabel,
     money,
     rateDate,
+    timeLabel,
     type Expense,
 } from "@/lib/domain";
 
@@ -56,7 +57,7 @@ export function Transactions({
                     <tr className="border-b text-[9px] tracking-wider text-muted-foreground">
                         <th className="pb-3 font-normal">SOURCE / MERCHANT</th>
                         <th className="hidden pb-3 font-normal md:table-cell">CATEGORY</th>
-                        <th className="hidden pb-3 font-normal sm:table-cell">DATE</th>
+                        <th className="hidden pb-3 font-normal sm:table-cell">DATE & TIME</th>
                         <th className="pb-3 text-right font-normal">AMOUNT</th>
                         <th className="w-10 pb-3">
                             <span className="sr-only">Actions</span>
@@ -82,6 +83,9 @@ export function Transactions({
                                             {expense.payment_method ||
                                                 (expense.source === "api" ? "Via API" : "Manual entry")}
                                         </span>
+                                        <span className="mt-1 block text-[9px] text-muted-foreground sm:hidden">
+                                            {dayLabel(expense.occurred_at, timezone)} · {timeLabel(expense.occurred_at, timezone)}
+                                        </span>
                                     </span>
                                 </button>
                             </td>
@@ -91,7 +95,8 @@ export function Transactions({
                                 </span>
                             </td>
                             <td className="hidden pr-4 text-[10px] text-muted-foreground sm:table-cell">
-                                {dayLabel(expense.occurred_at, timezone)}
+                                <span className="block whitespace-nowrap">{dayLabel(expense.occurred_at, timezone)}</span>
+                                <span className="mt-1 block tabular-nums">{timeLabel(expense.occurred_at, timezone)}</span>
                             </td>
                             <td className="text-right text-xs whitespace-nowrap tabular-nums">
                                 <div className={expense.kind === "income" ? "text-primary" : ""}>

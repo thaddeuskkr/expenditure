@@ -47,7 +47,6 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
 import {
@@ -608,10 +607,6 @@ function Workspace({
                                     </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent side="top" align="start" className="w-48">
-                                    <DropdownMenuItem onClick={() => navigate("Settings")}>
-                                        <Settings2 /> Preferences
-                                    </DropdownMenuItem>
-                                    <DropdownMenuSeparator />
                                     <DropdownMenuItem onClick={onSignOut}>
                                         <LogOut />
                                         Sign out

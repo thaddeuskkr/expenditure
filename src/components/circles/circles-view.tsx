@@ -12,7 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useWorkspace } from "../workspace-context";
-import { dayLabel, errorMessage, money } from "@/lib/domain";
+import { dayLabel, errorMessage, money, timeLabel } from "@/lib/domain";
 import {
     circlesApi,
     SPLIT_LABELS,
@@ -390,7 +390,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                         <Ellipsis />
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
+                                <DropdownMenuContent align="end" className="w-max max-w-(--radix-dropdown-menu-content-available-width) whitespace-nowrap">
                                     {detail.circle.is_owner ?
                                             (
                                                 <>
@@ -618,6 +618,9 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                     onClose={() => setViewing(null)}>
                     <div className="space-y-5 pt-2">
                         <p className="text-xs text-muted-foreground">{viewing.category}{viewing.source === "api" ? " · Via API" : ""}</p>
+                        <p className="text-xs text-muted-foreground">
+                            {dayLabel(viewing.occurred_at, preferences.timezone)} · {timeLabel(viewing.occurred_at, preferences.timezone)} · {preferences.timezone.replaceAll("_", " ")}
+                        </p>
                         <div className="divide-y">
                             {viewing.shares.map((share) => (
                                 <div

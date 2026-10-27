@@ -287,6 +287,15 @@ export function dayLabel(date: string, timezone: string) {
     }).format(asDate(date));
 }
 
+export function timeLabel(date: string, timezone: string) {
+    return new Intl.DateTimeFormat("en-SG", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+        timeZone: timezone,
+    }).format(asDate(date));
+}
+
 export function errorMessage(error: unknown) {
     return error instanceof Error ?
         error.message :

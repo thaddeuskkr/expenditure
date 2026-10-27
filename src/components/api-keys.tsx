@@ -7,7 +7,6 @@ import {
     Loader2,
     Plus,
     ShieldCheck,
-    Smartphone,
     Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -134,7 +133,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
         }
     }
 
-    const example = `curl -X POST '${pocketbaseUrl}/api/expenses/transactions' \\
+    const personalExample = `curl -X POST '${pocketbaseUrl}/api/expenses/transactions' \\
   -H 'X-API-Key: YOUR_API_KEY' \\
   -H 'Content-Type: application/json' \\
   -H 'Idempotency-Key: a-unique-transaction-id' \\
@@ -146,13 +145,30 @@ export function ApiKeys({ timezone }: { timezone: string }) {
     "payment_method": "Visa",
     "notes": "Afternoon coffee"
   }'`;
+    const circleExample = `curl -X POST '${pocketbaseUrl}/api/expenditure/circles/CIRCLE_ID/expenses' \\
+  -H 'Authorization: YOUR_USER_SESSION_TOKEN' \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "title": "Coffee together",
+    "kind": "expense",
+    "amount": 650,
+    "currency": "SGD",
+    "category": "Food & drinks",
+    "paid_by": "YOUR_MEMBERSHIP_ID",
+    "split_mode": "even",
+    "shares": [
+      { "member": "YOUR_MEMBERSHIP_ID" },
+      { "member": "OTHER_MEMBERSHIP_ID" }
+    ],
+    "payment_method": "Visa"
+  }'`;
     return (
         <div className="animate-enter">
             <div className="flex items-center justify-between border-b pb-6">
                 <div>
                     <h2 className="text-base font-medium">Personal API keys</h2>
                     <p className="mt-2 text-xs leading-6 text-muted-foreground">
-                        Access expenses from Shortcuts or other apps.
+                        Add or read personal expenses from other apps.
                     </p>
                 </div>
                 <Button
@@ -236,59 +252,68 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                                 </p>
                             </div>
                         )}
-            <div className="mt-10 grid gap-8 lg:grid-cols-[1fr_1.2fr]">
-                <div>
-                    <div className="mb-4 flex items-center gap-2 text-primary">
-                        <Smartphone className="size-4" />
-                        <p className="eyebrow text-primary">From your iPhone</p>
+            <div className="mt-10 space-y-10">
+                <section className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-medium">Personal transactions</h3>
+                        <p className="mt-4 text-xs leading-6 text-muted-foreground">
+                            Create a key with write access and send it in the X-API-Key header.
+                            Use an enabled currency and an active personal category, or omit them to use your defaults.
+                        </p>
+                        <p className="mt-4 flex gap-2 text-[10px] leading-5 text-muted-foreground">
+                            <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
+                            Keys are shown once and can be revoked at any time.
+                        </p>
                     </div>
-                    <h3 className="text-sm font-medium">Shortcuts setup</h3>
-                    <ol className="mt-6 space-y-4 text-xs leading-6 text-muted-foreground">
-                        <li>
-                            <span className="mr-3 text-primary">01</span>Create a key with
-                            write access.
-                        </li>
-                        <li>
-                            <span className="mr-3 text-primary">02</span>In Shortcuts, add
-                            “Get Contents of URL”.
-                        </li>
-                        <li>
-                            <span className="mr-3 text-primary">03</span>Use POST, the API
-                            URL, headers, and JSON below.
-                        </li>
-                        <li>
-                            <span className="mr-3 text-primary">04</span>Send integer minor
-                            units: SGD 6.50 becomes 650; JPY 650 stays 650. Use an enabled
-                            currency and an active category, or omit them to use your defaults.
-                        </li>
-                    </ol>
-                    <p className="mt-6 flex gap-2 text-[10px] leading-5 text-muted-foreground">
-                        <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
-                        Keys are shown once and can be revoked at any time.
-                    </p>
-                </div>
-                <div className="overflow-hidden rounded-xl border bg-[#141713]">
-                    <div className="flex items-center justify-between border-b px-5 py-3">
-                        <span className="text-[10px] tracking-wider text-muted-foreground">
-                            EXAMPLE REQUEST
-                        </span>
-                        <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label="Copy example request"
-                            onClick={() => copy(example)}>
-                            <Copy className="size-3.5" />
-                        </Button>
+                    <RequestExample
+                        title="Personal transaction request"
+                        request={personalExample}
+                        onCopy={copy}
+                        note="Use a unique Idempotency-Key per purchase and keep it for retries within 24 hours. Retries do not extend the window."
+                    />
+                </section>
+                <section className="grid gap-6 border-t pt-8 lg:grid-cols-[1fr_1.2fr]">
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-medium">Circle transactions</h3>
+                        <p className="mt-4 text-xs leading-6 text-muted-foreground">
+                            In the app, open Circles, select a Circle, and choose Add expense or Add income.
+                            Choose who paid or received the money and how to split it.
+                        </p>
+                        <p className="mt-4 text-xs leading-6 text-muted-foreground">
+                            For API requests, sign in as a normal PocketBase user through OAuth and use the
+                            session token in the Authorization header. With the JavaScript SDK, this is
+                            <code className="text-foreground"> pb.authStore.token</code>.
+                            Personal API keys do not grant Circle access. You must be an active member.
+                        </p>
+                        <ol className="mt-4 list-decimal space-y-3 pl-4 text-xs leading-6 text-muted-foreground">
+                            <li>
+                                Send <code className="break-all text-foreground">GET /api/expenditure/circles</code> with the same
+                                Authorization header. Use a Circle ID from <code className="text-foreground">circles</code>.
+                            </li>
+                            <li>
+                                Send <code className="break-all text-foreground">GET /api/expenditure/circles/CIRCLE_ID</code>.
+                                The response includes <code className="text-foreground">me</code> (your membership ID),
+                                <code className="text-foreground"> members</code>, and <code className="text-foreground">categories</code>.
+                            </li>
+                            <li>
+                                Replace the IDs in the example. Use active membership IDs for
+                                <code className="text-foreground"> paid_by</code> and each <code className="text-foreground">member</code>,
+                                and an active Circle category name. The example splits equally between two members.
+                            </li>
+                        </ol>
+                        <p className="mt-4 text-xs leading-6 text-muted-foreground">
+                            For income, set <code className="text-foreground">kind</code> to <code className="text-foreground">income</code>;
+                            <code className="text-foreground"> paid_by</code> is the recipient. Omit
+                            <code className="text-foreground"> occurred_at</code> to use the current time, or send a timestamp with a timezone.
+                        </p>
                     </div>
-                    <pre className="overflow-x-auto p-5 font-mono text-[11px] leading-6 text-[#c4cbb8]">
-                        {example}
-                    </pre>
-                    <div className="border-t px-5 py-4 text-[10px] leading-5 text-muted-foreground">
-                        Use a timestamp plus a random number for each purchase. Keep
-                        that same Idempotency-Key for retries within 24 hours. The
-                        retry window does not extend when you retry.
-                    </div>
-                </div>
+                    <RequestExample
+                        title="Circle transaction request"
+                        request={circleExample}
+                        onCopy={copy}
+                        note="Circle requests do not support Idempotency-Key replay protection. Check whether a transaction was saved before resending it."
+                    />
+                </section>
             </div>
             <Dialog
                 open={creating}
@@ -337,7 +362,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                                         <Input
                                             id="key-name"
                                             name="name"
-                                            placeholder="My iPhone Shortcut"
+                                            placeholder="My automation"
                                             maxLength={80}
                                             required
                                             autoFocus
@@ -401,7 +426,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Revoke {revoke?.name}?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Any Shortcut or app using this key will immediately lose access.
+                            Any app using this key will immediately lose access.
                             This cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -418,6 +443,44 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+        </div>
+    );
+}
+
+function RequestExample({ title, request, note, onCopy }: {
+    title: string;
+    request: string;
+    note: string;
+    onCopy: (request: string) => Promise<void>;
+}) {
+    return (
+        <div className="min-w-0 self-start overflow-hidden rounded-xl border bg-[#141713]">
+            <div className="flex items-center justify-between border-b px-5 py-3">
+                <span className="text-[10px] tracking-wider text-muted-foreground">
+                    {title.toUpperCase()}
+                </span>
+                <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={`Copy ${title.toLowerCase()}`}
+                    onClick={() => void onCopy(request)}>
+                    <Copy className="size-3.5" />
+                </Button>
+            </div>
+            <pre className="overflow-x-auto p-5 font-mono text-[11px] leading-6 text-[#c4cbb8]">
+                {request.split("\n").map((line, index, lines) => (
+                    <span key={index}>
+                        {line}
+                        {line.trimStart().startsWith("\"amount\":") && (
+                            <span className="text-muted-foreground">{" // Integer minor units / cents (SGD 6.50)"}</span>
+                        )}
+                        {index < lines.length - 1 ? "\n" : ""}
+                    </span>
+                ))}
+            </pre>
+            <p className="border-t px-5 py-4 text-[10px] leading-5 text-muted-foreground">
+                {note}
+            </p>
         </div>
     );
 }

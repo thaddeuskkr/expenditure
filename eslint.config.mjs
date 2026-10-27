@@ -48,6 +48,8 @@ const eslintConfig = defineConfig([
                 BadRequestError: "readonly",
                 Collection: "readonly",
                 DynamicModel: "readonly",
+                DateTime: "readonly",
+                Timezone: "readonly",
                 ForbiddenError: "readonly",
                 JSONField: "readonly",
                 NotFoundError: "readonly",

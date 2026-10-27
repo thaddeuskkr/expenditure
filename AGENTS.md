@@ -33,6 +33,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - `pocketbase/pb_hooks/circles.pb.js`, `circles-service.js`: Circle routes, permissions, transactions, and ledger operations.
 - `pocketbase/pb_hooks/circles-core.cjs`: allocation and settlement calculations shared by frontend and backend. Keep `circles-core.d.cts` in sync.
 - `pocketbase/pb_hooks/exchange-rates.js`, `overview.js`, `request.js`: cached rates, complete-dataset reports, and timestamp validation.
+- `pocketbase/pb_hooks/recurrence.js`, `recurrence.pb.js`: recurring schedules, timezone/calendar advancement, transactional generation and pause errors. Schedules live on the original expense; generated entries have no recurrence.
 - `pocketbase/pb_hooks/currencies.json`: shared currency catalog; use its precision on both sides.
 - `pocketbase/pb_migrations/`: ordered schema/data migrations. `tests/`: domain/export tests and disposable PocketBase integration/upgrade tests.
 
@@ -40,6 +41,8 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 - Use the database field names and types directly in requests, responses, and frontend types. Update all callers, OpenAPI, and tests together when changing a contract.
 - Monetary fields are `amount`: integer currency minor units, never floating-point money. SGD 6.50 = 650; JPY 650 = 650; KWD 1.234 = 1234. The current maximum is enforced in the schema/core. Use `payment_method` for payment labels.
+- `kind` distinguishes `expense` and `income`; both store positive `amount`. Income never consumes spending budgets. Circle income reverses the expense balance deltas: `paid_by` identifies the recipient who owes the allocated shares.
+- Recurrence supports daily/weekly/monthly/yearly expenses in the saved schedule timezone, including downtime catch-up. Preserve transactional generation/cursor advancement, original month-end anchors, author/membership checks and visible pause errors. Editing a schedule affects future entries; stopping/deleting it preserves generated history.
 - Circle shares use `member` (membership ID). Even inputs contain only `member`; exact inputs add integer `amount`; percentage inputs add integer `percentage_bp` (6000 = 60%). Saved shares contain the calculated `amount`. Preserve deterministic largest-remainder rounding.
 - Circle `owner` is a user ID. `paid_by`, share members, settlement participants, and `created_by` are membership IDs. Never interchange the two kinds of IDs.
 - Relations retain their stored IDs. Public related data goes under `expand.user` or `expand.circle`; do not replace relation IDs with objects. Keep profile projections limited to public fields.
@@ -61,7 +64,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - The frontend URL is `expenses.tkkr.dev`; the configured PocketBase URL is `e.tkkr.dev`. `NEXT_PUBLIC_POCKETBASE_URL` is public and baked into the client at build time. Do not change a running server or deployment without authorization.
 - Prepare installable PocketBase files for the user; do not assume server access. Copy all hook files, including JSON/CJS modules, together with all unapplied migrations. Keep the matching frontend/schema/hooks coordinated.
 - Add new migrations; do not rewrite applied history or remove old migrations because they contain earlier field names. Historical migrations are not runtime compatibility aliases. Back up before applying; some down migrations delete collections/data.
-- Current backend status is version 6 in `main.pb.js`, checked by workspace startup. When a contract changes, update both the reported and required version together.
+- Current backend status is version 7 in `main.pb.js`, checked by workspace startup. When a contract changes, update both the reported and required version together.
 - Test fresh installation and upgrades with existing records. Preserve IDs, amounts, timestamps, provider configuration, and ledger balances unless the requested change explicitly requires otherwise.
 - PocketBase 0.40.6 is the validated server version; do not confuse it with the JS SDK version. Read `package.json` for installed frontend/tool versions.
 - OAuth callback uses the PocketBase URL with `/api/oauth2-redirect`. Preserve exact allowed origins and realtime/SSE support. The frontend does not need a separate OAuth callback or privileged API proxy.

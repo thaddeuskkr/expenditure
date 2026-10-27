@@ -66,7 +66,7 @@ function initialize(app, user) {
     app.runInTransaction((tx) => {
         if (tx.countRecords("preferences", $dbx.hashExp({ user })) === 0) {
             const record = new Record(tx.findCollectionByNameOrId("preferences"));
-            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults });
+            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview" });
             tx.save(record);
         }
 
@@ -96,6 +96,12 @@ function category(app, user, name, allowArchived) {
 
 function validate(record, app) {
     const name = record.collection().name;
+    if (name === "expenses") {
+        if (record.isNew() && !record.getString("kind")) record.set("kind", "expense");
+        require(`${__hooks}/recurrence.js`).configure(record, app, record.getString("user"));
+    }
+
+    if (name === "preferences" && record.isNew() && !record.getString("default_tab")) record.set("default_tab", "Overview");
     const user = record.getString("user");
     const code = record.getString("currency");
     if (!currency(code)) throw new BadRequestError("Unsupported currency.");

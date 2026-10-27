@@ -47,6 +47,8 @@ function exportHeaders(timezone: string, mainCurrency?: string) {
                     "Rates fetched at",
                 ] :
                 []),
+        "Type",
+        "Recurrence",
     ];
 }
 
@@ -67,7 +69,7 @@ function exportValues(
         expense.source,
         asDate(expense.occurred_at).toISOString(),
     ];
-    if (!mainCurrency) return row;
+    if (!mainCurrency) return [...row, expense.kind, expense.recurrence];
 
     const convertedAmount = convertAmount(
         expense.amount,
@@ -91,7 +93,7 @@ function exportValues(
         sameCurrency ? "" : rateDate(expense.currency, mainCurrency, rates),
         rates.fetched_at ? asDate(rates.fetched_at).toISOString() : "",
     );
-    return row;
+    return [...row, expense.kind, expense.recurrence];
 }
 
 function csvCell(value: ExportCell, decimalPlaces?: number) {
@@ -180,7 +182,7 @@ export async function expenseWorkbook(
     sheet.getColumn(5).numFmt = "yyyy-mm-dd hh:mm:ss";
     sheet.autoFilter = {
         from: "A1",
-        to: `${mainCurrency ? "M" : "I"}${sheet.rowCount}`,
+        to: `${mainCurrency ? "O" : "K"}${sheet.rowCount}`,
     };
     sheet.getRow(1).font = { bold: true, color: { argb: "FFF0EEEA" }, size: 11 };
     sheet.getRow(1).fill = {

@@ -32,7 +32,17 @@ export const CATEGORY_COLORS = [
     "#c3a4af",
     "#999d94",
 ];
-export interface Expense extends RecordModel {
+export const DEFAULT_TABS = ["Overview", "Transactions", "Categories", "Budgets", "Circles", "API keys", "Settings"] as const;
+export type DefaultTab = typeof DEFAULT_TABS[number];
+export type Recurrence = "" | "daily" | "weekly" | "monthly" | "yearly";
+export interface RecurringFields {
+    recurrence: Recurrence;
+    recurrence_next: string;
+    recurrence_timezone: string;
+    recurrence_error: string;
+}
+export interface Expense extends RecordModel, RecurringFields {
+    kind: "expense" | "income";
     merchant: string;
     /** Integer currency minor units (cents for SGD). */
     amount: number;
@@ -51,6 +61,7 @@ export interface Budget extends RecordModel {
     amount: number;
 }
 export interface Preferences extends RecordModel {
+    default_tab: DefaultTab;
     currency: string;
     timezone: string;
     currencies: string[];
@@ -97,6 +108,8 @@ export interface ApiKey {
     last_used: string;
 }
 export interface Overview {
+    income: number;
+    income_missing_count: number;
     total: number;
     count: number;
     previous: number;
@@ -110,7 +123,9 @@ export interface Overview {
 }
 export type ExpenseInput = Pick<
     Expense,
-    | "merchant" |
+    | "kind" |
+    "recurrence" |
+    "merchant" |
     "amount" |
     "currency" |
     "category" |

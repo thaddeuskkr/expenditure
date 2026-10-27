@@ -63,7 +63,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
     const [dialog, setDialog] = useState<"create" | "settings" | "invite" | "transfer" | null>(
         null,
     );
-    const [editor, setEditor] = useState<CircleExpense | "new" | null>(null),
+    const [editor, setEditor] = useState<CircleExpense | "new" | "income" | null>(null),
         [viewing, setViewing] = useState<CircleExpense | null>(null);
     const [settlement, setSettlement] = useState<SettlementSuggestion | null>(null),
         [confirmation, setConfirmation] = useState<Confirmation | null>(null);
@@ -162,9 +162,9 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
     function removeExpense(expense: CircleExpense) {
         setViewing(null);
         setConfirmation({
-            title: "Delete shared expense?",
-            description: `${expense.title} · ${money(expense.amount, expense.currency)} ${expense.currency}. Member balances will be recalculated.`,
-            label: "Delete expense",
+            title: `Delete shared ${expense.kind}?`,
+            description: `${expense.title} · ${money(expense.amount, expense.currency)} ${expense.currency}. Member balances will be recalculated.${expense.recurrence ? " Future recurring entries will stop; existing entries remain." : ""}`,
+            label: `Delete ${expense.kind}`,
             action: async () => {
                 await circlesApi.deleteExpense(selected!, expense);
                 refresh();
@@ -224,7 +224,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                 {index?.circles.length || 0} circles
                             </p>
                         )}
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                     <Button
                         variant="ghost"
                         size="icon"
@@ -339,7 +339,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                             />
                             <h2 className="font-display text-3xl">No circles</h2>
                             <p className="mt-3 text-xs text-muted-foreground">
-                                Create a circle to split expenses with friends.
+                                Create a circle to split expenses and income with friends.
                             </p>
                             <Button
                                 className="mt-6"
@@ -374,7 +374,8 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                 </p>
                             </div>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-wrap gap-2">
+                            <Button variant="outline" onClick={() => setEditor("income")}><Plus /> Add income</Button>
                             <Button onClick={() => setEditor("new")}>
                                 <Plus />
                                 Add expense
@@ -460,7 +461,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                     onClick={() => setTab(item)}
                                     aria-pressed={tab === item}
                                     className={`border-b-2 py-3 text-xs transition-colors ${tab === item ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
-                                    {item}
+                                    {item === "Expenses" ? "Transactions" : item}
                                 </button>
                             ))}
                         </div>
@@ -486,6 +487,8 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                 <p className="mt-2 text-[10px] text-muted-foreground">
                                     {summary?.count || 0} {summary?.count === 1 ? "expense" : "expenses"} in {currency}
                                 </p>
+                                <p className="mt-2 text-[10px] text-primary">Income {money(summary?.income || 0, currency)}
+                                </p>
                             </div>
                             <div>
                                 <p className="eyebrow text-[9px]">
@@ -504,6 +507,16 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                     Balances stay separate by currency.
                                 </p>
                             </div>
+                        </div>
+                    )}
+                    {tab === "Expenses" && detail.recurring.length > 0 && (
+                        <div className="space-y-3 border-b pb-5">
+                            <h3 className="text-xs font-medium">Recurring expenses</h3>
+                            {detail.recurring.map((item) => (
+                                <button key={item.id} className="block w-full text-left text-xs text-muted-foreground" onClick={() => setViewing(item)}>
+                                    {item.title} · {item.recurrence} · {item.recurrence_error ? `Paused: ${item.recurrence_error}` : `Next ${new Date(item.recurrence_next).toLocaleDateString("en-SG", { timeZone: item.recurrence_timezone })}`}
+                                </button>
+                            ))}
                         </div>
                     )}
                     {tab === "Expenses" && (
@@ -565,11 +578,12 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
             {detail && editor && (
                 <CircleExpenseEditor
                     data={detail}
-                    expense={editor === "new" ? null : editor}
+                    expense={typeof editor === "string" ? null : editor}
+                    kind={editor === "income" ? "income" : "expense"}
                     onClose={() => setEditor(null)}
                     onSaved={() => {
                         refresh();
-                        toast.success("Shared expense saved");
+                        toast.success("Shared entry saved");
                     }}
                 />
             )}
@@ -597,7 +611,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
             {detail && viewing && (
                 <CircleModal
                     title={viewing.title}
-                    description={`${name(viewing.paid_by)} paid ${money(viewing.amount, viewing.currency)} ${viewing.currency} · ${SPLIT_LABELS[viewing.split_mode]}`}
+                    description={`${name(viewing.paid_by)} ${viewing.kind === "income" ? "received" : "paid"} ${money(viewing.amount, viewing.currency)} ${viewing.currency} · ${SPLIT_LABELS[viewing.split_mode]}`}
                     onClose={() => setViewing(null)}>
                     <div className="space-y-5 pt-2">
                         <div className="divide-y">
@@ -634,14 +648,14 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                     variant="ghost"
                                     className="text-destructive"
                                     onClick={() => removeExpense(viewing)}>
-                                    Delete expense
+                                    Delete {viewing.kind}
                                 </Button>
                                 <Button
                                     onClick={() => {
                                         setEditor(viewing);
                                         setViewing(null);
                                     }}>
-                                    Edit expense
+                                    Edit {viewing.kind}
                                 </Button>
                             </div>
                         )}

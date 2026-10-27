@@ -146,10 +146,10 @@ function balances(app, circle) {
         .newQuery(
             `
         SELECT member, currency, SUM(delta) AS net FROM (
-            SELECT paid_by AS member, currency, amount AS delta FROM circle_expenses WHERE circle = {:circle}
+            SELECT paid_by AS member, currency, CASE WHEN kind = 'income' THEN -amount ELSE amount END AS delta FROM circle_expenses WHERE circle = {:circle}
             UNION ALL
             SELECT json_extract(part.value, '$.member') AS member, expense.currency,
-                -CAST(json_extract(part.value, '$.amount') AS INTEGER) AS delta
+                (CASE WHEN expense.kind = 'income' THEN 1 ELSE -1 END) * CAST(json_extract(part.value, '$.amount') AS INTEGER) AS delta
             FROM circle_expenses AS expense, json_each(expense.shares) AS part WHERE expense.circle = {:circle}
             UNION ALL
             SELECT from_member AS member, currency, amount AS delta FROM circle_settlements WHERE circle = {:circle}
@@ -332,11 +332,11 @@ function create(e) {
 function detail(e) {
     const { circle, member, isOwner } = access(e.app, e.request.pathValue("id"), e.auth.id);
     const members = memberRecords(e.app, circle.id).map((row) => memberDTO(e.app, row));
-    const totals = arrayOf(new DynamicModel({ currency: "", total: 0, count: 0 }));
+    const totals = arrayOf(new DynamicModel({ currency: "", total: 0, income: 0, count: 0 }));
     e.app
         .db()
         .newQuery(
-            "SELECT currency, SUM(amount) AS total, COUNT(*) AS count FROM circle_expenses WHERE circle = {:circle} GROUP BY currency",
+            "SELECT currency, SUM(CASE WHEN kind = 'expense' THEN amount ELSE 0 END) AS total, SUM(CASE WHEN kind = 'income' THEN amount ELSE 0 END) AS income, SUM(CASE WHEN kind = 'expense' THEN 1 ELSE 0 END) AS count FROM circle_expenses WHERE circle = {:circle} GROUP BY currency",
         )
         .bind({ circle: circle.id })
         .all(totals);
@@ -363,9 +363,11 @@ function detail(e) {
         totals: totals.map((row) => ({
             currency: row.currency,
             total: row.total,
+            income: row.income,
             count: row.count,
         })),
         invitations,
+        recurring: e.app.findRecordsByFilter("circle_expenses", "circle = {:circle} && recurrence != ''", "recurrence_next,id", 0, 0, { circle: circle.id }).map((r) => r.publicExport()),
         expenses: page(e.app, "circle_expenses", circle.id, query.get("expense_page")),
         settlements: page(e.app, "circle_settlements", circle.id, query.get("settlement_page")),
     });
@@ -549,6 +551,8 @@ function removeMember(e) {
 function saveExpense(e) {
     const data = body(e, [
         "title",
+        "kind",
+        "recurrence",
         "amount",
         "currency",
         "paid_by",
@@ -602,6 +606,8 @@ function saveExpense(e) {
             shares.forEach((share) => memberInCircle(members, share.member, formerAllowed));
             const fields = {
                 circle: circle.id,
+                kind: data.kind === undefined ? (expense ? expense.getString("kind") : "expense") : data.kind,
+                recurrence: data.recurrence === undefined ? (expense ? expense.getString("recurrence") : "") : data.recurrence,
                 title: text(data.title, "Title", 160, true),
                 amount: total,
                 currency: code,
@@ -613,10 +619,10 @@ function saveExpense(e) {
                 occurred_at: occurredAt(data.occurred_at),
                 version: expense ? expense.getInt("version") + 1 : 1,
             };
-            if (expense) {
-                expense.load(fields);
-                app.save(expense);
-            } else expense = record(app, "circle_expenses", { ...fields, created_by: member.id });
+            if (!expense) expense = new Record(app.findCollectionByNameOrId("circle_expenses"));
+            expense.load({ ...fields, recurrence_error: "", created_by: expense.isNew() ? member.id : expense.getString("created_by") });
+            require(`${__hooks}/recurrence.js`).configure(expense, app, e.auth.id);
+            app.save(expense);
             preserveFormerBalances(app, circle.id, members, before);
             return expense.publicExport();
         },
@@ -724,6 +730,7 @@ function deleteContents(app, circle) {
 }
 
 module.exports = {
+    access, memberRecords, memberInCircle, balances, preserveFormerBalances,
     list,
     create,
     detail,

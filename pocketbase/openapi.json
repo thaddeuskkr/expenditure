@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "6.0.0",
-    "description": "Personal API keys authorize the personal expense automation endpoints. Category ordering and Circles require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted."
+    "version": "7.0.0",
+    "description": "Personal API keys authorize the personal expense automation endpoints. Category ordering and Circles require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring expenses run on the PocketBase server every minute, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
     {
@@ -1197,6 +1197,105 @@
           }
         }
       }
+    },
+    "/api/expenditure/config": {
+      "get": {
+        "summary": "Get initialized workspace settings",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Workspace configuration",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "preferences": {
+                      "$ref": "#/components/schemas/Preferences"
+                    },
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CategoryDefinition"
+                      }
+                    },
+                    "used_currencies": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/expenditure/overview": {
+      "get": {
+        "summary": "Get monthly spending and income totals",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "previous",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ISO currency code or all."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete matching totals",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Overview"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1640,6 +1739,45 @@
             "format": "date-time",
             "nullable": true,
             "description": "POST responses only: fixed retry-window end in UTC, 24 hours after server creation; null when the request had no Idempotency-Key. Retries do not extend this timestamp."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "description": "Positive amount with an explicit direction. For Circle income, paid_by is the recipient who owes each member their allocated share."
+          },
+          "recurrence": {
+            "type": "string",
+            "enum": [
+              "",
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ],
+            "description": "Empty disables recurrence. Only expenses can recur. The schedule is stored on the original entry; generated copies have empty recurrence. Enabling, changing, or resuming a paused schedule starts at its next future occurrence; active schedules catch up after downtime."
+          },
+          "recurrence_timezone": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Account timezone captured when the schedule starts."
+          },
+          "recurrence_anchor": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Original local calendar date/time; month ends clamp without losing this day."
+          },
+          "recurrence_next": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Next occurrence as an ISO instant, or empty when disabled."
+          },
+          "recurrence_error": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Non-empty means generation is paused. Resolve the issue and save the schedule to retry."
           }
         },
         "required": [
@@ -3153,7 +3291,7 @@
           "paid_by": {
             "type": "string",
             "pattern": "^[a-z0-9]{15}$",
-            "description": "Membership id of the payer; the payer need not be a participant."
+            "description": "Membership ID of the payer for an expense, or recipient for income."
           },
           "split_mode": {
             "type": "string",
@@ -3238,6 +3376,27 @@
             "type": "string",
             "format": "date-time",
             "description": "ISO date with Z or an explicit offset. Omission uses server time."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "description": "Positive amount with an explicit direction. For Circle income, paid_by is the recipient who owes each member their allocated share.",
+            "default": "expense"
+          },
+          "recurrence": {
+            "type": "string",
+            "enum": [
+              "",
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ],
+            "description": "Empty disables recurrence. Only expenses can recur. The schedule is stored on the original entry; generated copies have empty recurrence.",
+            "default": ""
           }
         },
         "required": [
@@ -3500,6 +3659,45 @@
             "type": "integer",
             "minimum": 1,
             "description": "Current record version; stale writes return 409."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "description": "Positive amount with an explicit direction. For Circle income, paid_by is the recipient who owes each member their allocated share."
+          },
+          "recurrence": {
+            "type": "string",
+            "enum": [
+              "",
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ],
+            "description": "Empty disables recurrence. Only expenses can recur. The schedule is stored on the original entry; generated copies have empty recurrence. Enabling, changing, or resuming a paused schedule starts at its next future occurrence; active schedules catch up after downtime."
+          },
+          "recurrence_timezone": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Account timezone captured when the schedule starts."
+          },
+          "recurrence_anchor": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Original local calendar date/time; month ends clamp without losing this day."
+          },
+          "recurrence_next": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Next occurrence as an ISO instant, or empty when disabled."
+          },
+          "recurrence_error": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Non-empty means generation is paused. Resolve the issue and save the schedule to retry."
           }
         },
         "required": [
@@ -4122,6 +4320,10 @@
                 },
                 "count": {
                   "type": "integer"
+                },
+                "income": {
+                  "type": "integer",
+                  "description": "Total income in currency minor units; total and count describe expenses only."
                 }
               }
             }
@@ -4183,6 +4385,13 @@
               "totalItems",
               "totalPages"
             ]
+          },
+          "recurring": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CircleExpense"
+            },
+            "description": "All recurring originals, including paused schedules, independent of transaction pagination."
           }
         },
         "required": [
@@ -4386,6 +4595,349 @@
           "provider",
           "source_url"
         ]
+      },
+      "Preferences": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "user": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "currencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "default_tab": {
+            "type": "string",
+            "enum": [
+              "Overview",
+              "Transactions",
+              "Categories",
+              "Budgets",
+              "Circles",
+              "API keys",
+              "Settings"
+            ],
+            "default": "Overview"
+          }
+        },
+        "description": "Persisted per-account preferences, editable through the owner-protected PocketBase preferences collection."
+      },
+      "PersonalEntryInput": {
+        "type": "object",
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "A supported uppercase currency code enabled in the user account. Defaults to the user main currency only when omitted; null, empty strings and non-string values are rejected."
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "A non-empty string naming an active category belonging to the user; surrounding whitespace is trimmed and matching is case-insensitive. Defaults to active Other, otherwise the first active category, only when omitted."
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Defaults to server time; include Z or a timezone offset when supplied."
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Optional text, preserved as supplied, up to 2000 characters. Defaults to an empty string."
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999,
+            "description": "Positive integer currency minor units, stored unchanged as amount in PocketBase. SGD 6.50 = 650, JPY 1000 = 1000, KWD 1.234 = 1234."
+          },
+          "payment_method": {
+            "type": "string",
+            "maxLength": 80,
+            "description": "Optional free-text payment label, such as Cash or Visa, stored unchanged as payment_method. Defaults to an empty string."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "expense",
+              "income"
+            ],
+            "description": "Positive amount with an explicit direction. For Circle income, paid_by is the recipient who owes each member their allocated share."
+          },
+          "recurrence": {
+            "type": "string",
+            "enum": [
+              "",
+              "daily",
+              "weekly",
+              "monthly",
+              "yearly"
+            ],
+            "description": "Empty disables recurrence. Only expenses can recur. The schedule is stored on the original entry; generated copies have empty recurrence."
+          },
+          "user": {
+            "type": "string"
+          }
+        },
+        "description": "Native owner-protected expenses collection input. Recurrence metadata is managed by the server. The API-key automation endpoint accepts ExpenseInput only."
+      },
+      "Overview": {
+        "type": "object",
+        "description": "Complete-dataset monthly spending and income summary. total, previous, count, categories, activity and original_totals include expenses only. Income is reported separately and never consumes a spending budget. Currency conversions are reference estimates rounded per entry.",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "income": {
+            "type": "integer"
+          },
+          "income_missing_count": {
+            "type": "integer"
+          },
+          "count": {
+            "type": "integer"
+          },
+          "previous": {
+            "type": "integer"
+          },
+          "missing_count": {
+            "type": "integer"
+          },
+          "previous_missing_count": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "missing_currencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "category": {
+                  "type": "string"
+                },
+                "total": {
+                  "type": "integer"
+                },
+                "count": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "activity": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "occurred_at": {
+                  "type": "string"
+                },
+                "total": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "original_totals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "currency": {
+                  "type": "string"
+                },
+                "total": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "rates_fetched_at": {
+            "type": "string"
+          }
+        }
       }
     }
   }

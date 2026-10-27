@@ -13,6 +13,8 @@ const expense = {
     notes: "line1\nline2",
     payment_method: "Visa",
     source: "api",
+    kind: "expense",
+    recurrence: "",
 } as Expense;
 
 test("CSV preserves cents, escapes formulas and multiline text, and uses the selected timezone", () => {
@@ -45,7 +47,7 @@ test("Excel export round-trips typed amounts, sortable local dates, headers and 
     assert.equal(sheet.getCell("A2").type, ExcelJS.ValueType.String);
     assert.equal(sheet.getCell("A2").value, expense.merchant);
     assert.equal(sheet.getCell("G2").value, expense.notes);
-    assert.equal(sheet.autoFilter, "A1:I2");
+    assert.equal(sheet.autoFilter, "A1:K2");
     assert.equal(sheet.views[0].state, "frozen");
 });
 
@@ -74,4 +76,15 @@ test("mixed-currency exports keep original precision and include dated conversio
     assert.ok(csvExport(rows, "Asia/Singapore", "SGD", rates).includes("\"1.234\""));
     const missing = await expenseWorkbook(rows, "UTC", "SGD", EMPTY_RATES);
     assert.equal(missing.getWorksheet("Expenses")!.getCell("J2").value, null);
+});
+
+test("exports distinguish income from expenses without changing positive monetary values", async () => {
+    const rows: Expense[] = [expense, { ...expense, kind: "income", merchant: "Salary" }];
+    const workbook = await expenseWorkbook(rows, "UTC");
+    const sheet = workbook.getWorksheet("Expenses")!;
+    assert.equal(sheet.getCell("J1").value, "Type");
+    assert.equal(sheet.getCell("J2").value, "expense");
+    assert.equal(sheet.getCell("J3").value, "income");
+    assert.equal(sheet.getCell("B3").value, 8.5);
+    assert.ok(csvExport(rows, "UTC").includes("\"income\""));
 });

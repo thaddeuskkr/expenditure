@@ -22,7 +22,7 @@ export function CircleExpenseList({
         <div>
             {!detail.expenses.items.length && (
                 <p className="py-12 text-center text-xs text-muted-foreground">
-                    No shared expenses yet.
+                    No shared transactions yet.
                 </p>
             )}
             <div className="divide-y">
@@ -47,7 +47,7 @@ export function CircleExpenseList({
                             <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm">{expense.title}</span>
                                 <span className="mt-2 block text-[10px] text-muted-foreground">
-                                    {name(expense.paid_by)} paid ·{" "}
+                                    {name(expense.paid_by)} {expense.kind === "income" ? "received" : "paid"} ·{" "}
                                     {dayLabel(expense.occurred_at, preferences.timezone)} ·{" "}
                                     {SPLIT_LABELS[expense.split_mode]}
                                 </span>
@@ -57,7 +57,7 @@ export function CircleExpenseList({
                                 </span>
                             </span>
                             <span className="shrink-0 text-right text-sm tabular-nums">
-                                {money(expense.amount, expense.currency)}{" "}
+                                {expense.kind === "income" ? "+ " : ""}{money(expense.amount, expense.currency)}{" "}
                                 <span className="text-[10px] text-muted-foreground">
                                     {expense.currency}
                                 </span>
@@ -76,7 +76,7 @@ export function CircleExpenseList({
             <CirclePagination
                 page={detail.expenses.page}
                 totalPages={detail.expenses.totalPages}
-                label="expenses"
+                label="transactions"
                 onPage={onPage}
             />
         </div>

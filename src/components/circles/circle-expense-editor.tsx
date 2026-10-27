@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { RecurrenceControl } from "../recurrence-control";
 import { Checkbox } from "../ui/checkbox";
 import { DateTimePicker } from "../date-time-picker";
 import { DialogFooter } from "../ui/dialog";
@@ -11,6 +12,7 @@ import { UserAvatar } from "../user-avatar";
 import { useWorkspace } from "../workspace-context";
 import {
     currencyDigits,
+    type Recurrence,
     errorMessage,
     formatAmountInput,
     fromZonedInput,
@@ -31,15 +33,19 @@ import { CircleModal, CurrencySelect, FormError, SaveButton } from "./circle-dia
 export function CircleExpenseEditor({
     data,
     expense,
+    kind = "expense",
     onClose,
     onSaved,
 }: {
     data: CircleDetail;
     expense: CircleExpense | null;
+    kind?: "expense" | "income";
     onClose: () => void;
     onSaved: () => void;
 }) {
     const { preferences } = useWorkspace();
+    const entryKind = expense?.kind || kind;
+    const [recurrence, setRecurrence] = useState<Recurrence>(expense?.recurrence || "");
     const eligible = data.members.filter(
         (member) =>
             member.active ||
@@ -129,6 +135,8 @@ export function CircleExpenseEditor({
             await circlesApi.saveExpense(
                 data.circle.id,
                 {
+                    kind: entryKind,
+                    recurrence: entryKind === "expense" ? recurrence : "",
                     title: String(form.get("title")).trim(),
                     amount: parseMinorUnits(amount, code),
                     currency: code,
@@ -156,7 +164,7 @@ export function CircleExpenseEditor({
 
     return (
         <CircleModal
-            title={expense ? "Edit shared expense" : "Add shared expense"}
+            title={`${expense ? "Edit" : "Add"} shared ${entryKind}`}
             description={data.circle.name}
             onClose={onClose}
             busy={busy}
@@ -164,7 +172,7 @@ export function CircleExpenseEditor({
             <form onSubmit={submit} className="space-y-6 pt-2">
                 <div>
                     <label htmlFor="shared-title" className="field-label">
-                        Expense
+                        {entryKind === "income" ? "Income" : "Expense"}
                     </label>
                     <Input
                         id="shared-title"
@@ -173,7 +181,7 @@ export function CircleExpenseEditor({
                         maxLength={160}
                         required
                         autoFocus
-                        placeholder="e.g. Dinner"
+                        placeholder={entryKind === "income" ? "e.g. Group refund" : "e.g. Dinner"}
                         className="h-10"
                     />
                 </div>
@@ -201,7 +209,7 @@ export function CircleExpenseEditor({
                     </div>
                     <div className="col-span-2 sm:col-span-1">
                         <label htmlFor="shared-payer" className="field-label">
-                            Paid by
+                            {entryKind === "income" ? "Received by" : "Paid by"}
                         </label>
                         <Select value={payer} onValueChange={setPayer}>
                             <SelectTrigger id="shared-payer" className="h-10! w-full">
@@ -357,9 +365,10 @@ export function CircleExpenseEditor({
                         className="w-full appearance-none rounded-lg border bg-transparent p-3 text-base outline-none focus:border-ring md:text-xs"
                     />
                 </div>
+                {entryKind === "expense" && <RecurrenceControl value={recurrence} onChange={setRecurrence} next={recurrence === expense?.recurrence ? expense?.recurrence_next : undefined} timezone={expense?.recurrence_timezone || preferences.timezone} error={expense?.recurrence_error} />}
                 <FormError error={error} />
                 <DialogFooter>
-                    <SaveButton busy={busy} label={expense ? "Save expense" : "Add expense"} />
+                    <SaveButton busy={busy} label={expense ? "Save changes" : `Add ${entryKind}`} />
                 </DialogFooter>
             </form>
         </CircleModal>

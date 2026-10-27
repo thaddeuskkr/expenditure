@@ -1,5 +1,5 @@
 /// <reference path="../pb_data/types.d.ts" />
-routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 6 }));
+routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 7 }));
 
 routerAdd(
     "GET",
@@ -259,6 +259,7 @@ routerAdd(
 // Native collection calls also preserve source provenance and enforce invariants.
 onRecordCreateRequest((e) => {
     if (!e.hasSuperuserAuth()) {
+        require(`${__hooks}/recurrence.js`).protect(e.record);
         e.record.set("source", "manual");
         e.record.set("idempotency_key", "");
     }
@@ -268,6 +269,7 @@ onRecordCreateRequest((e) => {
 
 onRecordUpdateRequest((e) => {
     if (!e.hasSuperuserAuth()) {
+        require(`${__hooks}/recurrence.js`).protect(e.record);
         e.record.set("source", e.record.original().getString("source"));
         e.record.set(
             "idempotency_key",

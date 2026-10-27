@@ -248,6 +248,9 @@ test(
             admin,
         );
         assert.equal(after.amount, 850);
+        assert.equal(after.kind, "expense");
+        assert.equal(after.recurrence, "");
+        assert.equal(storedPreferences.default_tab, "Overview");
         assert.equal(after.payment_method, "Stored Visa");
         assert.equal(after.amount_cents, undefined);
         assert.equal(after.card, undefined);

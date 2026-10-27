@@ -11,6 +11,7 @@ import {
     DialogFooter,
 } from "./ui/dialog";
 import { Input } from "./ui/input";
+import { RecurrenceControl } from "./recurrence-control";
 import { CurrencyPicker } from "./currency-picker";
 import { DateTimePicker } from "./date-time-picker";
 import { useWorkspace } from "./workspace-context";
@@ -31,24 +32,29 @@ import {
     rateDate,
     zonedInput,
     type Category,
+    type Recurrence,
     type Expense,
     type ExpenseInput,
 } from "@/lib/domain";
 
 export function ExpenseEditor({
     expense,
+    kind = "expense",
     currency,
     timezone,
     onClose,
     onSave,
 }: {
     expense: Expense | null;
+    kind?: "expense" | "income";
     currency: string;
     timezone: string;
     onClose: () => void;
     onSave: (data: ExpenseInput, id?: string) => Promise<void>;
 }) {
     const { categories, preferences } = useWorkspace();
+    const entryKind = expense?.kind || kind;
+    const [recurrence, setRecurrence] = useState<Recurrence>(expense?.recurrence || "");
     const categoryNames = categories
         .filter((c) => c.active || c.name === expense?.category)
         .map((c) => c.name);
@@ -80,6 +86,8 @@ export function ExpenseEditor({
         try {
             await onSave(
                 {
+                    kind: entryKind,
+                    recurrence: entryKind === "expense" ? recurrence : "",
                     merchant: String(form.get("merchant")).trim(),
                     amount: parseMinorUnits(
                         String(form.get("amount")),
@@ -113,21 +121,21 @@ export function ExpenseEditor({
             <DialogContent className="sm:max-w-115">
                 <DialogHeader>
                     <DialogTitle className="font-display text-3xl font-normal">
-                        {expense ? "Edit expense" : "Add expense"}
+                        {`${expense ? "Edit" : "Add"} ${entryKind}`}
                     </DialogTitle>
                     <DialogDescription className="sr-only">
-                        Enter expense details.
+                        Enter transaction details.
                     </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={submit} className="mt-3 space-y-5">
                     <div>
                         <label className="field-label" htmlFor="merchant">
-                            Merchant
+                            {entryKind === "income" ? "Source" : "Merchant"}
                         </label>
                         <Input
                             id="merchant"
                             name="merchant"
-                            placeholder="Where did you spend?"
+                            placeholder={entryKind === "income" ? "Where did it come from?" : "Where did you spend?"}
                             defaultValue={expense?.merchant}
                             maxLength={160}
                             required
@@ -231,6 +239,7 @@ export function ExpenseEditor({
                             className="w-full resize-none appearance-none rounded-lg border bg-input/20 px-3 py-2 text-base outline-none focus:ring-2 focus:ring-ring/40 md:text-sm"
                         />
                     </div>
+                    {entryKind === "expense" && <RecurrenceControl value={recurrence} onChange={setRecurrence} next={recurrence === expense?.recurrence ? expense?.recurrence_next : undefined} timezone={expense?.recurrence_timezone || timezone} error={expense?.recurrence_error} />}
                     {error && (
                         <p role="alert" className="text-sm text-destructive">
                             {error}
@@ -246,7 +255,7 @@ export function ExpenseEditor({
                         </Button>
                         <Button type="submit" className="h-10 px-5" disabled={busy}>
                             {busy ? <Loader2 className="animate-spin" /> : <Plus />}
-                            {expense ? "Save changes" : "Add expense"}
+                            {expense ? "Save changes" : `Add ${entryKind}`}
                         </Button>
                     </DialogFooter>
                 </form>

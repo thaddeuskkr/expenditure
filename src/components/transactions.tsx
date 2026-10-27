@@ -37,7 +37,7 @@ export function Transactions({
     if (!rows.length)
         return (
             <EmptyState
-                title={filtered ? "No matching expenses" : "No expenses"}
+                title={filtered ? "No matching transactions" : "No transactions"}
                 detail={
                     filtered ?
                         "Try a different search or category." :
@@ -52,7 +52,7 @@ export function Transactions({
             <table className="w-full text-left">
                 <thead>
                     <tr className="border-b text-[9px] tracking-wider text-muted-foreground">
-                        <th className="pb-3 font-normal">MERCHANT</th>
+                        <th className="pb-3 font-normal">SOURCE / MERCHANT</th>
                         <th className="hidden pb-3 font-normal md:table-cell">CATEGORY</th>
                         <th className="hidden pb-3 font-normal sm:table-cell">DATE</th>
                         <th className="pb-3 text-right font-normal">AMOUNT</th>
@@ -74,6 +74,7 @@ export function Transactions({
                                     <span>
                                         <span className="block max-w-32 truncate text-xs sm:max-w-52">
                                             {expense.merchant}
+                                            {expense.recurrence && <span className="ml-2 text-[9px] text-muted-foreground">{expense.recurrence}</span>}
                                         </span>
                                         <span className="mt-1 block max-w-36 truncate text-[9px] text-muted-foreground">
                                             {expense.payment_method ||
@@ -91,8 +92,8 @@ export function Transactions({
                                 {dayLabel(expense.occurred_at, timezone)}
                             </td>
                             <td className="text-right text-xs whitespace-nowrap tabular-nums">
-                                <div>
-                                    {money(expense.amount, expense.currency)}{" "}
+                                <div className={expense.kind === "income" ? "text-primary" : ""}>
+                                    {expense.kind === "income" ? "+ " : ""}{money(expense.amount, expense.currency)}{" "}
                                     <span className="text-[9px] text-muted-foreground">
                                         {expense.currency}
                                     </span>
@@ -112,12 +113,12 @@ export function Transactions({
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                         <DropdownMenuItem onClick={() => onEdit(expense)}>
-                                            Edit expense
+                                            Edit {expense.kind}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem
                                             variant="destructive"
                                             onClick={() => onDelete(expense)}>
-                                            Delete expense
+                                            Delete {expense.kind}
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>

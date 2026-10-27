@@ -1,4 +1,5 @@
 import core from "../../pocketbase/pb_hooks/circles-core.cjs";
+import type { RecurringFields, Recurrence } from "./domain";
 import { pb } from "./pocketbase";
 
 export { core as circleCore };
@@ -25,7 +26,8 @@ export interface CircleMember {
     user: string;
     expand: { user?: { id: string; collectionId: string; name: string; avatar: string } };
 }
-export interface CircleExpense {
+export interface CircleExpense extends RecurringFields {
+    kind: "expense" | "income";
     id: string;
     title: string;
     currency: string;
@@ -67,7 +69,8 @@ export interface CircleDetail {
     members: CircleMember[];
     balances: CircleBalance[];
     suggestions: SettlementSuggestion[];
-    totals: { currency: string; total: number; count: number }[];
+    totals: { currency: string; total: number; income: number; count: number }[];
+    recurring: CircleExpense[];
     expenses: CirclePage<CircleExpense>;
     settlements: CirclePage<CircleSettlement>;
     invitations: CircleInvitation[];
@@ -77,6 +80,8 @@ export interface CircleIndex {
     invitations: IncomingInvitation[];
 }
 export interface CircleExpenseInput {
+    kind: "expense" | "income";
+    recurrence: Recurrence;
     title: string;
     currency: string;
     amount: number;

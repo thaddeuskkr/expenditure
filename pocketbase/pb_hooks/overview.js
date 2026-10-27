@@ -6,6 +6,7 @@ function summarize(app, user, range) {
     const rows = arrayOf(
         new DynamicModel({
             amount: 0,
+            kind: "",
             currency: "",
             category: "",
             occurred_at: "",
@@ -14,13 +15,15 @@ function summarize(app, user, range) {
     app
         .db()
         .newQuery(
-            "SELECT amount, currency, category, occurred_at FROM expenses WHERE user = {:user} AND occurred_at >= {:previous} AND occurred_at < {:to}" +
+            "SELECT amount, kind, currency, category, occurred_at FROM expenses WHERE user = {:user} AND occurred_at >= {:previous} AND occurred_at < {:to}" +
             (range.currency === "all" ? "" : " AND currency = {:currency}"),
         )
         .bind({ ...range, user })
         .all(rows);
     const result = {
         total: 0,
+        income: 0,
+        income_missing_count: 0,
         count: 0,
         previous: 0,
         missing_count: 0,
@@ -44,6 +47,15 @@ function summarize(app, user, range) {
             main,
             snapshot,
         );
+        if (row.kind === "income") {
+            if (current) {
+                if (converted === null) result.income_missing_count++;
+                else result.income += converted;
+            }
+
+            return;
+        }
+
         if (current) {
             result.count++;
             originals[row.currency] =

@@ -119,6 +119,8 @@ function subscribeDesktop(callback: () => void) {
 
 const blank: Overview = {
     total: 0,
+    income: 0,
+    income_missing_count: 0,
     count: 0,
     previous: 0,
     categories: [],
@@ -162,8 +164,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 6)
-                    throw new Error("This app requires backend version 6. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 7)
+                    throw new Error("This app requires backend version 7. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -234,7 +236,7 @@ function Workspace({
     initialConfiguration: WorkspaceConfig;
     onSignOut: () => void;
 }) {
-    const [section, setSection] = useState<Section>("Overview");
+    const [section, setSection] = useState<Section>(initialConfiguration.preferences.default_tab);
     const [focusedCircle, setFocusedCircle] = useState<string>();
     const [configuration, setConfiguration] = useState(initialConfiguration);
     const preferences = configuration.preferences;
@@ -249,7 +251,7 @@ function Workspace({
         ),
     );
     const [mobileNav, setMobileNav] = useState(false);
-    const [editor, setEditor] = useState<Expense | "new" | null>(null);
+    const [editor, setEditor] = useState<Expense | "new" | "income" | null>(null);
     const [deleting, setDeleting] = useState<Expense | null>(null);
     const [deleteBusy, setDeleteBusy] = useState(false);
     const [budgetEditor, setBudgetEditor] = useState<Budget | "new" | null>(null);
@@ -440,7 +442,7 @@ function Workspace({
                 .collection("expenses")
                 .create({ ...data, user: user.id, source: "manual" });
         refresh();
-        toast.success(id ? "Expense updated" : "Expense added");
+        toast.success(`${data.kind === "income" ? "Income" : "Expense"} ${id ? "updated" : "added"}`);
     }
 
     async function deleteExpense() {
@@ -451,7 +453,7 @@ function Workspace({
             refresh();
             setDeleting(null);
             if (expenses.length === 1 && page > 1) setPage(page - 1);
-            toast.success("Expense deleted");
+            toast.success(`${deleting.kind === "income" ? "Income" : "Expense"} deleted`);
         } catch (e) {
             toast.error(errorMessage(e));
         } finally {
@@ -500,7 +502,7 @@ function Workspace({
                 mainCurrency,
                 rates,
             });
-            toast.success(`Exported ${rows.length} expenses`);
+            toast.success(`Exported ${rows.length} transactions`);
         } catch (e) {
             toast.error(errorMessage(e));
         } finally {
@@ -651,7 +653,7 @@ function Workspace({
                                             <DropdownMenuTrigger asChild>
                                                 <Button
                                                     variant="outline"
-                                                    aria-label="Export expenses"
+                                                    aria-label="Export transactions"
                                                     className="h-10 px-3.5"
                                                     disabled={exporting || loading || !!error}>
                                                     {exporting ?
@@ -676,10 +678,13 @@ function Workspace({
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
+                                        <Button variant="outline" className="h-10 px-3 sm:px-4" onClick={() => setEditor("income")}>
+                                            <Plus className="hidden sm:block" /> Add income
+                                        </Button>
                                         <Button
-                                            className="h-10 px-4"
+                                            className="h-10 px-3 sm:px-4"
                                             onClick={() => setEditor("new")}>
-                                            <Plus /> Add expense
+                                            <Plus className="hidden sm:block" /> Add expense
                                         </Button>
                                     </>
                                 )}
@@ -743,7 +748,7 @@ function Workspace({
                                 role="alert"
                                 className="mb-7 rounded-xl border border-destructive/20 bg-destructive/5 p-5">
                                 <p className="text-sm text-destructive">
-                                    Couldn’t load expenses.
+                                    Couldn’t load transactions.
                                 </p>
                                 <p className="mt-2 text-xs text-muted-foreground">{error}</p>
                                 <Button variant="outline" className="mt-4" onClick={refresh}>
@@ -778,6 +783,8 @@ function Workspace({
                                                 {money(overview.total, mainCurrency)}
                                             </span>
                                         </div>
+                                        <p className="mt-4 text-xs text-primary">Income {money(overview.income, mainCurrency)} · Net {money(overview.income - overview.total, mainCurrency)}</p>
+                                        {overview.income_missing_count > 0 && <p className="mt-2 text-xs text-destructive">{overview.income_missing_count} income entries have no usable conversion rate.</p>}
                                         <div className="mt-4 flex items-center gap-2 text-[10px]">
                                             {difference !== null ?
                                                     (
@@ -860,7 +867,7 @@ function Workspace({
                                             <span className="flex size-5 items-center justify-center rounded-full bg-white/4">
                                                 <Wallet className="size-2.5" />
                                             </span>
-                                            {overview.count} transactions this month
+                                            {overview.count} expenses this month
                                             <span className="mx-1 text-white/15">·</span>
                                             {mainCurrency} · converted total
                                         </div>
@@ -1146,7 +1153,9 @@ function Workspace({
                         {section === "Circles" && <CirclesView key={focusedCircle || "circles"} initialCircle={focusedCircle} />}
                         {section === "Settings" && (
                             <WorkspaceSettings
+                                onEditRecurring={setEditor}
                                 key={preferences.id || "defaults"}
+                                recurringRevision={revision}
                                 onSave={async (data) => {
                                     if (preferences.id)
                                         await pb
@@ -1175,8 +1184,9 @@ function Workspace({
                 />
                 {editor && (
                     <ExpenseEditor
-                        key={typeof editor === "string" ? "new" : editor.id}
-                        expense={editor === "new" ? null : editor}
+                        key={typeof editor === "string" ? editor : editor.id}
+                        expense={typeof editor === "string" ? null : editor}
+                        kind={editor === "income" ? "income" : "expense"}
                         currency={mainCurrency}
                         timezone={timezone}
                         onClose={() => setEditor(null)}
@@ -1200,16 +1210,16 @@ function Workspace({
                     }}>
                     <AlertDialogContent>
                         <AlertDialogHeader>
-                            <AlertDialogTitle>Delete this expense?</AlertDialogTitle>
+                            <AlertDialogTitle>Delete this {deleting?.kind || "entry"}?</AlertDialogTitle>
                             <AlertDialogDescription>
                                 {deleting?.merchant} ·{" "}
                                 {deleting && money(deleting.amount, deleting.currency)}.
-                                This removes the expense permanently.
+                                This removes the entry permanently.{deleting?.recurrence ? " Future recurring entries will stop. Existing entries will remain." : ""}
                             </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                             <AlertDialogCancel disabled={deleteBusy}>
-                                Keep expense
+                                Keep entry
                             </AlertDialogCancel>
                             <AlertDialogAction
                                 disabled={deleteBusy}
@@ -1217,7 +1227,7 @@ function Workspace({
                                     e.preventDefault();
                                     void deleteExpense();
                                 }}>
-                                {deleteBusy ? "Deleting…" : "Delete expense"}
+                                {deleteBusy ? "Deleting…" : "Delete entry"}
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>

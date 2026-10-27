@@ -25,9 +25,12 @@ import {
     DialogDescription,
     DialogFooter,
 } from "./ui/dialog";
+import { RecurringExpenses } from "./recurring-expenses";
 import { useWorkspace } from "./workspace-context";
 import {
     CATEGORY_COLORS,
+    DEFAULT_TABS,
+    type Expense,
     TIMEZONES,
     errorMessage,
     type CategoryDefinition,
@@ -38,13 +41,18 @@ import { pb } from "@/lib/pocketbase";
 export function WorkspaceSettings({
     onSave,
     onCategoriesChanged,
+    onEditRecurring,
+    recurringRevision,
 }: {
+    onEditRecurring: (expense: Expense) => void;
+    recurringRevision: number;
     onSave: (
-        data: Pick<Preferences, "currency" | "timezone" | "currencies">,
+        data: Pick<Preferences, "currency" | "timezone" | "currencies" | "default_tab">,
     ) => Promise<void>;
     onCategoriesChanged: () => Promise<void>;
 }) {
     const { preferences, categories, rates } = useWorkspace();
+    const [defaultTab, setDefaultTab] = useState(preferences.default_tab);
     const [main, setMain] = useState(preferences.currency);
     const [timezone, setTimezone] = useState(preferences.timezone);
     const [enabled, setEnabled] = useState(preferences.currencies);
@@ -59,7 +67,7 @@ export function WorkspaceSettings({
         setBusy(true);
         setError("");
         try {
-            await onSave({ currency: main, timezone, currencies: enabled });
+            await onSave({ currency: main, timezone, currencies: enabled, default_tab: defaultTab });
         } catch (e) {
             setError(errorMessage(e));
         } finally {
@@ -112,8 +120,12 @@ export function WorkspaceSettings({
         <div className="max-w-3xl space-y-12 animate-enter">
             <form onSubmit={save} className="space-y-6">
                 <h2 className="border-b pb-4 text-sm font-medium">
-                    Currencies & timezone
+                    Preferences
                 </h2>
+                <div>
+                    <label className="field-label" htmlFor="default-tab">Default tab on login</label>
+                    <SearchableSelect id="default-tab" value={defaultTab} onValueChange={(value) => setDefaultTab(value as Preferences["default_tab"])} options={DEFAULT_TABS.map((value) => ({ value, label: value }))} searchPlaceholder="Find a tab…" />
+                </div>
                 <div className="grid gap-6 sm:grid-cols-2">
                     <div>
                         <label className="field-label" htmlFor="main-currency">
@@ -155,6 +167,7 @@ export function WorkspaceSettings({
                     preferences
                 </Button>
             </form>
+            <RecurringExpenses key={recurringRevision} onEdit={onEditRecurring} />
             <section>
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
                     <h2 className="text-sm font-medium">Categories</h2>

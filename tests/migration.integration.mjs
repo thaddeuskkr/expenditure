@@ -254,6 +254,7 @@ test(
         assert.equal(after.recurrence, "");
         assert.equal(storedPreferences.default_tab, "Overview");
         assert.equal(storedPreferences.time_format, "24h");
+        assert.equal(storedPreferences.timezone, preferencesBefore.timezone);
         assert.equal(after.payment_method, "Stored Visa");
         assert.equal(after.amount_cents, undefined);
         assert.equal(after.card, undefined);
@@ -382,7 +383,7 @@ test(
         assert.ok(afterRepaymentEdit.suggestions.some((row) => row.currency === "SGD" && row.amount === 275));
 
         // Re-running migration commands must not duplicate or reset user data.
-        await request(`/api/collections/preferences/records/${prefs.id}`, auth.token, { time_format: "12h" }, "PATCH");
+        await request(`/api/collections/preferences/records/${prefs.id}`, auth.token, { time_format: "12h", timezone: "Asia/Katmandu" }, "PATCH");
         await stop();
         const repeat = spawnSync(binary, ["migrate", "up", ...newFlags], {
             encoding: "utf8",
@@ -390,5 +391,6 @@ test(
         assert.equal(repeat.status, 0, repeat.stderr);
         await start(newFlags);
         assert.equal((await request(`/api/collections/preferences/records/${prefs.id}`, auth.token)).time_format, "12h");
+        assert.equal((await request(`/api/collections/preferences/records/${prefs.id}`, auth.token)).timezone, "Asia/Katmandu");
     },
 );

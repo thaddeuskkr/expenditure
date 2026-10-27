@@ -12,6 +12,8 @@ import {
     timeLabel,
     dateTimeLabel,
     zonedInput,
+    TIMEZONES,
+    timezoneLabel,
 } from "../src/lib/domain.ts";
 test("decimal amounts are parsed exactly into integer cents", () => {
     assert.equal(parseMinorUnits("8.50"), 850);
@@ -96,4 +98,22 @@ test("12-hour and 24-hour formats distinguish midnight and noon without changing
     assert.equal(timeLabel(instant, "America/New_York", "24h", true), "03:00:37");
     assert.equal(dateTimeLabel(instant, "America/New_York", "12h"), "8 Mar 2026, 3:00:37 AM");
     assert.equal(dateTimeLabel(instant, "America/New_York", "24h"), "8 Mar 2026, 03:00:37");
+});
+
+test("timezone choices cover the shared catalog and display date-aware GMT offsets", () => {
+    assert.ok(TIMEZONES.length > 400);
+    assert.equal(new Set(TIMEZONES).size, TIMEZONES.length);
+    for (const zone of ["Asia/Singapore", "UTC", "Asia/Tokyo", "Asia/Katmandu", "Australia/Eucla", "Pacific/Chatham", "America/Chicago"]) {
+        assert.ok(TIMEZONES.includes(zone), zone);
+    }
+
+    const winter = "2026-01-15T12:00:00Z", summer = "2026-07-15T12:00:00Z";
+    assert.equal(timezoneLabel("Asia/Singapore", winter), "GMT+08:00 · Asia/Singapore");
+    assert.equal(timezoneLabel("UTC", winter), "GMT+00:00 · UTC");
+    assert.equal(timezoneLabel("Asia/Katmandu", winter), "GMT+05:45 · Asia/Katmandu");
+    assert.equal(timezoneLabel("Australia/Eucla", winter), "GMT+08:45 · Australia/Eucla");
+    assert.equal(timezoneLabel("America/St_Johns", winter), "GMT-03:30 · America/St Johns");
+    assert.equal(timezoneLabel("America/New_York", winter), "GMT-05:00 · America/New York");
+    assert.equal(timezoneLabel("America/New_York", summer), "GMT-04:00 · America/New York");
+    for (const zone of TIMEZONES) assert.match(timezoneLabel(zone, winter), /^GMT[+-]\d{2}:\d{2} · /);
 });

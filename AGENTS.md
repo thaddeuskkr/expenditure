@@ -37,6 +37,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - `pocketbase/pb_hooks/exchange-rates.js`, `overview.js`, `request.js`: cached rates, complete-dataset reports, and timestamp validation.
 - `pocketbase/pb_hooks/recurrence.js`, `recurrence.pb.js`: recurring schedules, timezone/calendar advancement, transactional generation and pause errors. Schedules live on the original expense; generated entries have no recurrence.
 - `pocketbase/pb_hooks/currencies.json`: shared currency catalog; use its precision on both sides.
+- `pocketbase/pb_hooks/timezones.json`: shared timezone catalog for the preferences schema and frontend selector. Save the timezone ID; derive displayed GMT offsets for the current date so daylight-saving changes remain correct.
 - `pocketbase/pb_migrations/`: ordered schema/data migrations. `tests/`: domain/export tests and disposable PocketBase integration/upgrade tests.
 
 ## Data and API rules
@@ -70,7 +71,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - The frontend URL is `expenses.tkkr.dev`; the configured PocketBase URL is `e.tkkr.dev`. `NEXT_PUBLIC_POCKETBASE_URL` is public and baked into the client at build time. Do not change a running server or deployment without authorization.
 - Prepare installable PocketBase files for the user; do not assume server access. Copy all hook files, including JSON/CJS modules, together with all unapplied migrations. Keep the matching frontend/schema/hooks coordinated.
 - Add new migrations; do not rewrite applied history or remove old migrations because they contain earlier field names. Historical migrations are not runtime compatibility aliases. Back up before applying; some down migrations delete collections/data.
-- Current backend status is version 11 in `main.pb.js`, checked by workspace startup. When a contract changes, update both the reported and required version together.
+- Current backend status is version 12 in `main.pb.js`, checked by workspace startup. When a contract changes, update both the reported and required version together.
 - Test fresh installation and upgrades with existing records. Preserve IDs, amounts, timestamps, provider configuration, and ledger balances unless the requested change explicitly requires otherwise.
 - PocketBase 0.40.6 is the validated server version; do not confuse it with the JS SDK version. Read `package.json` for installed frontend/tool versions.
 - OAuth callback uses the PocketBase URL with `/api/oauth2-redirect`. Preserve exact allowed origins and realtime/SSE support. The frontend does not need a separate OAuth callback or privileged API proxy.

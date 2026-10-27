@@ -1,5 +1,5 @@
 "use client";
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { CurrencyPicker, EnabledCurrenciesPicker } from "./currency-picker";
@@ -14,6 +14,7 @@ import {
     TIMEZONES,
     errorMessage,
     dateTimeLabel,
+    timezoneLabel,
     type Preferences,
 } from "@/lib/domain";
 
@@ -36,6 +37,10 @@ export function WorkspaceSettings({
     const [timezone, setTimezone] = useState(preferences.timezone);
     const [timeFormat, setTimeFormat] = useState(preferences.time_format);
     const [enabled, setEnabled] = useState(preferences.currencies);
+    const [timezoneDate, setTimezoneDate] = useState(() => new Date());
+    const timezoneOptions = useMemo(() => {
+        return TIMEZONES.map((zone) => ({ value: zone, label: timezoneLabel(zone, timezoneDate) }));
+    }, [timezoneDate]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     async function save(event: FormEvent<HTMLFormElement>) {
@@ -79,8 +84,11 @@ export function WorkspaceSettings({
                             id="preference-timezone"
                             value={timezone}
                             onValueChange={setTimezone}
-                            options={TIMEZONES.map((zone) => ({ value: zone, label: zone.replaceAll("_", " ") }))}
-                            searchPlaceholder="Search timezones…"
+                            onOpenChange={(open) => {
+                                if (open) setTimezoneDate(new Date());
+                            }}
+                            options={timezoneOptions}
+                            searchPlaceholder="Search timezones or GMT offsets…"
                         />
                     </div>
                 </div>

@@ -1,5 +1,6 @@
 import type { RecordModel } from "pocketbase";
 import currencyCatalog from "../../pocketbase/pb_hooks/currencies.json" with { type: "json" };
+import timezoneCatalog from "../../pocketbase/pb_hooks/timezones.json" with { type: "json" };
 
 export const CATEGORIES = [
     "Food & drinks",
@@ -13,15 +14,7 @@ export const CATEGORIES = [
 ] as const;
 export type Category = string;
 export const CURRENCY_CATALOG = currencyCatalog;
-export const TIMEZONES = [
-    "Asia/Singapore",
-    "UTC",
-    "Asia/Kuala_Lumpur",
-    "Australia/Sydney",
-    "Europe/London",
-    "America/New_York",
-    "America/Los_Angeles",
-];
+export const TIMEZONES = timezoneCatalog;
 export const CATEGORY_COLORS = [
     "#bfc9a4",
     "#8dada0",
@@ -210,6 +203,14 @@ export function zonedDate(date: Date | string, timezone = "Asia/Singapore") {
         month: "2-digit",
         day: "2-digit",
     }).format(asDate(date));
+}
+
+export function timezoneLabel(timezone: string, date: Date | string = new Date()) {
+    const offset = new Intl.DateTimeFormat("en-US", {
+        timeZone: timezone,
+        timeZoneName: "longOffset",
+    }).formatToParts(asDate(date)).find((part) => part.type === "timeZoneName")!.value;
+    return `${offset === "GMT" ? "GMT+00:00" : offset} · ${timezone.replaceAll("_", " ")}`;
 }
 
 export function asDate(value: Date | string) {

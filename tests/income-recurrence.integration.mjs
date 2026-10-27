@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { randomBytes } from "node:crypto";
+import timezoneCatalog from "../pocketbase/pb_hooks/timezones.json" with { type: "json" };
 
 test(
     "Income, recurring expenses and default login tab",
@@ -28,7 +29,13 @@ test(
             const data = e.requestInfo().body;
             const lib = require(__hooks + "/recurrence.js");
             return e.json(200, { next: data.now ? lib.firstFuture(data.previous, data.frequency, data.anchor, data.timezone, data.now) : lib.nextDate(data.previous, data.frequency, data.anchor, data.timezone) });
-        }, $apis.requireAuth("_superusers"));`);
+        }, $apis.requireAuth("_superusers"));
+        routerAdd("GET", "/api/test/timezones", (e) => e.json(200, {
+            items: require(__hooks + "/timezones.json").map((zone) => ({
+                timezone: zone,
+                offset: new DateTime("2026-01-15T12:00:00Z").time().in(new Timezone(zone)).format("-07:00"),
+            })),
+        }), $apis.requireAuth("_superusers"));`);
         const flags = [
             `--dir=${directory}`,
             `--hooksDir=${hooks}`,
@@ -151,6 +158,24 @@ test(
             await api(path, outside.token, { default_tab: "Overview" }, "PATCH", 404);
         });
         const root = "/api/expenditure/circles";
+        await t.test("expanded timezone choices are accepted, persisted and available to the scheduler", async () => {
+            const schema = await api("/api/collections/preferences", admin);
+            assert.deepEqual(schema.fields.find((field) => field.name === "timezone").values, timezoneCatalog);
+            const supported = await api("/api/test/timezones", admin);
+            assert.deepEqual(supported.items.map((item) => item.timezone), timezoneCatalog);
+            assert.ok(supported.items.every((item) => /^[+-]\d{2}:\d{2}$/.test(item.offset)));
+            const path = `/api/collections/preferences/records/${aliceConfig.preferences.id}`;
+            for (const timezone of ["Asia/Tokyo", "Asia/Katmandu", "Australia/Eucla", "Pacific/Chatham", "America/St_Johns"]) {
+                await api(path, alice.token, { timezone }, "PATCH");
+                assert.equal((await api("/api/expenditure/config", alice.token)).preferences.timezone, timezone);
+            }
+
+            const next = await api("/api/test/next", admin, { previous: "2026-10-27T04:00:00Z", frequency: "daily", anchor: "2026-10-27T09:45:00", timezone: "Asia/Katmandu" });
+            assert.equal(Date.parse(next.next), Date.parse("2026-10-28T04:00:00Z"));
+            await api(path, alice.token, { timezone: "Not/A_Timezone" }, "PATCH", 400);
+            await api(path, outside.token, { timezone: "Asia/Tokyo" }, "PATCH", 404);
+            await api(path, alice.token, { timezone: "Asia/Singapore" }, "PATCH");
+        });
         await t.test("time format is persisted per user, defaults to 24h and rejects unsupported values", async () => {
             const before = await api("/api/expenditure/config", alice.token);
             assert.equal(before.preferences.time_format, "24h");

@@ -13,6 +13,7 @@ export function SearchableSelect({
     id,
     value,
     onValueChange,
+    onOpenChange,
     options,
     placeholder = "Select an option",
     searchPlaceholder = "Search…",
@@ -23,6 +24,7 @@ export function SearchableSelect({
     id?: string;
     value: string;
     onValueChange: (value: string) => void;
+    onOpenChange?: (open: boolean) => void;
     options: SelectOption[];
     placeholder?: string;
     searchPlaceholder?: string;
@@ -32,8 +34,13 @@ export function SearchableSelect({
 }) {
     const [open, setOpen] = useState(false);
     const selected = options.find((option) => option.value === value);
+    function changeOpen(next: boolean) {
+        setOpen(next);
+        onOpenChange?.(next);
+    }
+
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={changeOpen}>
             <PopoverTrigger asChild>
                 <Button
                     id={id}
@@ -63,7 +70,7 @@ export function SearchableSelect({
                                     data-checked={option.value === value}
                                     onSelect={() => {
                                         onValueChange(option.value);
-                                        setOpen(false);
+                                        changeOpen(false);
                                     }}>
                                     <span className="min-w-0 flex-1">
                                         <span className="block truncate">{option.label}</span>

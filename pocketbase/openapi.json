@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "12.0.0",
+    "version": "13.0.0",
     "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring expenses run on the PocketBase server every minute, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -1343,7 +1343,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Aggregates all matching personal expenses and the requesting user's positive allocated shares of Circle expenses, regardless of who paid. Uses the expense instant and supplied account-timezone month boundaries, including historical shares for inactive memberships. Moved personal receipts are excluded to prevent double counting. Circle categories match personal categories by exact name, then by a unique case/whitespace-insensitive name; unmatched or ambiguous names count as the personal Other category or a report-only Other bucket. Split edits update consumption without creating personal transactions or changing Circle balances. Circle income and repayments do not consume budgets. Native personal transaction lists and exports remain personal-only."
       }
     },
     "/api/expenditure/circles/{id}/categories": {
@@ -5743,7 +5744,7 @@
       },
       "Overview": {
         "type": "object",
-        "description": "Complete-dataset monthly spending and income summary. total, previous, count, categories, activity and original_totals include expenses only. Income is reported separately and never consumes a spending budget. Currency conversions are reference estimates rounded per entry.",
+        "description": "Complete-dataset monthly spending and personal income summary. total, previous, count, categories, activity and original_totals include personal expenses plus the user's positive allocated Circle expense shares. Circle categories use matching personal category names, falling back to Other. Personal income is reported separately; Circle income and repayments are excluded. Currency conversions are reference estimates rounded per personal expense or allocated share.",
         "properties": {
           "total": {
             "type": "integer"

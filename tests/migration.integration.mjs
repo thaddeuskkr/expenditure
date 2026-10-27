@@ -355,7 +355,7 @@ test(
         const circleApiResponse = await fetch(`${base}/api/expenses/circles/${circle.id}/transactions`, {
             method: "POST",
             headers: { "X-API-Key": automation.key, "Content-Type": "application/json" },
-            body: JSON.stringify({ title: "Added after upgrade", amount: 501, currency: "SGD" }),
+            body: JSON.stringify({ title: "Added after upgrade", amount: 501, currency: "SGD", occurred_at: "2026-10-27T04:00:00Z" }),
         });
         const circleApiExpense = await circleApiResponse.json();
         assert.equal(circleApiResponse.status, 201, JSON.stringify(circleApiExpense));
@@ -381,6 +381,15 @@ test(
         assert.equal(afterRepaymentEdit.balances.find((row) => row.member === members[0].id && row.currency === "SGD").net, 275);
         assert.equal(afterRepaymentEdit.balances.find((row) => row.member === members[1].id && row.currency === "SGD").net, -275);
         assert.ok(afterRepaymentEdit.suggestions.some((row) => row.currency === "SGD" && row.amount === 275));
+
+        const summaryRange = new URLSearchParams({ from: "2026-09-30T16:00:00Z", to: "2026-10-31T16:00:00Z", previous: "2026-08-31T16:00:00Z", currency: "SGD" });
+        const summary = await request(`/api/expenditure/overview?${summaryRange}`, auth.token);
+        assert.equal(summary.total, 850 + 325 + 501);
+        assert.equal(summary.count, 3);
+        assert.equal(summary.categories.find((row) => row.category === "Food & drinks").total, 850);
+        assert.equal(summary.categories.find((row) => row.category === "Other").total, 325 + 501);
+        const memberSchema = await request("/api/collections/circle_members", admin);
+        assert.ok(memberSchema.indexes.some((index) => index.includes("idx_circle_members_user_circle")));
 
         // Re-running migration commands must not duplicate or reset user data.
         await request(`/api/collections/preferences/records/${prefs.id}`, auth.token, { time_format: "12h", timezone: "Asia/Katmandu" }, "PATCH");

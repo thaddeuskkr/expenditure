@@ -197,7 +197,10 @@ test(
         let moved;
         const activeCategory = () => detail().then((result) => result.categories.find((row) => row.active).name);
         await t.test("members can move only their own expenses and receive the entire initial share", async () => {
+            const query = new URLSearchParams({ from: "2026-10-01T00:00:00Z", to: "2026-11-01T00:00:00Z", previous: "2026-09-01T00:00:00Z", currency: "all" });
+            const baseline = await api(`/api/expenditure/overview?${query}`, bob.token);
             const own = await api(personal, bob.token, personalData);
+            assert.equal((await api(`/api/expenditure/overview?${query}`, bob.token)).total, baseline.total + own.amount);
             const category = await activeCategory();
             const request = { expense: own.id, previous_updated: own.updated, category };
             await api(`${root}/${circle.id}/expenses/move`, alice.token, request, "POST", 404);
@@ -222,12 +225,14 @@ test(
             await api(`${personal}/${own.id}`, bob.token, { amount: 3, moved_to: "" }, "PATCH", 404);
             await api(`${personal}/${own.id}`, bob.token, undefined, "DELETE", 404);
             assert.equal((await api(personal, bob.token)).totalItems, 0);
-            const query = new URLSearchParams({ from: "2026-10-01T00:00:00Z", to: "2026-11-01T00:00:00Z", previous: "2026-09-01T00:00:00Z", currency: "all" });
-            assert.equal((await api(`/api/expenditure/overview?${query}`, bob.token)).total, 0);
+            const afterMove = await api(`/api/expenditure/overview?${query}`, bob.token);
+            assert.equal(afterMove.total, baseline.total + own.amount);
+            assert.equal(afterMove.count, baseline.count + 1);
             const ownerMember = (await detail()).me;
             const edit = { title: moved.title, kind: "expense", recurrence: "", amount: moved.amount, currency: moved.currency, category: moved.category, paid_by: bobMember, split_mode: "even", shares: [{ member: bobMember }, { member: ownerMember }], occurred_at: personalData.occurred_at, version: moved.version };
             const resplit = await api(`${root}/${circle.id}/expenses/${moved.id}`, bob.token, edit, "PATCH");
             assert.equal((await detail()).balances.find((row) => row.member === bobMember && row.currency === "SGD").net, 617);
+            assert.equal((await api(`/api/expenditure/overview?${query}`, bob.token)).total, baseline.total + 617);
             await api(`${root}/${circle.id}/expenses/${moved.id}`, bob.token, { ...edit, split_mode: "percentage", shares: [{ member: bobMember, percentage_bp: 10000 }], version: resplit.version }, "PATCH");
             await api(`${root}/${otherCircle.id}/expenses/move`, alice.token, request, "POST", 404);
             const income = await api(personal, bob.token, { ...personalData, kind: "income" });

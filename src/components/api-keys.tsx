@@ -269,10 +269,6 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                     <div className="min-w-0">
                         <h3 className="text-sm font-medium">Circle transactions</h3>
                         <p className="mt-4 text-xs leading-6 text-muted-foreground">
-                            In the app, open Circles, select a Circle, and choose Add expense or Add income.
-                            Choose who paid or received the money and how to split it.
-                        </p>
-                        <p className="mt-4 text-xs leading-6 text-muted-foreground">
                             Use your API key with write access in the X-API-Key header.
                             You must be an active member of the Circle.
                         </p>

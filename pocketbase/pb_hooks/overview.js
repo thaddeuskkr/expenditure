@@ -3,6 +3,18 @@ function summarize(app, user, range) {
     const fx = require(`${__hooks}/exchange-rates.js`);
     const main = config.preferences(app, user).currency;
     const snapshot = fx.read(app);
+    const categoryNames = config.categories(app, user).map((category) => category.name);
+    const categoryKey = (name) => name.trim().replace(/\s+/g, " ").toLowerCase();
+    const other = categoryNames.find((name) => categoryKey(name) === "other") || "Other";
+    const circleCategories = Object.create(null);
+    function personalCategory(name) {
+        if (Object.prototype.hasOwnProperty.call(circleCategories, name)) return circleCategories[name];
+        const exact = categoryNames.find((category) => category === name);
+        const matches = exact ? [exact] : categoryNames.filter((category) => categoryKey(category) === categoryKey(name));
+        circleCategories[name] = matches.length === 1 ? matches[0] : other;
+        return circleCategories[name];
+    }
+
     const rows = arrayOf(
         new DynamicModel({
             amount: 0,
@@ -10,13 +22,26 @@ function summarize(app, user, range) {
             currency: "",
             category: "",
             occurred_at: "",
+            circle_share: 0,
         }),
     );
     app
         .db()
         .newQuery(
-            "SELECT amount, kind, currency, category, occurred_at FROM expenses WHERE user = {:user} AND moved_to = '' AND occurred_at >= {:previous} AND occurred_at < {:to}" +
-            (range.currency === "all" ? "" : " AND currency = {:currency}"),
+            `SELECT amount, kind, currency, category, occurred_at, 0 AS circle_share
+             FROM expenses
+             WHERE user = {:user} AND moved_to = '' AND occurred_at >= {:previous} AND occurred_at < {:to}
+             ${range.currency === "all" ? "" : "AND currency = {:currency}"}
+             UNION ALL
+             SELECT json_extract(allocation.value, '$.amount') AS amount,
+                    shared.kind, shared.currency, shared.category, shared.occurred_at, 1 AS circle_share
+             FROM circle_members membership
+             JOIN circle_expenses shared ON shared.circle = membership.circle
+             JOIN json_each(shared.shares) allocation ON json_extract(allocation.value, '$.member') = membership.id
+             WHERE membership.user = {:user} AND shared.kind = 'expense'
+               AND json_extract(allocation.value, '$.amount') > 0
+               AND shared.occurred_at >= {:previous} AND shared.occurred_at < {:to}
+               ${range.currency === "all" ? "" : "AND shared.currency = {:currency}"}`,
         )
         .bind({ ...range, user })
         .all(rows);
@@ -67,10 +92,11 @@ function summarize(app, user, range) {
             }
 
             result.total += converted;
-            if (!grouped[row.category])
-                grouped[row.category] = { category: row.category, total: 0, count: 0 };
-            grouped[row.category].total += converted;
-            grouped[row.category].count++;
+            const category = row.circle_share ? personalCategory(row.category) : row.category;
+            if (!grouped[category])
+                grouped[category] = { category, total: 0, count: 0 };
+            grouped[category].total += converted;
+            grouped[category].count++;
             const time = row.occurred_at.slice(0, 16).replace(" ", "T") + ":00Z";
             activity[time] = (activity[time] || 0) + converted;
         } else if (converted === null) result.previous_missing_count++;

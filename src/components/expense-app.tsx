@@ -164,8 +164,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 12)
-                    throw new Error("This app requires backend version 12. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 13)
+                    throw new Error("This app requires backend version 13. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -408,6 +408,7 @@ function Workspace({
             active = false;
         };
     }, [
+        section,
         month,
         filterCurrency,
         mainCurrency,
@@ -865,7 +866,7 @@ function Workspace({
                                             <span className="flex size-5 items-center justify-center rounded-full bg-white/4">
                                                 <Wallet className="size-2.5" />
                                             </span>
-                                            {overview.count} expenses this month
+                                            {overview.count} expenses this month, including Circle shares
                                             <span className="mx-1 text-white/15">·</span>
                                             {mainCurrency} · converted total
                                         </div>
@@ -1143,7 +1144,8 @@ function Workspace({
                                             />
                                         )}
                                 <p className="mt-8 text-[10px] leading-6 text-muted-foreground">
-                                    Budgets apply to {monthTitle(month)} in {mainCurrency}.
+                                    Budgets apply to {monthTitle(month)} in {mainCurrency} and include your allocated Circle expense shares.
+                                    Circle categories without a matching personal category count as Other.
                                     Category limits are independent of the overall budget and do
                                     not roll over.
                                 </p>

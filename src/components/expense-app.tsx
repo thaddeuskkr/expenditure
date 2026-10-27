@@ -35,6 +35,7 @@ import {
 import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { MonthPicker } from "./month-picker";
 import {
     Select,
     SelectContent,
@@ -87,7 +88,6 @@ import {
     type WorkspaceConfig,
     type ExchangeRates,
     pocketbaseTimestamp,
-    shiftMonth,
     zonedDate,
     type Budget,
     type Expense,
@@ -685,31 +685,7 @@ function Workspace({
                         </div>
                         {isDataPage && (
                             <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
-                                <div className="flex items-center gap-1 rounded-lg border bg-white/1 p-1">
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        aria-label="Previous month"
-                                        onClick={() => changeMonth(shiftMonth(month, -1))}>
-                                        <ChevronLeft className="size-3.5" />
-                                    </Button>
-                                    <input
-                                        aria-label="Month"
-                                        type="month"
-                                        value={month}
-                                        min="2000-01"
-                                        max="2199-12"
-                                        onChange={(e) => changeMonth(e.target.value)}
-                                        className="w-35 border-0 bg-transparent px-2 py-1 text-[11px] outline-none"
-                                    />
-                                    <Button
-                                        variant="ghost"
-                                        size="icon-sm"
-                                        aria-label="Next month"
-                                        onClick={() => changeMonth(shiftMonth(month, 1))}>
-                                        <ChevronRight className="size-3.5" />
-                                    </Button>
-                                </div>
+                                <MonthPicker value={month} onChange={changeMonth} timezone={preferences.timezone} />
                                 {section === "Transactions" ?
                                         (
                                             <Select

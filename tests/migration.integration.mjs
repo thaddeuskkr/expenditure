@@ -160,6 +160,33 @@ test(
             scopes: ["expenses:read"],
         });
         await stop();
+        // Stage the previous schema with real category rows before adding order.
+        await copyFile(resolve("pocketbase/pb_hooks/currencies.json"), join(oldHooks, "currencies.json"));
+        for (const file of ["1793100000_categories_currencies_rates.js", "1793103600_circles.js"]) {
+            await copyFile(resolve("pocketbase/pb_migrations", file), join(oldMigrations, file));
+        }
+
+        const previousSchema = spawnSync(binary, ["migrate", "up", ...oldFlags], { encoding: "utf8" });
+        assert.equal(previousSchema.status, 0, previousSchema.stderr + previousSchema.stdout);
+        await start(oldFlags);
+        const secondUser = await request("/api/collections/users/records", admin, {
+            email: "second-upgrade@example.com", password, passwordConfirm: password,
+        });
+        for (const [owner, names] of [[user.id, ["Other", "Food & drinks", "Groceries"]], [secondUser.id, ["Second Z", "Second A"]]]) {
+            for (const [index, name] of names.entries()) {
+                await request("/api/collections/categories/records", admin, {
+                    user: owner, name, color: "#aabbcc", active: index !== 0,
+                });
+            }
+        }
+
+        async function categoryRows(owner, sort) {
+            return (await request(`/api/collections/categories/records?perPage=100&sort=${sort}&filter=${encodeURIComponent(`user = '${owner}'`)}`, admin)).items;
+        }
+
+        const previousCategories = await categoryRows(user.id, "created,name,id");
+        const secondPrevious = await categoryRows(secondUser.id, "created,name,id");
+        await stop();
         const upgrade = spawnSync(binary, ["migrate", "up", ...newFlags], {
             encoding: "utf8",
         });
@@ -207,6 +234,12 @@ test(
             { identity: "upgrade@example.com", password },
         );
         const config = await request("/api/expenditure/config", auth.token);
+        assert.deepEqual(config.categories.map((category) => category.id), previousCategories.map((category) => category.id));
+        assert.deepEqual(config.categories.map((category) => category.sort_order), [0, 1, 2]);
+        assert.deepEqual(config.categories.map((category) => category.active), previousCategories.map((category) => category.active));
+        const secondAfter = await categoryRows(secondUser.id, "sort_order");
+        assert.deepEqual(secondAfter.map((category) => category.id), secondPrevious.map((category) => category.id));
+        assert.deepEqual(secondAfter.map((category) => category.sort_order), [0, 1]);
         assert.ok(config.categories.some((c) => c.name === "Food & drinks"));
         assert.equal(config.preferences.currency, "SGD");
         // Re-running migration commands must not duplicate or reset user data.

@@ -14,7 +14,8 @@ import {
     DialogFooter,
 } from "../ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { CURRENCY_CATALOG, errorMessage } from "@/lib/domain";
+import { errorMessage } from "@/lib/domain";
+import { CurrencyPicker } from "../currency-picker";
 import {
     circleCore,
     circlesApi,
@@ -36,22 +37,8 @@ export function CurrencySelect({
     id?: string;
     codes?: string[];
 }) {
-    const currencies = codes ?
-            CURRENCY_CATALOG.filter((c) => codes.includes(c.code)) :
-        CURRENCY_CATALOG;
     return (
-        <Select value={value} onValueChange={onChange}>
-            <SelectTrigger id={id} className="h-10! w-full">
-                <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-                {currencies.map((c) => (
-                    <SelectItem key={c.code} value={c.code}>
-                        {c.code} · {c.name}
-                    </SelectItem>
-                ))}
-            </SelectContent>
-        </Select>
+        <CurrencyPicker id={id} value={value} onChange={onChange} codes={codes} />
     );
 }
 

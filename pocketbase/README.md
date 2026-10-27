@@ -9,7 +9,7 @@ The frontend is hosted on Vercel at **https://expenses.tkkr.dev**. This backend 
 1. Back up your existing `pb_data` directory using PocketBase’s backup facility or a consistent stopped-server backup.
 2. From this project's `pocketbase/` directory, copy **all files** inside `pb_hooks/` (including `currencies.json`) and `pb_migrations/` into the corresponding directories used by your existing PocketBase process. Preserve unrelated files. Check for filename conflicts before copying.
 3. Restart PocketBase. It automatically applies unapplied migrations on startup. If your service disables automatic migrations, run `./pocketbase migrate up` using the same data, hooks, and migration directories as the service, then restart it.
-4. Confirm `https://e.tkkr.dev/api/expenditure/status` returns `{"version":3}`. In the PocketBase dashboard, confirm `expenses`, `budgets`, `preferences`, `api_keys`, `categories`, `exchange_rates`, and the five `circle_*` / `circles` collections exist.
+4. Confirm `https://e.tkkr.dev/api/expenditure/status` returns `{"version":4}`. In the PocketBase dashboard, confirm `expenses`, `budgets`, `preferences`, `api_keys`, `categories`, `exchange_rates`, and the five `circle_*` / `circles` collections exist.
 5. Open **https://expenses.tkkr.dev** and sign in using tkID. Add an expense, create a write key under **API keys**, and test the example request below.
 
 For a typical executable installation, the final directory layout is:
@@ -33,6 +33,7 @@ pb_migrations/
   1793026800_expenditure.js
   1793100000_categories_currencies_rates.js
   1793103600_circles.js
+  1793107200_category_order.js
 ```
 
 For Docker, mount the supplied hook and migration directories at the paths your image uses. PocketBase’s `--hooksDir`, `--migrationsDir`, and `--dir` flags can override the defaults. Do not create a second empty `pb_data` volume when installing these files.
@@ -47,8 +48,8 @@ The dashboard and API have been tested with PocketBase 0.40.6. If your host runs
 
 1. Back up your existing database. Stop PocketBase while copying files if your service automatically reloads hooks.
 2. Replace the package’s files in `pb_hooks/`, including the shared `currencies.json`. Preserve unrelated hooks.
-3. Add all unapplied migrations, including `1793100000_categories_currencies_rates.js` and `1793103600_circles.js`, to your migration directory. Keep the original applied migration and migration history intact.
-4. Restart PocketBase, confirm status version 3, and open Settings in the app.
+3. Add all unapplied migrations, including `1793100000_categories_currencies_rates.js`, `1793103600_circles.js`, and `1793107200_category_order.js`, to your migration directory. Keep the original applied migration and migration history intact.
+4. Restart PocketBase, confirm status version 4, and open Settings in the app.
 
 The upgrade changes category fields from fixed choices to validated text, expands currency choices, adds per-user enabled currencies, and creates `categories` and `exchange_rates`. It preserves existing record IDs, original amounts, category values, preferences, budgets, keys, and retry identifiers. Default categories are created per user on the first configuration request; old data is included. There is no remote migration performed by the Next.js app.
 
@@ -66,7 +67,7 @@ Failed fetches retain the last good rates. A cache older than 36 hours is marked
 
 ## API keys
 
-Sign in through the web app to create a key. Keys expire after 30, 90, or 365 days and can be revoked immediately. Each user can have up to 20 active keys; a bounded history of up to 100 keys is retained, pruning inactive keys when necessary.
+Sign in through the web app to create a key. Keys can expire after 30, 90, or 365 days, or never expire. All keys can be revoked immediately. Each user can have up to 20 active keys; a bounded history of up to 100 keys is retained, pruning inactive keys when necessary.
 
 - `expenses:write`: add expenses using POST below.
 - `expenses:read`: list expenses using GET below.
@@ -98,7 +99,19 @@ curl -X POST 'https://e.tkkr.dev/api/expenses/transactions' \
 
 All optional fields are validated by PocketBase before saving. Explicit nulls, arrays, objects, numbers, and booleans are rejected for text fields; defaults apply only when a field is omitted. The currency must be a supported uppercase code enabled in the user’s Settings; an empty string is invalid. The category must be a non-empty string of at most 60 characters naming an active category belonging to that user. Category matching trims surrounding whitespace and is case-insensitive; responses use the configured name. Payment methods are free-text labels such as Cash or Visa, up to 80 characters, and notes allow up to 2000 characters. New users start with SGD, USD, EUR, GBP, AUD, and MYR enabled, and eight editable categories.
 
-Responses include `amount_minor` and the legacy native field `amount_cents`, both containing the same currency minor-unit value. Create, replay, and list responses include `payment_method` and the legacy native `card` field with the same payment label. No database migration is needed for this alias. A new expense returns its record with HTTP 201 and `replay: false`. An exact retry with the same Idempotency-Key returns the original record with HTTP 200 and `replay: true`. Reusing a key with different expense data returns HTTP 409. The idempotency key is optional, scoped to the user, up to 128 characters, and allows letters, digits, underscores, dots, colons, and hyphens. Keep one value for retries of the same purchase and use a new value for each new purchase. If you omit `occurred_at`, a retry can omit it too. Deleting an expense also removes its deduplication record.
+Responses include `amount_minor` and the legacy native field `amount_cents`, both containing the same currency minor-unit value. Create, replay, and list responses include `payment_method` and the legacy native `card` field with the same payment label. No database migration is needed for this alias. A new expense returns its record with HTTP 201 and `replay: false`.
+
+#### Idempotency and collisions
+
+An `Idempotency-Key` protects retries for **24 hours from the expense's server-created timestamp**, regardless of the purchase's `occurred_at` date. Within that window, the same key and expense data returns the existing record with HTTP 200 and `replay: true`. Different data with the same key returns HTTP 409 and creates nothing. Identical purchases that accidentally use the same key within the window cannot be distinguished from retries; generate a new key for each purchase.
+
+After 24 hours, reusing the key creates a **new expense**, even if the payload is identical. A retry after expiry can therefore create a duplicate. Retries and edits do not extend the window. Expiry frees only the old record's hidden retry marker when that key is reused; it never deletes or changes the original expense's amounts, notes, purchase date or timestamps. Releasing the expired marker and creating the new expense are atomic, so concurrent retries still produce just one new record. Deleting the expense removes its retry protection immediately.
+
+POST responses include `idempotency_expires_at`, an ISO 8601 UTC timestamp, or `null` when no key was supplied. The header remains optional, scoped to the user (shared across that user's API keys), up to 128 characters, and allows letters, digits, underscores, dots, colons, and hyphens. If you omit `occurred_at`, a retry can omit it too. API access-key expiry is separate and unchanged.
+
+For Shortcuts, generate **Current Date → Format Date** using Custom `yyyyMMddHHmmssSSS`, then combine the formatted date and a large **Random Number** in a **Text** action, for example `20261027131822123-713884596`. Use that text as `Idempotency-Key`. Generate it once before the request/retry loop and retain both the key and payload for retries; do not generate a new key for a network timeout. A 409 with different purchase data can be retried with a newly generated key. See [Apple's custom date-format guide](https://support.apple.com/guide/shortcuts/custom-date-formats-apd8d9b19184/ios).
+
+Install the updated `main.pb.js` and `expenditure.js` hooks and restart PocketBase to enable the 24-hour window. Existing idempotency markers follow the same expiry, based on their server-created timestamps. No new migration is needed for this change.
 
 ### List expenses
 
@@ -126,7 +139,7 @@ Native collection validation returns PocketBase’s usual error responses.
 4. Add headers `X-API-Key` with your key and `Content-Type` with `application/json`.
 5. Add `merchant` as Text, `amount_minor` as Number, `currency` as Text (`SGD`), and optionally `category`, `payment_method`, `notes`, and `occurred_at`.
 6. Convert the currency amount to integer minor units before sending: multiply SGD/USD by 100, JPY by 1, or KWD by 1000, then round. SGD 8.50 becomes 850. For multiple currencies, use the `digits` value from the supplied catalog.
-7. For retries, generate a unique identifier once per purchase and pass it in `Idempotency-Key`. Reuse that identifier only for retries of the same purchase.
+7. Generate the timestamp-plus-random-number identifier above once per purchase and pass it in `Idempotency-Key`. Reuse it only for retries of that same payload within 24 hours; retain it outside any retry loop.
 
 Wallet automations can supply available transaction fields to this request. Availability of Wallet trigger fields depends on your iOS version and transaction type; the app does not scrape Apple Wallet.
 
@@ -136,10 +149,14 @@ Use a normal PocketBase `users` authentication token in the `Authorization` head
 
 - `GET /api/expenditure/keys`: safe key metadata only.
 - `POST /api/expenditure/keys`: JSON `{ "name": "My iPhone", "scopes": ["expenses:write"], "expires_in_days": 90 }`; returns `{ "key": "exp_…", "record": { … } }` once.
+- Set `expires_in_days` to `30`, `90`, `365`, or explicitly `null` for a key that never expires. Non-expiring keys return `expires_at: ""`, count toward the same 20-active-key limit, and can be revoked at any time. Existing keys keep their expiry. This option needs the updated `main.pb.js` hook and a PocketBase restart; no additional migration is required.
 - `DELETE /api/expenditure/keys/{id}`: revokes an owned key.
 - `GET /api/expenditure/config`: the user’s preferences, categories (including archived), and currencies already present in their expenses/budgets. Seeds default categories once.
 - `POST /api/expenditure/categories`: JSON `{ "name": "Travel", "color": "#bfc9a4" }`; creates an active owned category.
 - `PATCH /api/expenditure/categories/{id}`: any of `name`, `color`, `active`; updates an owned category and propagates renames. Keep at least one active category.
+- `POST /api/expenditure/categories/reorder`: JSON `{ "ids": ["NEW_ORDER_OF_IDS"], "previous_ids": ["CURRENT_ORDER_OF_IDS"] }`. Supply every category ID exactly once in each array, including archived categories. Use the current order from `/api/expenditure/config` for `previous_ids`. Returns `{ "items": [...] }` in the saved order. Only owned IDs are accepted; unknown, duplicate or omitted IDs return 400. A changed list or order returns 409: reload config before retrying. Requires a normal users session, not a personal API key.
+
+Category ordering is stored per account in `categories.sort_order`. New categories append to the end; renaming, archiving and restoring preserve position. The initial migration preserves each existing account's displayed `created,name` order, including archived categories. Install the updated `configuration.js`, `configuration.pb.js` and `main.pb.js` hooks with migration `1793107200_category_order.js`, restart PocketBase, then redeploy the frontend. Status returns version 4. Rolling this migration back removes the saved order only; categories, expenses and budgets remain. Use the matching older hooks when rolling back.
 - `GET /api/expenditure/rates`: cached `{ quotes, dates, fetched_at, attempted_at, provider, source_url, stale }`. Quotes are units per EUR and dates are per currency; EUR’s identity quote is 1. Refreshes if due.
 - `GET /api/expenditure/overview?from=…&to=…&previous=…&currency=all`: converted monthly summary, previous-month total, category totals, minute activity, original totals, and missing conversion counts. Converted totals use main-currency minor units; `original_totals` use each source currency’s minor units. `currency=all` combines source currencies; a supported code filters source records but totals still use the main currency. ISO 8601 bounds must be ordered and span at most 64 days; the frontend calculates local month boundaries.
 - Native `/api/collections/expenses/records`, `/budgets/records`, and `/preferences/records`: standard PocketBase CRUD protected by ownership and configuration validation. Preferences include `currency` (main), `currencies` (enabled codes), and `timezone`. The native expense/budget amount field is named `amount_cents` for compatibility but stores currency minor units, including zero- or three-decimal currencies. Category changes must use the custom routes; native category mutations and exchange-rate access are locked.

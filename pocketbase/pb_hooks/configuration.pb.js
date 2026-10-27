@@ -61,11 +61,13 @@ routerAdd(
             )
                 throw new BadRequestError("A category with this name already exists.");
             const record = new Record(app.findCollectionByNameOrId("categories"));
+            const existing = config.categories(app, e.auth.id);
             record.load({
                 user: e.auth.id,
                 name: data.name.trim(),
                 color: data.color,
                 active: true,
+                sort_order: existing.length ? existing[existing.length - 1].sort_order + 1 : 0,
             });
             app.save(record);
             created = record.publicExport();
@@ -74,6 +76,47 @@ routerAdd(
     },
     $apis.requireAuth("users"),
     $apis.bodyLimit(4096),
+);
+
+routerAdd(
+    "POST",
+    "/api/expenditure/categories/reorder",
+    (e) => {
+        const config = require(`${__hooks}/configuration.js`);
+        const data = e.requestInfo().body;
+        function validIds(ids) {
+            return Array.isArray(ids) && ids.length > 0 && ids.length <= 100 &&
+                ids.every((id, index) => typeof id === "string" && /^[a-z0-9]{15}$/.test(id) && ids.indexOf(id) === index);
+        }
+
+        if (!validIds(data.ids) || !validIds(data.previous_ids) ||
+            Object.keys(data).some((key) => ["ids", "previous_ids"].indexOf(key) < 0))
+            throw new BadRequestError("Provide the current and requested category IDs, without duplicates.");
+        let items;
+        e.app.runInTransaction((app) => {
+            const records = app.findRecordsByFilter(
+                "categories", "user = {:user}", "sort_order,created,name,id", 0, 0, { user: e.auth.id },
+            );
+            const current = records.map((record) => record.id);
+            if (data.previous_ids.length !== current.length ||
+                current.some((id, index) => id !== data.previous_ids[index]))
+                throw new ApiError(409, "Your categories changed. Refresh and try again.");
+            if (data.ids.length !== current.length || data.ids.some((id) => current.indexOf(id) < 0))
+                throw new BadRequestError("Include each of your categories exactly once.");
+            data.ids.forEach((id, index) => {
+                const record = records.find((item) => item.id === id);
+                if (record.getInt("sort_order") !== index) {
+                    record.set("sort_order", index);
+                    app.save(record);
+                }
+            });
+            items = config.categories(app, e.auth.id);
+        });
+        e.response.header().set("Cache-Control", "no-store");
+        return e.json(200, { items });
+    },
+    $apis.requireAuth("users"),
+    $apis.bodyLimit(8192),
 );
 
 routerAdd(

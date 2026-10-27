@@ -12,10 +12,11 @@ Production app: **https://expenses.tkkr.dev** on Vercel. API: **https://e.tkkr.d
 - Monthly totals, previous-month comparison, daily activity, category spending, and overall/category budgets.
 - Custom categories with names, colors, renaming, and archiving. Changes belong to each user.
 - Choose enabled currencies from 155 supported fiat currencies and set a main currency for combined totals, conversion previews, and budgets. Defaults: SGD and Asia/Singapore.
+- Search currencies and timezones, choose report months from a month grid, and enter expense dates with styled calendars and time selectors. Date entry follows the configured timezone; phone screens use a focused calendar dialog.
 - Online reference rates cached in PocketBase, checked hourly. Original amounts stay intact; dated conversions are estimates using the latest available rates.
 - Circles with owner controls, email-bound invitations, equal/percentage/exact splits, per-currency balances, and recorded settlements.
 - Scoped, expiring, revocable personal API keys for adding or reading expenses from Shortcuts and other tools. Secrets are shown once and only SHA-256 hashes are stored.
-- Idempotent API writes, live expense updates through PocketBase realtime, and refresh on window focus.
+- API writes with a fixed 24-hour idempotency window, live expense updates through PocketBase realtime, and refresh on window focus.
 - Responsive layouts, accessible shadcn dialogs and menus, keyboard shortcut `N` for a new expense, and reduced-motion support.
 
 ## Run locally
@@ -66,13 +67,13 @@ Commit the source, configuration, documentation, tests, and `pnpm-lock.yaml`. De
 
 ## Categories, currencies, and rates
 
-Use **Settings** to add or rename categories, change their colors, archive or restore them, enable currencies, and set the main currency. Renaming updates existing expenses and budgets together. Archiving hides a category from new entries while keeping historical reports. Disabling a currency also keeps old entries available. Each account’s settings and categories are private.
+Use **Settings** to add, reorder, or rename categories, change their colors, archive or restore them, enable currencies, and set the main currency. Renaming updates existing expenses and budgets together. Archiving hides a category from new entries while keeping historical reports. Disabling a currency also keeps old entries available. Each account’s settings and categories are private. Under **Categories**, select **Reorder** and use the up/down controls. Each move saves immediately and applies to expense, budget and filter selectors. New categories append at the end; renamed or archived categories retain their position.
 
 PocketBase fetches [Frankfurter v2](https://frankfurter.dev/) reference rates from public sources. Its scheduled job checks at minute 7 every hour; opening the app also refreshes an expired cache, with a shared lease to prevent duplicate requests. The browser checks PocketBase every five minutes while visible and on window focus. The upstream source generally publishes daily, not continuously. No provider key or additional backend is needed.
 
 Conversions use the latest cached rates even for historical expenses, rounded once per expense into the main currency. They are estimates, not the actual card or bank exchange rate. Each expense retains its original amount and currency. Failed refreshes preserve the last good quotes; the app flags a cache older than 36 hours. Missing quotes or observations over 14 days old are excluded from converted totals, with an explicit incomplete-total warning. Same-currency expenses need no exchange rate.
 
-For an existing installation, upload all updated `pb_hooks` files, including `currencies.json`, and the new migration `1793100000_categories_currencies_rates.js`, then restart PocketBase. Back up first. The upgrade preserves expense and budget IDs, amounts, categories, preferences, API keys, and idempotency data. See the backend guide for installation and rollback details.
+For an existing installation, upload all updated `pb_hooks` files, including `currencies.json`, and all unapplied migrations, including `1793100000_categories_currencies_rates.js` and `1793107200_category_order.js`, then restart PocketBase and redeploy the frontend. Category ordering requires backend status version 4. Back up first. The upgrade preserves expense and budget IDs, amounts, categories, preferences, API keys, and idempotency data. See the backend guide for installation and rollback details.
 
 ## Circles
 

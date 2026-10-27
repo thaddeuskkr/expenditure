@@ -55,14 +55,14 @@ function categories(app, user) {
     const records = app.findRecordsByFilter(
         "categories",
         "user = {:user}",
-        "created,name",
+        "sort_order,created,name,id",
         0,
         0,
         { user },
     );
     return records.length ?
             records.map((r) => r.publicExport()) :
-            defaultNames.map((name, i) => ({ name, color: colors[i], active: true }));
+            defaultNames.map((name, i) => ({ name, color: colors[i], active: true, sort_order: i }));
 }
 
 function initialize(app, user) {
@@ -88,6 +88,7 @@ function initialize(app, user) {
                 name,
                 color: colors[i % colors.length],
                 active: true,
+                sort_order: i,
             });
             tx.save(record);
         });

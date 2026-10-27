@@ -11,6 +11,8 @@ import {
     DialogFooter,
 } from "./ui/dialog";
 import { Input } from "./ui/input";
+import { CurrencyPicker } from "./currency-picker";
+import { DateTimePicker } from "./date-time-picker";
 import { useWorkspace } from "./workspace-context";
 import {
     Select,
@@ -153,18 +155,7 @@ export function ExpenseEditor({
                             <label className="field-label" htmlFor="expense-currency">
                                 Currency
                             </label>
-                            <Select value={selectedCurrency} onValueChange={setCurrency}>
-                                <SelectTrigger id="expense-currency" className="h-11! w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {currencies.map((c) => (
-                                        <SelectItem key={c} value={c}>
-                                            {c}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <CurrencyPicker id="expense-currency" value={selectedCurrency} onChange={setCurrency} codes={currencies} compact className="h-11" />
                         </div>
                     </div>
                     {selectedCurrency !== preferences.currency && amount && (
@@ -196,15 +187,14 @@ export function ExpenseEditor({
                                 · {timezone.replaceAll("_", " ")}
                             </span>
                         </label>
-                        <Input
+                        <DateTimePicker
                             id="occurred_at"
                             name="occurred_at"
-                            type="datetime-local"
                             defaultValue={zonedInput(
                                 expense?.occurred_at || new Date(),
                                 timezone,
                             )}
-                            required
+                            timezone={timezone}
                             className="h-11"
                         />
                     </div>
@@ -221,6 +211,7 @@ export function ExpenseEditor({
                             placeholder="e.g. DBS Live Fresh, cash"
                             maxLength={80}
                             defaultValue={expense?.card}
+                            className="h-11"
                         />
                     </div>
                     <div>
@@ -237,7 +228,7 @@ export function ExpenseEditor({
                             defaultValue={expense?.notes}
                             rows={2}
                             placeholder="Anything to remember?"
-                            className="w-full resize-none rounded-lg border bg-input/20 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/40"
+                            className="w-full resize-none appearance-none rounded-lg border bg-input/20 px-3 py-2 text-base outline-none focus:ring-2 focus:ring-ring/40 md:text-sm"
                         />
                     </div>
                     {error && (

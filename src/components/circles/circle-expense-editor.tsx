@@ -3,6 +3,8 @@
 import { useState, type FormEvent } from "react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
+import { Checkbox } from "../ui/checkbox";
+import { DateTimePicker } from "../date-time-picker";
 import { DialogFooter } from "../ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { UserAvatar } from "../user-avatar";
@@ -215,15 +217,14 @@ export function CircleExpenseEditor({
                         <label htmlFor="shared-date" className="field-label">
                             Date & time
                         </label>
-                        <Input
+                        <DateTimePicker
                             id="shared-date"
                             name="occurred_at"
-                            type="datetime-local"
                             defaultValue={zonedInput(
                                 expense?.occurred_at || new Date(),
                                 preferences.timezone,
                             )}
-                            required
+                            timezone={preferences.timezone}
                             className="h-10"
                         />
                     </div>
@@ -265,16 +266,14 @@ export function CircleExpenseEditor({
                             return (
                                 <div key={member.id} className="flex items-center gap-3 py-3">
                                     <label className="flex min-w-0 flex-1 items-center gap-3">
-                                        <input
-                                            type="checkbox"
+                                        <Checkbox
                                             checked={checked}
-                                            onChange={(e) =>
+                                            onCheckedChange={(next) =>
                                                 setSelected((previous) =>
-                                                    e.target.checked ?
+                                                    next === true ?
                                                             [...previous, member.id] :
                                                             previous.filter((id) => id !== member.id),
                                                 )}
-                                            className="size-4 accent-primary"
                                         />
                                         {member.user && (
                                             <UserAvatar user={member.user} name={member.name} />
@@ -351,7 +350,7 @@ export function CircleExpenseEditor({
                         defaultValue={expense?.notes}
                         maxLength={2000}
                         rows={2}
-                        className="w-full rounded-lg border bg-transparent p-3 text-xs outline-none focus:border-ring"
+                        className="w-full appearance-none rounded-lg border bg-transparent p-3 text-base outline-none focus:border-ring md:text-xs"
                     />
                 </div>
                 <FormError error={error} />

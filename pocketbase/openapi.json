@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "3.0.0",
-    "description": "Personal API keys authorize the personal expense automation endpoints. Circles require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server."
+    "version": "4.1.0",
+    "description": "Personal API keys authorize the personal expense automation endpoints. Category ordering and Circles require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server."
   },
   "servers": [
     {
@@ -19,7 +19,7 @@
     "/api/expenses/transactions": {
       "post": {
         "summary": "Add an expense",
-        "description": "Requires expenses:write. An exact retry returns the original record. Use a new Idempotency-Key for each purchase. Omit user.",
+        "description": "Requires expenses:write. Idempotency-Key is optional and scoped to the user. For 24 hours from the original server-created timestamp, identical data replays the existing expense and different data conflicts. After expiry, even identical data creates a new expense; old expenses are retained. Retries and edits do not extend the window. Use a timestamp plus a random number per purchase, retained for retries. Omit user.",
         "parameters": [
           {
             "in": "header",
@@ -29,7 +29,8 @@
               "type": "string",
               "maxLength": 128,
               "pattern": "^[A-Za-z0-9_.:-]+$"
-            }
+            },
+            "description": "Fixed 24-hour retry protection. Generate once per purchase and reuse only for that payload. Expiry is based on server creation time, not occurred_at. After expiry a late retry can create a duplicate."
           }
         ],
         "requestBody": {
@@ -52,7 +53,7 @@
         },
         "responses": {
           "200": {
-            "description": "Idempotent replay",
+            "description": "Idempotent replay within the fixed 24-hour window",
             "content": {
               "application/json": {
                 "schema": {
@@ -81,7 +82,7 @@
             "description": "Missing expenses:write scope"
           },
           "409": {
-            "description": "Idempotency key conflicts with another payload"
+            "description": "Key already used with different data within the 24-hour window; no new expense created"
           }
         }
       },
@@ -960,6 +961,86 @@
           }
         }
       }
+    },
+    "/api/expenditure/categories/reorder": {
+      "post": {
+        "summary": "Reorder your categories",
+        "description": "Include all owned category IDs, including archived categories. previous_ids must match the latest order from GET /api/expenditure/config. The update is atomic and never changes names, colors or active status. Normal users session required; personal API keys cannot reorder categories.",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "ids",
+                  "previous_ids"
+                ],
+                "properties": {
+                  "ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9]{15}$"
+                    }
+                  },
+                  "previous_ids": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 100,
+                    "uniqueItems": true,
+                    "items": {
+                      "type": "string",
+                      "pattern": "^[a-z0-9]{15}$"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved order",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "items"
+                  ],
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CategoryDefinition"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid IDs, duplicates, omitted categories or IDs outside this account"
+          },
+          "401": {
+            "description": "A users session is required"
+          },
+          "409": {
+            "description": "Categories or their order changed. Refresh config and try again."
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1245,6 +1326,12 @@
                 "type": "string",
                 "maxLength": 80,
                 "description": "Payment method; returned with the native compatibility field card on create, replay and list responses."
+              },
+              "idempotency_expires_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true,
+                "description": "POST responses only: fixed retry-window end in UTC, 24 hours after server creation; null when the request had no Idempotency-Key. Retries do not extend this timestamp."
               }
             }
           }
@@ -3747,6 +3834,36 @@
           "circle",
           "member"
         ]
+      },
+      "CategoryDefinition": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "color",
+          "active",
+          "sort_order"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "color": {
+            "type": "string",
+            "pattern": "^#[a-fA-F0-9]{6}$"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "sort_order": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
       }
     }
   }

@@ -1,5 +1,5 @@
 /// <reference path="../pb_data/types.d.ts" />
-routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 3 }));
+routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 4 }));
 
 routerAdd(
     "GET",
@@ -42,13 +42,13 @@ routerAdd(
         )
             throw new BadRequestError("Select valid scopes.");
         const days = data.expires_in_days;
-        if ([30, 90, 365].indexOf(days) < 0)
-            throw new BadRequestError("Expiration must be 30, 90 or 365 days.");
+        if (days !== null && [30, 90, 365].indexOf(days) < 0)
+            throw new BadRequestError("Expiration must be 30, 90 or 365 days, or null for no expiration.");
         let result;
         e.app.runInTransaction((app) => {
             const count = app.countRecords(
                 "api_keys",
-                $dbx.exp("user = {:user} AND revoked_at = '' AND expires_at > {:now}", {
+                $dbx.exp("user = {:user} AND revoked_at = '' AND (expires_at = '' OR expires_at > {:now})", {
                     user: e.auth.id,
                     now: new Date().toISOString().replace("T", " "),
                 }),
@@ -86,7 +86,7 @@ routerAdd(
                 key_hash: $security.sha256(secret),
                 key_prefix: secret.slice(0, 12),
                 scopes,
-                expires_at: new Date(Date.now() + days * 86400000).toISOString(),
+                expires_at: days === null ? "" : new Date(Date.now() + days * 86400000).toISOString(),
             });
             app.save(record);
             result = { key: secret, record: lib.cleanKey(record) };
@@ -135,6 +135,15 @@ routerAdd(
             replay = false;
         e.app.runInTransaction((app) => {
             if (idempotency) {
+                // Free only the expired retry marker, preserving the expense and
+                // its timestamps. Do this in the same transaction as insertion.
+                app.db().newQuery(
+                    "UPDATE expenses SET idempotency_key = '' WHERE user = {:user} AND idempotency_key = {:key} AND created <= {:cutoff}",
+                ).bind({
+                    user: identity.user.id,
+                    key: idempotency,
+                    cutoff: new Date(Date.now() - lib.IDEMPOTENCY_TTL_MS).toISOString().replace("T", " "),
+                }).execute();
                 const existing = app.findRecordsByFilter(
                     "expenses",
                     "user = {:user} && idempotency_key = {:key}",
@@ -163,7 +172,7 @@ routerAdd(
                     )
                         throw new ApiError(
                             409,
-                            "Idempotency-Key was already used with different data.",
+                            "Idempotency-Key is already in use for different data within the 24-hour retry window. Use a new key for a new purchase.",
                         );
                     replay = true;
                     return;
@@ -183,6 +192,7 @@ routerAdd(
         return e.json(replay ? 200 : 201, {
             ...lib.exportExpense(record),
             replay,
+            idempotency_expires_at: lib.idempotencyExpiresAt(record),
         });
     },
     $apis.bodyLimit(8192),
@@ -257,6 +267,9 @@ onRecordUpdateRequest((e) => {
             "idempotency_key",
             e.record.original().getString("idempotency_key"),
         );
+        // Editing an API expense must not extend or shorten its retry window.
+        if (e.record.getString("source") === "api")
+            e.record.set("created", e.record.original().get("created"));
     }
 
     return e.next();

@@ -60,6 +60,7 @@ export interface CategoryDefinition {
     name: string;
     color: string;
     active: boolean;
+    sort_order: number;
 }
 export interface WorkspaceConfig {
     preferences: Preferences;

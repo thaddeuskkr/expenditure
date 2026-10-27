@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Input } from "../ui/input";
+import { DateTimePicker } from "../date-time-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { DialogFooter } from "../ui/dialog";
 import { useWorkspace } from "../workspace-context";
@@ -136,12 +137,11 @@ export function SettlementDialog({
                     <label htmlFor="settlement-date" className="field-label">
                         Date & time
                     </label>
-                    <Input
+                    <DateTimePicker
                         id="settlement-date"
                         name="occurred_at"
-                        type="datetime-local"
                         defaultValue={zonedInput(new Date(), preferences.timezone)}
-                        required
+                        timezone={preferences.timezone}
                     />
                 </div>
                 <div>

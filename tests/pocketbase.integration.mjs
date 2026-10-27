@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { createServer as createHttpServer } from "node:http";
 import { randomBytes, createHash } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 
 test(
     "PocketBase migrations, user isolation, scoped API keys, and aggregation",
@@ -824,6 +825,68 @@ test(
                 assert.equal(edited.data.source, "api");
             },
         );
+        await t.test("category ordering is private, atomic, persistent and rejects stale changes", async () => {
+            const path = "/api/expenditure/categories/reorder";
+            const original = (await request("/api/expenditure/config", { token: alice.token })).data.categories;
+            const other = (await request("/api/expenditure/config", { token: bob.token })).data.categories;
+            const ids = original.map((category) => category.id);
+            const reversed = ids.slice().reverse();
+            const body = { ids: reversed, previous_ids: ids };
+            assert.equal((await request(path, { method: "POST", body })).status, 401);
+            assert.equal((await request(path, { method: "POST", key: writeKey.key, body })).status, 401);
+            for (const invalid of [
+                { ...body, ids: [] },
+                { ...body, ids: ids.slice(1) },
+                { ...body, ids: [ids[0], ...ids.slice(0, -1)] },
+                { ...body, ids: [other[0].id, ...ids.slice(1)] },
+                { ...body, ids: [null, ...ids.slice(1)] },
+                { ...body, ids: Array(101).fill(ids[0]) },
+                { ...body, user: bob.id },
+            ]) {
+                assert.equal((await request(path, { token: alice.token, method: "POST", body: invalid })).status, 400);
+            }
+
+            assert.deepEqual((await request("/api/expenditure/config", { token: alice.token })).data.categories, original);
+            const reordered = await request(path, { token: alice.token, method: "POST", body });
+            assert.equal(reordered.status, 200, JSON.stringify(reordered.data));
+            assert.deepEqual(reordered.data.items.map((category) => category.id), reversed);
+            assert.deepEqual(reordered.data.items.map((category) => category.sort_order), reversed.map((_, index) => index));
+            for (const category of reordered.data.items) {
+                const before = original.find((item) => item.id === category.id);
+                assert.deepEqual([category.name, category.color, category.active], [before.name, before.color, before.active]);
+            }
+
+            assert.deepEqual((await request("/api/expenditure/config", { token: alice.token })).data.categories.map((category) => category.id), reversed);
+            assert.deepEqual((await request("/api/expenditure/config", { token: bob.token })).data.categories, other);
+            assert.equal((await request(path, { token: alice.token, method: "POST", body })).status, 409);
+            assert.equal((await request(`/api/collections/categories/records/${ids[0]}`, {
+                token: alice.token, method: "PATCH", body: { sort_order: 99 },
+            })).status, 403);
+
+            const appended = await request("/api/expenditure/categories", {
+                token: alice.token, method: "POST", body: { name: "Ordered addition", color: "#aabbcc" },
+            });
+            assert.equal(appended.status, 201, JSON.stringify(appended.data));
+            assert.equal(appended.data.sort_order, ids.length);
+            const current = [...reversed, appended.data.id];
+            assert.equal((await request(path, {
+                token: alice.token, method: "POST", body: { ids: reversed, previous_ids: reversed },
+            })).status, 409);
+            await request(`/api/expenditure/categories/${appended.data.id}`, {
+                token: alice.token, method: "PATCH", body: { name: "Renamed ordered addition", active: false },
+            });
+            assert.deepEqual((await request("/api/expenditure/config", { token: alice.token })).data.categories.map((category) => category.id), current);
+
+            const first = current.slice(), second = current.slice();
+            [first[0], first[1]] = [first[1], first[0]];
+            [second[1], second[2]] = [second[2], second[1]];
+            const concurrent = await Promise.all([first, second].map((order) => request(path, {
+                token: alice.token, method: "POST", body: { ids: order, previous_ids: current },
+            })));
+            assert.deepEqual(concurrent.map((result) => result.status).sort(), [200, 409]);
+            const winner = concurrent.find((result) => result.status === 200).data.items;
+            assert.deepEqual((await request("/api/expenditure/config", { token: alice.token })).data.categories.map((category) => category.id), winner.map((category) => category.id));
+        });
         await t.test(
             "cached online rates convert all currencies and preserve originals",
             async () => {
@@ -1055,6 +1118,128 @@ test(
                 assert.equal(saved.notes, body.notes);
             },
         );
+        await t.test("idempotency expires after 24 hours without deleting expenses or extending on retries", async () => {
+            const day = 24 * 60 * 60 * 1000;
+            // PocketBase's native API ignores autodate edits, even for superusers.
+            // Age only this test's disposable records directly; never change the
+            // production retention window or the machine's clock for testing.
+            function ageRecords(ids, created) {
+                const database = new DatabaseSync(join(directory, "data.db"));
+                try {
+                    database.exec("PRAGMA busy_timeout = 5000");
+                    const update = database.prepare("UPDATE expenses SET created = ? WHERE id = ?");
+                    for (const id of ids) update.run(created.replace("T", " "), id);
+                } finally {
+                    database.close();
+                }
+            }
+
+            const path = "/api/expenses/transactions";
+            const headers = { "Idempotency-Key": "123456" };
+            const category = await request("/api/expenditure/categories", {
+                token: alice.token, method: "POST", body: { name: "Retry retention", color: "#aabbcc" },
+            });
+            assert.equal(category.status, 201, JSON.stringify(category.data));
+            const body = { merchant: "First random-number purchase", amount_minor: 650, currency: "SGD", category: category.data.name };
+            const original = await request(path, { key: writeKey.key, method: "POST", headers, body });
+            assert.equal(original.status, 201, JSON.stringify(original.data));
+            assert.equal(Date.parse(original.data.idempotency_expires_at) - Date.parse(original.data.created.replace(" ", "T")), day);
+            const replay = await request(path, { key: writeKey.key, method: "POST", headers, body });
+            assert.equal(replay.status, 200);
+            assert.equal(replay.data.id, original.data.id);
+            assert.equal(replay.data.idempotency_expires_at, original.data.idempotency_expires_at);
+            assert.equal((await request(path, {
+                key: writeKey.key, method: "POST", headers, body: { ...body, amount_minor: 700 },
+            })).status, 409);
+
+            const edited = await request(`/api/collections/expenses/records/${original.data.id}`, {
+                token: alice.token, method: "PATCH", body: { created: new Date(Date.now() + day).toISOString() },
+            });
+            assert.equal(edited.status, 200, JSON.stringify(edited.data));
+            assert.equal(edited.data.created, original.data.created);
+
+            const bobKey = await request("/api/expenditure/keys", {
+                token: bob.token, method: "POST", body: { name: "Independent retry namespace", scopes: ["expenses:write"], expires_in_days: 30 },
+            });
+            const bobExpense = await request(path, { key: bobKey.data.key, method: "POST", headers, body: expense });
+            assert.equal(bobExpense.status, 201, JSON.stringify(bobExpense.data));
+            const expired = new Date(Date.now() - day - 1000).toISOString();
+            ageRecords([original.data.id, bobExpense.data.id], expired);
+            for (const id of [original.data.id, bobExpense.data.id]) {
+                const result = await request(`/api/collections/expenses/records/${id}`, {
+                    token: admin,
+                });
+                assert.equal(result.status, 200, JSON.stringify(result.data));
+                assert.equal(Date.parse(result.data.created.replace(" ", "T")), Date.parse(expired));
+            }
+
+            const archived = await request(`/api/expenditure/categories/${category.data.id}`, {
+                token: alice.token, method: "PATCH", body: { active: false },
+            });
+            assert.equal(archived.status, 200, JSON.stringify(archived.data));
+            const before = await request(`/api/collections/expenses/records/${original.data.id}`, { token: admin });
+            const nextBody = { ...expense, merchant: "New purchase after expiry" };
+            const concurrent = await Promise.all(Array.from({ length: 5 }, () => request(path, {
+                key: writeKey.key, method: "POST", headers, body: nextBody,
+            })));
+            assert.equal(concurrent.filter((result) => result.status === 201).length, 1, JSON.stringify(concurrent));
+            assert.ok(concurrent.every((result) => [200, 201].includes(result.status)), JSON.stringify(concurrent));
+            const saved = concurrent.find((result) => result.status === 201).data;
+            assert.notEqual(saved.id, original.data.id);
+            assert.ok(Date.parse(saved.idempotency_expires_at) > Date.now());
+            assert.ok(concurrent.every((result) => result.data.id === saved.id && result.data.idempotency_expires_at === saved.idempotency_expires_at));
+            assert.deepEqual((await request(`/api/collections/expenses/records/${original.data.id}`, { token: admin })).data, { ...before.data, idempotency_key: "" });
+            const oldMarker = await request(`/api/collections/expenses/records?filter=${encodeURIComponent(`id = '${original.data.id}' && idempotency_key = ''`)}`, { token: admin });
+            assert.equal(oldMarker.data.totalItems, 1);
+            const otherMarker = await request(`/api/collections/expenses/records?filter=${encodeURIComponent(`id = '${bobExpense.data.id}' && idempotency_key = '123456'`)}`, { token: admin });
+            assert.equal(otherMarker.data.totalItems, 1);
+
+            // Once expired, even identical data is a new request; late retries
+            // must not rely on deduplication beyond the documented window.
+            ageRecords([saved.id], expired);
+            const lateRetry = await request(path, { key: writeKey.key, method: "POST", headers, body: nextBody });
+            assert.equal(lateRetry.status, 201, JSON.stringify(lateRetry.data));
+            assert.notEqual(lateRetry.data.id, saved.id);
+            const noKey = await request(path, { key: writeKey.key, method: "POST", body: nextBody });
+            assert.equal(noKey.status, 201, JSON.stringify(noKey.data));
+            assert.equal(noKey.data.idempotency_expires_at, null);
+        });
+        await t.test("non-expiring keys retain scopes and can be revoked", async () => {
+            for (const expires_in_days of [undefined, 0, -1, 31, 366, "90", "never", false, {}, []]) {
+                const invalid = await request("/api/expenditure/keys", {
+                    token: alice.token,
+                    method: "POST",
+                    body: { name: "Invalid expiry", scopes: ["expenses:read"], expires_in_days },
+                });
+                assert.equal(invalid.status, 400, JSON.stringify(invalid.data));
+            }
+
+            const result = await request("/api/expenditure/keys", {
+                token: alice.token,
+                method: "POST",
+                body: { name: "No expiry", scopes: ["expenses:read"], expires_in_days: null },
+            });
+            assert.equal(result.status, 201, JSON.stringify(result.data));
+            assert.equal(result.data.record.expires_at, "");
+            const permanent = result.data;
+            const listed = await request("/api/expenditure/keys", { token: alice.token });
+            assert.equal(listed.data.items.find((key) => key.id === permanent.record.id).expires_at, "");
+            assert.equal((await request("/api/expenses/transactions", { key: permanent.key })).status, 200);
+            assert.equal((await request("/api/expenses/transactions", {
+                key: permanent.key,
+                method: "POST",
+                body: expense,
+            })).status, 403);
+            assert.equal((await request(`/api/expenditure/keys/${permanent.record.id}`, {
+                token: bob.token,
+                method: "DELETE",
+            })).status, 404);
+            assert.equal((await request(`/api/expenditure/keys/${permanent.record.id}`, {
+                token: alice.token,
+                method: "DELETE",
+            })).status, 200);
+            assert.equal((await request("/api/expenses/transactions", { key: permanent.key })).status, 401);
+        });
         await t.test(
             "revocation, expiration and deleted users lose access immediately",
             async () => {
@@ -1105,7 +1290,7 @@ test(
                     body: {
                         name: "Delete user test",
                         scopes: ["expenses:read"],
-                        expires_in_days: 30,
+                        expires_in_days: null,
                     },
                 });
                 await request(`/api/collections/users/records/${bob.id}`, {
@@ -1120,7 +1305,7 @@ test(
             },
         );
         await t.test(
-            "active key limit can be recovered by revoking a key",
+            "active key limit includes non-expiring keys and recovers after revocation",
             async () => {
                 const records = [];
                 for (let index = 0; index < 20; index++) {
@@ -1130,7 +1315,7 @@ test(
                         body: {
                             name: `Limit test ${index}`,
                             scopes: ["expenses:write"],
-                            expires_in_days: 30,
+                            expires_in_days: index % 2 === 0 ? null : 30,
                         },
                     });
                     assert.equal(result.status, 201, JSON.stringify(result.data));

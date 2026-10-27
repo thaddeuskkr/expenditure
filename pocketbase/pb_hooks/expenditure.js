@@ -1,4 +1,12 @@
 // Shared helpers are loaded inside each handler: PocketBase isolates handler scopes.
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+
+function idempotencyExpiresAt(record) {
+    if (!record.getString("idempotency_key")) return null;
+    const created = Date.parse(record.getString("created").replace(" ", "T"));
+    return new Date(created + IDEMPOTENCY_TTL_MS).toISOString();
+}
+
 function cleanKey(record) {
     return {
         id: record.id,
@@ -216,6 +224,8 @@ function bounds(query) {
 }
 
 module.exports = {
+    IDEMPOTENCY_TTL_MS,
+    idempotencyExpiresAt,
     cleanKey,
     exportExpense,
     authenticate,

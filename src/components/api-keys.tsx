@@ -95,7 +95,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
               scope === "both" ?
                       ["expenses:read", "expenses:write"] :
                       [`expenses:${scope}`],
-                        expires_in_days: Number(days),
+                        expires_in_days: days === "never" ? null : Number(days),
                     },
                 },
             );
@@ -179,7 +179,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                         (
                             <div className="divide-y">
                                 {keys.map((key) => {
-                                    const expired = asDate(key.expires_at).getTime() <= now;
+                                    const expired = !!key.expires_at && asDate(key.expires_at).getTime() <= now;
                                     const inactive = !!key.revoked_at || expired;
                                     return (
                                         <div
@@ -204,8 +204,9 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                                                     {key.key_prefix}••••••••
                                                 </p>
                                                 <p className="mt-1.5 text-[10px] text-muted-foreground">
-                                                    {key.scopes.join(" · ")} · Expires{" "}
-                                                    {dayLabel(key.expires_at, timezone)}
+                                                    {key.scopes.join(" · ")} · {key.expires_at ?
+                                                        `Expires ${dayLabel(key.expires_at, timezone)}` :
+                                                        "Never expires"}
                                                 </p>
                                             </div>
                                             <div className="hidden text-right text-[11px] text-muted-foreground sm:block">
@@ -283,8 +284,9 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                         {example}
                     </pre>
                     <div className="border-t px-5 py-4 text-[10px] leading-5 text-muted-foreground">
-                        Use a fresh Idempotency-Key for each purchase. Reuse it only when
-                        retrying the same request.
+                        Use a timestamp plus a random number for each purchase. Keep
+                        that same Idempotency-Key for retries within 24 hours. The
+                        retry window does not extend when you retry.
                     </div>
                 </div>
             </div>
@@ -359,7 +361,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                                     </div>
                                     <div>
                                         <label className="field-label" htmlFor="key-expiry">
-                                            Expires after
+                                            Expiration
                                         </label>
                                         <Select value={days} onValueChange={setDays}>
                                             <SelectTrigger id="key-expiry" className="h-11! w-full">
@@ -371,6 +373,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                                                         {d} days
                                                     </SelectItem>
                                                 ))}
+                                                <SelectItem value="never">Never expires</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>

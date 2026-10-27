@@ -2,23 +2,21 @@
 import { useState, type FormEvent } from "react";
 import {
     Archive,
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
     Check,
     Loader2,
     Pencil,
     Plus,
     RotateCcw,
-    Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ClientResponseError } from "pocketbase";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "./ui/select";
+import { CurrencyPicker, EnabledCurrenciesPicker } from "./currency-picker";
+import { SearchableSelect } from "./ui/searchable-select";
 import {
     Dialog,
     DialogContent,
@@ -29,7 +27,6 @@ import {
 } from "./ui/dialog";
 import { useWorkspace } from "./workspace-context";
 import {
-    CURRENCY_CATALOG,
     CATEGORY_COLORS,
     TIMEZONES,
     errorMessage,
@@ -51,11 +48,12 @@ export function WorkspaceSettings({
     const [main, setMain] = useState(preferences.currency);
     const [timezone, setTimezone] = useState(preferences.timezone);
     const [enabled, setEnabled] = useState(preferences.currencies);
-    const [adding, setAdding] = useState("");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     const [editor, setEditor] = useState<CategoryDefinition | "new" | null>(null);
     const [categoryBusy, setCategoryBusy] = useState("");
+    const [reordering, setReordering] = useState(false);
+    const [orderStatus, setOrderStatus] = useState("");
     async function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setBusy(true);
@@ -87,6 +85,29 @@ export function WorkspaceSettings({
         }
     }
 
+    async function moveCategory(index: number, direction: -1 | 1) {
+        const destination = index + direction;
+        if (categoryBusy || destination < 0 || destination >= categories.length) return;
+        const next = categories.map((category) => category.id);
+        [next[index], next[destination]] = [next[destination], next[index]];
+        const category = categories[index];
+        setCategoryBusy(category.id);
+        try {
+            await pb.send("/api/expenditure/categories/reorder", {
+                method: "POST",
+                body: { ids: next, previous_ids: categories.map((item) => item.id) },
+            });
+            await onCategoriesChanged();
+            setOrderStatus(`${category.name} moved to position ${destination + 1} of ${categories.length}.`);
+        } catch (e) {
+            toast.error(errorMessage(e));
+            if (e instanceof ClientResponseError && e.status === 409)
+                await onCategoriesChanged().catch(() => {});
+        } finally {
+            setCategoryBusy("");
+        }
+    }
+
     return (
         <div className="max-w-3xl space-y-12 animate-enter">
             <form onSubmit={save} className="space-y-6">
@@ -98,19 +119,7 @@ export function WorkspaceSettings({
                         <label className="field-label" htmlFor="main-currency">
                             Main currency
                         </label>
-                        <Select value={main} onValueChange={setMain}>
-                            <SelectTrigger id="main-currency" className="h-10! w-full">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {enabled.map((code) => (
-                                    <SelectItem key={code} value={code}>
-                                        {code} ·{" "}
-                                        {CURRENCY_CATALOG.find((c) => c.code === code)?.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <CurrencyPicker id="main-currency" value={main} onChange={setMain} codes={enabled} />
                         <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
                             Used for converted amounts, combined totals, and new budgets.
                         </p>
@@ -119,87 +128,18 @@ export function WorkspaceSettings({
                         <label className="field-label" htmlFor="preference-timezone">
                             Timezone
                         </label>
-                        <Select value={timezone} onValueChange={setTimezone}>
-                            <SelectTrigger id="preference-timezone" className="h-10! w-full">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {TIMEZONES.map((zone) => (
-                                    <SelectItem key={zone} value={zone}>
-                                        {zone.replaceAll("_", " ")}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <SearchableSelect
+                            id="preference-timezone"
+                            value={timezone}
+                            onValueChange={setTimezone}
+                            options={TIMEZONES.map((zone) => ({ value: zone, label: zone.replaceAll("_", " ") }))}
+                            searchPlaceholder="Search timezones…"
+                        />
                     </div>
                 </div>
                 <div>
-                    <p className="field-label">Enabled currencies</p>
-                    <div className="flex flex-wrap gap-2">
-                        {enabled.map((code) => (
-                            <span
-                                key={code}
-                                className="flex items-center gap-2 rounded-lg border bg-white/2 py-2 pr-2 pl-3 text-xs">
-                                {code}
-                                {code === main ?
-                                        (
-                                            <span className="text-[9px] text-primary">Main</span>
-                                        ) :
-                                        (
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    setEnabled((items) => items.filter((c) => c !== code))}
-                                                aria-label={`Remove ${code}`}
-                                                className="rounded p-1 text-muted-foreground hover:text-destructive">
-                                                <Trash2 className="size-3" />
-                                            </button>
-                                        )}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-                <div className="flex max-w-lg gap-2">
-                    <div className="flex-1">
-                        <Input
-                            aria-label="Currency to enable"
-                            list="currency-catalog"
-                            value={adding}
-                            onChange={(e) => setAdding(e.target.value.toUpperCase())}
-                            placeholder="Currency code, e.g. JPY"
-                            maxLength={3}
-                            className="h-10"
-                        />
-                        <datalist id="currency-catalog">
-                            {CURRENCY_CATALOG.filter((c) => !enabled.includes(c.code)).map(
-                                (c) => (
-                                    <option key={c.code} value={c.code}>
-                                        {c.name}
-                                    </option>
-                                ),
-                            )}
-                        </datalist>
-                    </div>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="h-10"
-                        onClick={() => {
-                            const code = adding.trim().toUpperCase();
-                            if (!CURRENCY_CATALOG.some((c) => c.code === code)) {
-                                setError("Choose a supported currency code.");
-                                return;
-                            }
-
-                            setEnabled((items) =>
-                                items.includes(code) ? items : [...items, code],
-                            );
-                            setAdding("");
-                            setError("");
-                        }}>
-                        <Plus />
-                        Enable
-                    </Button>
+                    <label className="field-label" htmlFor="enabled-currencies">Enabled currencies</label>
+                    <EnabledCurrenciesPicker value={enabled} main={main} onChange={setEnabled} />
                 </div>
                 <p className="text-[11px] leading-5 text-muted-foreground">
                     Disabling a currency hides it from new expense forms. Existing
@@ -216,18 +156,35 @@ export function WorkspaceSettings({
                 </Button>
             </form>
             <section>
-                <div className="flex items-center justify-between border-b pb-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b pb-4">
                     <h2 className="text-sm font-medium">Categories</h2>
-                    <Button
-                        variant="outline"
-                        className="h-9"
-                        onClick={() => setEditor("new")}>
-                        <Plus />
-                        Add category
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant={reordering ? "secondary" : "ghost"}
+                            className="h-9 px-3"
+                            aria-label={reordering ? "Finish reordering categories" : "Reorder categories"}
+                            aria-pressed={reordering}
+                            disabled={!!categoryBusy || categories.length < 2}
+                            onClick={() => setReordering((previous) => !previous)}>
+                            {categoryBusy && reordering ? <Loader2 className="animate-spin" /> : reordering ? <Check /> : <ArrowUpDown />}
+                            <span className={reordering ? "" : "hidden sm:inline"}>{reordering ? "Done" : "Reorder"}</span>
+                        </Button>
+                        {!reordering && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-9"
+                                disabled={!!categoryBusy}
+                                onClick={() => setEditor("new")}>
+                                <Plus />
+                                Add category
+                            </Button>
+                        )}
+                    </div>
                 </div>
                 <div className="divide-y">
-                    {categories.map((category) => (
+                    {categories.map((category, index) => (
                         <div
                             key={category.id}
                             className={`flex items-center gap-3 py-4 ${category.active ? "" : "opacity-55"}`}>
@@ -243,38 +200,54 @@ export function WorkspaceSettings({
                                     </span>
                                 )}
                             </span>
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={`Edit ${category.name}`}
-                                onClick={() => setEditor(category)}>
-                                <Pencil className="size-3.5" />
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                aria-label={`${category.active ? "Archive" : "Restore"} ${category.name}`}
-                                disabled={!!categoryBusy}
-                                onClick={() => void archive(category)}>
-                                {categoryBusy === category.id ?
-                                        (
-                                            <Loader2 className="size-3.5 animate-spin" />
-                                        ) :
-                                    category.active ?
-                                            (
-                                                <Archive className="size-3.5" />
-                                            ) :
-                                            (
-                                                <RotateCcw className="size-3.5" />
-                                            )}
-                            </Button>
+                            {reordering ?
+                                    (
+                                        <div className="flex shrink-0 items-center gap-1">
+                                            <Button type="button" variant="ghost" size="icon" className="size-9" aria-label={`Move ${category.name} up`} disabled={!!categoryBusy || index === 0} onClick={() => void moveCategory(index, -1)}>
+                                                <ArrowUp className="size-4" />
+                                            </Button>
+                                            <Button type="button" variant="ghost" size="icon" className="size-9" aria-label={`Move ${category.name} down`} disabled={!!categoryBusy || index === categories.length - 1} onClick={() => void moveCategory(index, 1)}>
+                                                <ArrowDown className="size-4" />
+                                            </Button>
+                                        </div>
+                                    ) :
+                                    (
+                                        <>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                aria-label={`Edit ${category.name}`}
+                                                disabled={!!categoryBusy}
+                                                onClick={() => setEditor(category)}>
+                                                <Pencil className="size-3.5" />
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                aria-label={`${category.active ? "Archive" : "Restore"} ${category.name}`}
+                                                disabled={!!categoryBusy}
+                                                onClick={() => void archive(category)}>
+                                                {categoryBusy === category.id ?
+                                                        (
+                                                            <Loader2 className="size-3.5 animate-spin" />
+                                                        ) :
+                                                    category.active ?
+                                                            (
+                                                                <Archive className="size-3.5" />
+                                                            ) :
+                                                            (
+                                                                <RotateCcw className="size-3.5" />
+                                                            )}
+                                            </Button>
+                                        </>
+                                    )}
                         </div>
                     ))}
                 </div>
                 <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-                    Renaming updates existing expenses and budgets. Archived categories
-                    remain in reports.
+                    {reordering ? "Changes save automatically and apply to category selectors." : "Renaming updates existing expenses and budgets. Archived categories remain in reports."}
                 </p>
+                <p role="status" className="sr-only">{orderStatus}</p>
             </section>
             <section className="border-t pt-6">
                 <h2 className="text-sm font-medium">Exchange rates</h2>

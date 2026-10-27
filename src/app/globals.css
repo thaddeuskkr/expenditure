@@ -67,9 +67,7 @@
   ::selection {
     background: #c2cbb033;
   }
-  input[type="month"] {
-    color-scheme: dark;
-  }
+
 }
 @layer components {
   .eyebrow {

@@ -50,6 +50,7 @@ const eslintConfig = defineConfig([
                 DynamicModel: "readonly",
                 ForbiddenError: "readonly",
                 NotFoundError: "readonly",
+                NumberField: "readonly",
                 Record: "readonly",
                 SelectField: "readonly",
                 TextField: "readonly",

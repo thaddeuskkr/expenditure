@@ -148,8 +148,11 @@ export const circlesApi = {
             method: "DELETE",
             body: { version: expense.version },
         }),
-    settle: (circle: string, data: SettlementSuggestion & { notes: string; occurred_at: string }) =>
-        pb.send<CircleSettlement>(`${base}/${circle}/settlements`, { method: "POST", body: data }),
+    settle: (circle: string, data: SettlementSuggestion & { notes: string; occurred_at: string }, settlement?: CircleSettlement) =>
+        pb.send<CircleSettlement>(`${base}/${circle}/settlements${settlement ? "/" + settlement.id : ""}`, {
+            method: settlement ? "PATCH" : "POST",
+            body: { ...data, ...(settlement ? { version: settlement.version } : {}) },
+        }),
     undoSettlement: (circle: string, settlement: CircleSettlement) =>
         pb.send(`${base}/${circle}/settlements/${settlement.id}`, {
             method: "DELETE",

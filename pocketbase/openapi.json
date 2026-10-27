@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "8.0.0",
-    "description": "Personal API keys authorize the personal expense automation endpoints. Category ordering and Circles require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring expenses run on the PocketBase server every minute, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
+    "version": "11.0.0",
+    "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring expenses run on the PocketBase server every minute, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
     {
@@ -960,6 +960,55 @@
             "description": "Stale record version; reload before retrying"
           }
         }
+      },
+      "patch": {
+        "summary": "Author or owner: edit a recorded repayment",
+        "description": "Updates a recorded external repayment without transferring money. Requires its current version. The original author or Circle owner may edit. Financial changes by a non-owner require that author to remain a participant in the replacement; metadata-only edits retain author access. Financial changes are validated against current balances with the original repayment reversed, so they cannot overpay or mix currencies. Former members balances cannot change. The ID, original creator and creation timestamp are retained. Omitted notes and occurred_at retain their previous values. Notes/date-only edits remain allowed after later ledger changes. Balances and repayment suggestions are recalculated from the saved ledger.",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleSettlementEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleSettlement"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields, participants, currency, integer amount or timestamp; financial change overpays or alters a former member balance"
+          },
+          "401": {
+            "description": "A PocketBase users session is required"
+          },
+          "403": {
+            "description": "Only the original author or Circle owner may edit; non-owners must remain a participant when changing financial details"
+          },
+          "404": {
+            "description": "Circle, invitation or record is not accessible"
+          },
+          "409": {
+            "description": "Stale record version; reload before retrying"
+          }
+        }
       }
     },
     "/api/expenditure/categories/reorder": {
@@ -1594,6 +1643,72 @@
           }
         }
       }
+    },
+    "/api/expenses/circles/{id}/transactions": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Add a self-paid Circle expense using an API key",
+        "description": "Requires expenses:write in X-API-Key and active membership in the Circle. The key and membership are checked inside the creation transaction. Only the key owner can be the payer and sole initial share member. Other Circle routes remain session-only. source is api. Idempotency-Key replay protection is not supported; each successful request creates an entry.",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleApiExpenseInput"
+              },
+              "example": {
+                "title": "Coffee together",
+                "amount": 650,
+                "currency": "SGD",
+                "category": "Food & drinks",
+                "payment_method": "Visa"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Expense created with a 100% self allocation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleExpense"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Unsupported fields, invalid title or integer amount, unsupported currency, invalid timestamp, unknown/inactive Circle category, or Circle entry limit reached"
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked API key"
+          },
+          "403": {
+            "description": "Missing expenses:write scope"
+          },
+          "404": {
+            "description": "Circle not found or the key owner is not an active member"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1607,7 +1722,7 @@
         "type": "apiKey",
         "in": "header",
         "name": "Authorization",
-        "description": "A normal PocketBase users authentication token. Personal exp_ API keys do not grant Circles access."
+        "description": "A normal PocketBase users authentication token, required for Circle management, reads and split edits. API-key Circle creation uses its separate automation endpoint."
       }
     },
     "schemas": {
@@ -4969,6 +5084,15 @@
               "Settings"
             ],
             "default": "Overview"
+          },
+          "time_format": {
+            "type": "string",
+            "enum": [
+              "24h",
+              "12h"
+            ],
+            "default": "24h",
+            "description": "Persisted display preference for all app times and local export columns. New and upgraded accounts default to 24h. API and UTC timestamps retain ISO notation; stored instants and recurrence schedules do not change."
           }
         },
         "description": "Persisted per-account preferences, editable through the owner-protected PocketBase preferences collection."
@@ -5414,6 +5538,218 @@
             }
           }
         }
+      },
+      "CircleApiExpenseInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "title",
+          "amount"
+        ],
+        "description": "Creates an expense as the API key owner, who must be an active Circle member. paid_by and created_by are that membership ID. A percentage split assigns 10000 basis points (100%) and the entire amount to that same member, initially creating no shared debt. Payer, shares, split_mode, kind, recurrence and provenance fields are server-managed and rejected in requests. Edit allocations through the authenticated website.",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999,
+            "description": "Integer minor units of the specified currency."
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "AFN",
+              "ALL",
+              "AMD",
+              "ANG",
+              "AOA",
+              "ARS",
+              "AUD",
+              "AWG",
+              "AZN",
+              "BAM",
+              "BBD",
+              "BDT",
+              "BHD",
+              "BIF",
+              "BMD",
+              "BND",
+              "BOB",
+              "BRL",
+              "BSD",
+              "BTN",
+              "BWP",
+              "BYN",
+              "BZD",
+              "CAD",
+              "CDF",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CRC",
+              "CUP",
+              "CVE",
+              "CZK",
+              "DJF",
+              "DKK",
+              "DOP",
+              "DZD",
+              "EGP",
+              "ERN",
+              "ETB",
+              "EUR",
+              "FJD",
+              "FKP",
+              "GBP",
+              "GEL",
+              "GHS",
+              "GIP",
+              "GMD",
+              "GNF",
+              "GTQ",
+              "GYD",
+              "HKD",
+              "HNL",
+              "HTG",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "IQD",
+              "IRR",
+              "ISK",
+              "JMD",
+              "JOD",
+              "JPY",
+              "KES",
+              "KGS",
+              "KHR",
+              "KMF",
+              "KPW",
+              "KRW",
+              "KWD",
+              "KYD",
+              "KZT",
+              "LAK",
+              "LBP",
+              "LKR",
+              "LRD",
+              "LSL",
+              "LYD",
+              "MAD",
+              "MDL",
+              "MGA",
+              "MKD",
+              "MMK",
+              "MNT",
+              "MOP",
+              "MRU",
+              "MUR",
+              "MVR",
+              "MWK",
+              "MXN",
+              "MYR",
+              "MZN",
+              "NAD",
+              "NGN",
+              "NIO",
+              "NOK",
+              "NPR",
+              "NZD",
+              "OMR",
+              "PAB",
+              "PEN",
+              "PGK",
+              "PHP",
+              "PKR",
+              "PLN",
+              "PYG",
+              "QAR",
+              "RON",
+              "RSD",
+              "RUB",
+              "RWF",
+              "SAR",
+              "SBD",
+              "SCR",
+              "SDG",
+              "SEK",
+              "SGD",
+              "SHP",
+              "SLE",
+              "SOS",
+              "SRD",
+              "SSP",
+              "STN",
+              "SVC",
+              "SYP",
+              "SZL",
+              "THB",
+              "TJS",
+              "TMT",
+              "TND",
+              "TOP",
+              "TRY",
+              "TTD",
+              "TWD",
+              "TZS",
+              "UAH",
+              "UGX",
+              "USD",
+              "UYU",
+              "UZS",
+              "VES",
+              "VND",
+              "VUV",
+              "WST",
+              "XAF",
+              "XCD",
+              "XCG",
+              "XOF",
+              "XPF",
+              "YER",
+              "ZAR",
+              "ZMW",
+              "ZWG"
+            ],
+            "description": "Supported uppercase currency code. Omission uses the Circle currency. Amount is expressed in this currency minor units."
+          },
+          "category": {
+            "type": "string",
+            "maxLength": 60,
+            "description": "An active category name from the target Circle. Omission selects Other, or the first active Circle category."
+          },
+          "payment_method": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO date with Z or an explicit offset. Omission uses server time."
+          }
+        }
+      },
+      "CircleSettlementEdit": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CircleSettlementInput"
+          },
+          {
+            "$ref": "#/components/schemas/RecordVersion"
+          }
+        ],
+        "description": "Replacement payer, recipient, currency and amount with the current version. Omitted notes and occurred_at preserve their saved values."
       }
     }
   }

@@ -550,6 +550,41 @@ function removeMember(e) {
     });
 }
 
+function createApiExpense(e) {
+    const data = body(e, ["title", "amount", "currency", "category", "payment_method", "notes", "occurred_at"]);
+    return write(e, (app) => {
+        const api = require(`${__hooks}/expenditure.js`);
+        const identity = api.authenticate(e, "expenses:write", app);
+        const { circle, member } = access(app, e.request.pathValue("id"), identity.user.id);
+        if (app.countRecords("circle_expenses", $dbx.hashExp({ circle: circle.id })) >= 10000)
+            throw new BadRequestError("This circle has reached its expense limit.");
+        const total = amount(data.amount);
+        const members = memberRecords(app, circle.id), before = balances(app, circle.id);
+        const expense = new Record(app.findCollectionByNameOrId("circle_expenses"));
+        expense.load({
+            circle: circle.id,
+            title: text(data.title, "Title", 160, true),
+            kind: "expense",
+            amount: total,
+            currency: currency(data.currency === undefined ? circle.getString("currency") : data.currency),
+            category: require(`${__hooks}/circle-categories.js`).select(app, circle.id, data.category, null),
+            paid_by: member.id,
+            created_by: member.id,
+            split_mode: "percentage",
+            shares: core.allocate(total, "percentage", [{ member: member.id, percentage_bp: 10000 }]),
+            payment_method: text(data.payment_method, "Payment method", 80, false),
+            notes: text(data.notes, "Notes", 2000, false),
+            occurred_at: occurredAt(data.occurred_at),
+            source: "api",
+            version: 1,
+        });
+        app.save(expense);
+        preserveFormerBalances(app, circle.id, members, before);
+        api.touch(app, identity.key);
+        return expense.publicExport();
+    }, 201);
+}
+
 function saveExpense(e) {
     const data = body(e, [
         "title",
@@ -654,6 +689,7 @@ function deleteExpense(e) {
 }
 
 function settle(e) {
+    const editing = e.request.pathValue("settlement");
     const data = body(e, [
         "from_member",
         "to_member",
@@ -661,46 +697,75 @@ function settle(e) {
         "amount",
         "notes",
         "occurred_at",
+        ...(editing ? ["version"] : []),
     ]);
     return write(
         e,
         (app) => {
             const { circle, member, isOwner } = access(app, e.request.pathValue("id"), e.auth.id);
+            let settlement = null;
+            if (editing) {
+                settlement = find(app, "circle_settlements", editing);
+                if (settlement.getString("circle") !== circle.id)
+                    throw new NotFoundError("Settlement not found.");
+                if (!isOwner && settlement.getString("created_by") !== member.id)
+                    throw new ForbiddenError("Only the author or owner can edit this settlement.");
+                checkVersion(settlement, data.version);
+            }
+
             const members = memberRecords(app, circle.id);
             const from = members.find((m) => m.id === data.from_member),
                 to = members.find((m) => m.id === data.to_member);
             if (!from || !to || from.id === to.id)
                 throw new BadRequestError("Choose two different circle members.");
-            if (!isOwner && member.id !== from.id && member.id !== to.id)
-                throw new ForbiddenError(
-                    "Only a participant or the owner can record this settlement.",
-                );
             const code = currency(data.currency),
                 total = amount(data.amount);
-            const rows = balanceMap(balances(app, circle.id));
+            const before = balances(app, circle.id);
+            const rows = balanceMap(before);
+            if (settlement) {
+                // Validate the replacement against balances without this repayment.
+                // Keep its ID, creation timestamp and original author intact.
+                const fromKey = settlement.getString("from_member") + ":" + settlement.getString("currency");
+                const toKey = settlement.getString("to_member") + ":" + settlement.getString("currency");
+                rows[fromKey] = (rows[fromKey] || 0) - settlement.getInt("amount");
+                rows[toKey] = (rows[toKey] || 0) + settlement.getInt("amount");
+            }
+
             const debt = -(rows[from.id + ":" + code] || 0),
                 credit = rows[to.id + ":" + code] || 0;
-            if (total > Math.min(debt, credit))
+            const unchangedMoney = settlement && settlement.getString("from_member") === from.id &&
+                settlement.getString("to_member") === to.id && settlement.getString("currency") === code &&
+                settlement.getInt("amount") === total;
+            if (!isOwner && member.id !== from.id && member.id !== to.id && !unchangedMoney)
+                throw new ForbiddenError(
+                    "Only a participant or the owner can change this settlement's financial details.",
+                );
+            if (!unchangedMoney && total > Math.min(debt, credit))
                 throw new BadRequestError(
                     "Settlement exceeds the remaining balance in this currency.",
                 );
             if (
-                app.countRecords("circle_settlements", $dbx.hashExp({ circle: circle.id })) >= 10000
+                !settlement && app.countRecords("circle_settlements", $dbx.hashExp({ circle: circle.id })) >= 10000
             )
                 throw new BadRequestError("This circle has reached its settlement limit.");
-            return record(app, "circle_settlements", {
+            const fields = {
                 circle: circle.id,
                 from_member: from.id,
                 to_member: to.id,
                 currency: code,
                 amount: total,
-                notes: text(data.notes, "Notes", 1000, false),
-                occurred_at: occurredAt(data.occurred_at),
-                created_by: member.id,
-                version: 1,
-            }).publicExport();
+                notes: settlement && data.notes === undefined ? settlement.getString("notes") : text(data.notes, "Notes", 1000, false),
+                occurred_at: settlement && data.occurred_at === undefined ? settlement.getString("occurred_at") : occurredAt(data.occurred_at),
+                created_by: settlement ? settlement.getString("created_by") : member.id,
+                version: settlement ? settlement.getInt("version") + 1 : 1,
+            };
+            if (!settlement) settlement = new Record(app.findCollectionByNameOrId("circle_settlements"));
+            settlement.load(fields);
+            app.save(settlement);
+            if (editing) preserveFormerBalances(app, circle.id, members, before);
+            return settlement.publicExport();
         },
-        201,
+        editing ? 200 : 201,
     );
 }
 
@@ -746,6 +811,7 @@ module.exports = {
     acceptInvitation,
     revokeInvitation,
     removeMember,
+    createApiExpense,
     saveExpense,
     deleteExpense,
     settle,

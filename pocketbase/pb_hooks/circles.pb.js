@@ -1,5 +1,12 @@
 // Each handler loads its module inside PocketBase's isolated callback scope.
 routerAdd(
+    "POST",
+    "/api/expenses/circles/{id}/transactions",
+    (e) => require(`${__hooks}/circles-service.js`).createApiExpense(e),
+    $apis.bodyLimit(8192),
+);
+
+routerAdd(
     "GET",
     "/api/expenditure/circles",
     (e) => require(`${__hooks}/circles-service.js`).list(e),
@@ -87,6 +94,13 @@ routerAdd(
 routerAdd(
     "POST",
     "/api/expenditure/circles/{id}/settlements",
+    (e) => require(`${__hooks}/circles-service.js`).settle(e),
+    $apis.requireAuth("users"),
+    $apis.bodyLimit(8192),
+);
+routerAdd(
+    "PATCH",
+    "/api/expenditure/circles/{id}/settlements/{settlement}",
     (e) => require(`${__hooks}/circles-service.js`).settle(e),
     $apis.requireAuth("users"),
     $apis.bodyLimit(8192),

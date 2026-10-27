@@ -13,12 +13,14 @@ export function CircleBalances({
     detail,
     currency,
     onSettle,
+    onEdit,
     onUndo,
     onPage,
 }: {
     detail: CircleDetail;
     currency: string;
     onSettle: (suggestion: SettlementSuggestion) => void;
+    onEdit: (settlement: CircleSettlement) => void;
     onUndo: (settlement: CircleSettlement) => void;
     onPage: (page: number) => void;
 }) {
@@ -122,9 +124,14 @@ export function CircleBalances({
                                 {money(payment.amount, payment.currency)} {payment.currency}
                             </span>
                             {canModify(payment.created_by) && (
-                                <Button variant="ghost" size="sm" onClick={() => onUndo(payment)}>
-                                    Undo
-                                </Button>
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <Button variant="ghost" size="sm" aria-label={`Edit repayment from ${name(payment.from_member)} to ${name(payment.to_member)}`} onClick={() => onEdit(payment)}>
+                                        Edit
+                                    </Button>
+                                    <Button variant="ghost" size="sm" onClick={() => onUndo(payment)}>
+                                        Undo
+                                    </Button>
+                                </div>
                             )}
                         </div>
                     ))}

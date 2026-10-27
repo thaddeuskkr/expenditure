@@ -20,13 +20,14 @@ function cleanKey(record) {
     };
 }
 
-function authenticate(e, scope) {
+function authenticate(e, scope, app) {
+    app = app || e.app;
     const secret = e.request.header.get("X-API-Key");
     if (!/^exp_[A-Za-z0-9]{48}$/.test(secret))
         throw new UnauthorizedError("Invalid API key.");
     let key;
     try {
-        key = e.app.findFirstRecordByData(
+        key = app.findFirstRecordByData(
             "api_keys",
             "key_hash",
             $security.sha256(secret),
@@ -47,7 +48,7 @@ function authenticate(e, scope) {
     if (key.getStringSlice("scopes").indexOf(scope) === -1)
         throw new ForbiddenError("This API key does not have the required scope.");
     // Resolve the relation so deleted users can never retain access through a key.
-    const user = e.app.findRecordById("users", key.getString("user"));
+    const user = app.findRecordById("users", key.getString("user"));
     e.response.header().set("Cache-Control", "no-store");
     return { key, user };
 }

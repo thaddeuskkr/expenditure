@@ -66,7 +66,7 @@ function initialize(app, user) {
     app.runInTransaction((tx) => {
         if (tx.countRecords("preferences", $dbx.hashExp({ user })) === 0) {
             const record = new Record(tx.findCollectionByNameOrId("preferences"));
-            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview" });
+            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview", time_format: "24h" });
             tx.save(record);
         }
 
@@ -102,6 +102,7 @@ function validate(record, app) {
     }
 
     if (name === "preferences" && record.isNew() && !record.getString("default_tab")) record.set("default_tab", "Overview");
+    if (name === "preferences" && record.isNew() && !record.getString("time_format")) record.set("time_format", "24h");
     const user = record.getString("user");
     const code = record.getString("currency");
     if (!currency(code)) throw new BadRequestError("Unsupported currency.");

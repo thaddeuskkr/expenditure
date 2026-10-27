@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, ArrowRight, Ellipsis, Loader2, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, Copy, Ellipsis, Loader2, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
 import {
@@ -66,7 +66,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
     );
     const [editor, setEditor] = useState<CircleExpense | "new" | "income" | null>(null),
         [viewing, setViewing] = useState<CircleExpense | null>(null);
-    const [settlement, setSettlement] = useState<SettlementSuggestion | null>(null),
+    const [settlement, setSettlement] = useState<SettlementSuggestion | CircleSettlement | null>(null),
         [confirmation, setConfirmation] = useState<Confirmation | null>(null);
     const [filterCurrency, setFilterCurrency] = useState("");
     const refresh = useCallback(() => setRevision((value) => value + 1), []);
@@ -208,6 +208,16 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                 refresh();
             },
         });
+    }
+
+    async function copyCircleId() {
+        if (!detail) return;
+        try {
+            await navigator.clipboard.writeText(detail.circle.id);
+            toast.success("Circle ID copied");
+        } catch {
+            toast.error("Could not copy Circle ID", { description: detail.circle.id });
+        }
     }
 
     return (
@@ -391,6 +401,10 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-max max-w-(--radix-dropdown-menu-content-available-width) whitespace-nowrap">
+                                    <DropdownMenuItem onClick={() => void copyCircleId()}>
+                                        <Copy /> Copy Circle ID
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
                                     {detail.circle.is_owner ?
                                             (
                                                 <>
@@ -533,6 +547,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                             detail={detail}
                             currency={currency}
                             onSettle={setSettlement}
+                            onEdit={setSettlement}
                             onUndo={undoSettlement}
                             onPage={setSettlementPage}
                         />
@@ -594,10 +609,11 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                 <SettlementDialog
                     data={detail}
                     suggestion={settlement}
+                    settlement={"id" in settlement ? settlement : undefined}
                     onClose={() => setSettlement(null)}
                     onSaved={() => {
                         refresh();
-                        toast.success("Settlement recorded");
+                        toast.success("id" in settlement ? "Repayment updated" : "Settlement recorded");
                     }}
                 />
             )}
@@ -619,7 +635,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                     <div className="space-y-5 pt-2">
                         <p className="text-xs text-muted-foreground">{viewing.category}{viewing.source === "api" ? " · Via API" : ""}</p>
                         <p className="text-xs text-muted-foreground">
-                            {dayLabel(viewing.occurred_at, preferences.timezone)} · {timeLabel(viewing.occurred_at, preferences.timezone)} · {preferences.timezone.replaceAll("_", " ")}
+                            {dayLabel(viewing.occurred_at, preferences.timezone)} · {timeLabel(viewing.occurred_at, preferences.timezone, preferences.time_format)} · {preferences.timezone.replaceAll("_", " ")}
                         </p>
                         <div className="divide-y">
                             {viewing.shares.map((share) => (

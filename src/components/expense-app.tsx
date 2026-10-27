@@ -164,8 +164,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 8)
-                    throw new Error("This app requires backend version 8. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 11)
+                    throw new Error("This app requires backend version 11. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -500,6 +500,7 @@ function Workspace({
                 month,
                 currency: filterCurrency,
                 timezone,
+                timeFormat: preferences.time_format,
                 mainCurrency,
                 rates,
             });
@@ -664,7 +665,7 @@ function Workspace({
                                                     <ChevronDown className="size-3" />
                                                 </Button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
+                                            <DropdownMenuContent align="end" className="w-max max-w-(--radix-dropdown-menu-content-available-width) whitespace-nowrap">
                                                 <DropdownMenuItem
                                                     onClick={() => void exportExpenses("xlsx")}>
                                                     Excel (.xlsx)

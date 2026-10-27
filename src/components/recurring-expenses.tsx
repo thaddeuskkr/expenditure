@@ -2,9 +2,11 @@
 import { useEffect, useState } from "react";
 import { Button } from "./ui/button";
 import { pb } from "@/lib/pocketbase";
-import { errorMessage, money, type Expense } from "@/lib/domain";
+import { dateTimeLabel, errorMessage, money, type Expense } from "@/lib/domain";
+import { useWorkspace } from "./workspace-context";
 
 export function RecurringExpenses({ onEdit }: { onEdit: (expense: Expense) => void }) {
+    const { preferences } = useWorkspace();
     const [rows, setRows] = useState<Expense[]>([]);
     const [error, setError] = useState("");
     useEffect(() => {
@@ -25,7 +27,7 @@ export function RecurringExpenses({ onEdit }: { onEdit: (expense: Expense) => vo
                 <div key={expense.id} className="flex items-center justify-between gap-4 border-b pb-4">
                     <div className="min-w-0 text-xs">
                         <p className="break-words">{expense.merchant} · {money(expense.amount, expense.currency)} {expense.currency}</p>
-                        <p className="mt-2 text-muted-foreground">{expense.recurrence} · Next {new Date(expense.recurrence_next).toLocaleString("en-SG", { timeZone: expense.recurrence_timezone })}</p>
+                        <p className="mt-2 text-muted-foreground">{expense.recurrence} · Next {dateTimeLabel(expense.recurrence_next, expense.recurrence_timezone, preferences.time_format)}</p>
                         {expense.recurrence_error && <p className="mt-2 text-destructive">Paused: {expense.recurrence_error}</p>}
                     </div>
                     <Button variant="outline" onClick={() => onEdit(expense)}>Edit</Button>

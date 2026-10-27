@@ -253,6 +253,7 @@ test(
         assert.equal(after.moved_circle, "");
         assert.equal(after.recurrence, "");
         assert.equal(storedPreferences.default_tab, "Overview");
+        assert.equal(storedPreferences.time_format, "24h");
         assert.equal(after.payment_method, "Stored Visa");
         assert.equal(after.amount_cents, undefined);
         assert.equal(after.card, undefined);
@@ -350,11 +351,44 @@ test(
         assert.deepEqual(secondAfter.map((category) => category.sort_order), [0, 1]);
         assert.ok(config.categories.some((c) => c.name === "Food & drinks"));
         assert.equal(config.preferences.currency, "SGD");
+        const circleApiResponse = await fetch(`${base}/api/expenses/circles/${circle.id}/transactions`, {
+            method: "POST",
+            headers: { "X-API-Key": automation.key, "Content-Type": "application/json" },
+            body: JSON.stringify({ title: "Added after upgrade", amount: 501, currency: "SGD" }),
+        });
+        const circleApiExpense = await circleApiResponse.json();
+        assert.equal(circleApiResponse.status, 201, JSON.stringify(circleApiExpense));
+        assert.equal(circleApiExpense.source, "api");
+        assert.equal(circleApiExpense.paid_by, members[0].id);
+        assert.deepEqual(circleApiExpense.shares, [{ member: members[0].id, amount: 501, percentage_bp: 10000 }]);
+        const updatedDetail = await request(`/api/expenditure/circles/${circle.id}`, auth.token);
+        assert.deepEqual(updatedDetail.balances, detail.balances);
+        for (const original of shared) {
+            assert.deepEqual(updatedDetail.expenses.items.find((item) => item.id === original.id), detail.expenses.items.find((item) => item.id === original.id));
+        }
+
+        const editedRepayment = await request(`/api/expenditure/circles/${circle.id}/settlements/${settlement.id}`, auth.token, {
+            from_member: members[1].id, to_member: members[0].id, currency: "SGD", amount: 50,
+            notes: "Corrected after upgrade", version: settlement.version,
+        }, "PATCH");
+        assert.equal(editedRepayment.id, settlement.id);
+        assert.equal(editedRepayment.created, settlement.created);
+        assert.equal(editedRepayment.created_by, settlement.created_by);
+        assert.equal(editedRepayment.occurred_at, settlement.occurred_at);
+        assert.equal(editedRepayment.version, settlement.version + 1);
+        const afterRepaymentEdit = await request(`/api/expenditure/circles/${circle.id}`, auth.token);
+        assert.equal(afterRepaymentEdit.balances.find((row) => row.member === members[0].id && row.currency === "SGD").net, 275);
+        assert.equal(afterRepaymentEdit.balances.find((row) => row.member === members[1].id && row.currency === "SGD").net, -275);
+        assert.ok(afterRepaymentEdit.suggestions.some((row) => row.currency === "SGD" && row.amount === 275));
+
         // Re-running migration commands must not duplicate or reset user data.
+        await request(`/api/collections/preferences/records/${prefs.id}`, auth.token, { time_format: "12h" }, "PATCH");
         await stop();
         const repeat = spawnSync(binary, ["migrate", "up", ...newFlags], {
             encoding: "utf8",
         });
         assert.equal(repeat.status, 0, repeat.stderr);
+        await start(newFlags);
+        assert.equal((await request(`/api/collections/preferences/records/${prefs.id}`, auth.token)).time_format, "12h");
     },
 );

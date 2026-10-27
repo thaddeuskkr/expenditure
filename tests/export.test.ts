@@ -88,3 +88,22 @@ test("exports distinguish income from expenses without changing positive monetar
     assert.equal(sheet.getCell("B3").value, 8.5);
     assert.ok(csvExport(rows, "UTC").includes("\"income\""));
 });
+
+test("export time formats change local display while retaining typed Excel dates and original UTC timestamps", async () => {
+    const rows = [expense, { ...expense, occurred_at: "2026-10-01T04:05:30Z" }];
+    const csv = csvExport(rows, "Asia/Singapore", undefined, EMPTY_RATES, "12h");
+    assert.ok(csv.includes("\"2026-10-01 12:05:30 AM\""));
+    assert.ok(csv.includes("\"2026-10-01 12:05:30 PM\""));
+    assert.ok(csv.includes("\"2026-09-30T16:05:30.000Z\""));
+    const workbook = await expenseWorkbook(rows, "Asia/Singapore", undefined, EMPTY_RATES, "12h");
+    const buffer = await workbook.xlsx.writeBuffer();
+    const loaded = new ExcelJS.Workbook();
+    await loaded.xlsx.load(buffer);
+    const sheet = loaded.getWorksheet("Expenses")!;
+    assert.equal(sheet.getCell("E2").type, ExcelJS.ValueType.Date);
+    assert.equal(sheet.getCell("E2").numFmt, "yyyy-mm-dd h:mm:ss AM/PM");
+    assert.equal((sheet.getCell("E2").value as Date).toISOString(), "2026-10-01T00:05:30.000Z");
+    assert.equal((sheet.getCell("E3").value as Date).toISOString(), "2026-10-01T12:05:30.000Z");
+    assert.equal(sheet.getCell("I2").value, "2026-09-30T16:05:30.000Z");
+    assert.equal((await expenseWorkbook(rows, "Asia/Singapore")).getWorksheet("Expenses")!.getCell("E2").numFmt, "yyyy-mm-dd hh:mm:ss");
+});

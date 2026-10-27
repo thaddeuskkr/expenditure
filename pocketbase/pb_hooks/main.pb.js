@@ -1,5 +1,5 @@
 /// <reference path="../pb_data/types.d.ts" />
-routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 8 }));
+routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 11 }));
 
 routerAdd(
     "GET",

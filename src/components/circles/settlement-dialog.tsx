@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { DialogFooter } from "../ui/dialog";
 import { useWorkspace } from "../workspace-context";
 import {
+    asDate,
     errorMessage,
     formatAmountInput,
     fromZonedInput,
@@ -14,17 +15,19 @@ import {
     parseMinorUnits,
     zonedInput,
 } from "@/lib/domain";
-import { circlesApi, type CircleDetail, type SettlementSuggestion } from "@/lib/circles";
+import { circlesApi, type CircleDetail, type CircleSettlement, type SettlementSuggestion } from "@/lib/circles";
 import { CircleModal, CurrencySelect, FormError, SaveButton } from "./circle-dialogs";
 
 export function SettlementDialog({
     data,
     suggestion,
+    settlement,
     onClose,
     onSaved,
 }: {
     data: CircleDetail;
     suggestion: SettlementSuggestion;
+    settlement?: CircleSettlement;
     onClose: () => void;
     onSaved: () => void;
 }) {
@@ -37,15 +40,22 @@ export function SettlementDialog({
     );
     const [busy, setBusy] = useState(false),
         [error, setError] = useState("");
-    const net = (id: string) =>
-        data.balances.find((row) => row.member === id && row.currency === currency)?.net || 0;
+    const net = (id: string) => {
+        const current = data.balances.find((row) => row.member === id && row.currency === currency)?.net || 0;
+        if (!settlement || settlement.currency !== currency) return current;
+        if (id === settlement.from_member) return current - settlement.amount;
+        if (id === settlement.to_member) return current + settlement.amount;
+        return current;
+    };
+
     const maximum = Math.max(0, Math.min(-net(from), net(to)));
-    const currencies = [...new Set(data.suggestions.map((row) => row.currency))];
+    const currencies = [...new Set([...data.suggestions.map((row) => row.currency), ...(settlement ? [settlement.currency] : [])])];
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         setBusy(true);
         setError("");
         const form = new FormData(event.currentTarget);
+        const selectedDate = String(form.get("occurred_at"));
         try {
             await circlesApi.settle(data.circle.id, {
                 from_member: from,
@@ -53,8 +63,10 @@ export function SettlementDialog({
                 currency,
                 amount: parseMinorUnits(amount, currency),
                 notes: String(form.get("notes") || ""),
-                occurred_at: fromZonedInput(String(form.get("occurred_at")), preferences.timezone),
-            });
+                occurred_at: settlement && selectedDate === zonedInput(settlement.occurred_at, preferences.timezone) ?
+                        asDate(settlement.occurred_at).toISOString() :
+                        fromZonedInput(selectedDate, preferences.timezone),
+            }, settlement);
             onSaved();
             onClose();
         } catch (e) {
@@ -66,8 +78,8 @@ export function SettlementDialog({
 
     return (
         <CircleModal
-            title="Record settlement"
-            description="Record a repayment made outside Expenditure. This does not transfer money."
+            title={settlement ? "Edit repayment" : "Record settlement"}
+            description={`${settlement ? "Update" : "Record"} a repayment made outside Expenditure. This does not transfer money.`}
             busy={busy}
             onClose={onClose}>
             <form onSubmit={submit} className="space-y-5 pt-3">
@@ -81,7 +93,8 @@ export function SettlementDialog({
                         codes={currencies}
                         onChange={(code) => {
                             setCurrency(code);
-                            const next = data.suggestions.find((row) => row.currency === code)!;
+                            const next = settlement?.currency === code ? settlement : data.suggestions.find((row) => row.currency === code);
+                            if (!next) return;
                             setFrom(next.from_member);
                             setTo(next.to_member);
                             setAmount(formatAmountInput(next.amount, code));
@@ -105,7 +118,7 @@ export function SettlementDialog({
                                 </SelectTrigger>
                                 <SelectContent>
                                     {data.members
-                                        .filter((m) => net(m.id) * sign > 0)
+                                        .filter((m) => net(m.id) * sign > 0 || (settlement && m.id === value))
                                         .map((member) => (
                                             <SelectItem key={member.id} value={member.id}>
                                                 {member.name}
@@ -130,7 +143,7 @@ export function SettlementDialog({
                         autoFocus
                     />
                     <p className="mt-2 text-[11px] text-muted-foreground">
-                        Remaining: {money(maximum, currency)} {currency}
+                        {settlement ? "Maximum" : "Remaining"}: {money(maximum, currency)} {currency}
                     </p>
                 </div>
                 <div>
@@ -140,7 +153,7 @@ export function SettlementDialog({
                     <DateTimePicker
                         id="settlement-date"
                         name="occurred_at"
-                        defaultValue={zonedInput(new Date(), preferences.timezone)}
+                        defaultValue={zonedInput(settlement?.occurred_at || new Date(), preferences.timezone)}
                         timezone={preferences.timezone}
                     />
                 </div>
@@ -148,11 +161,11 @@ export function SettlementDialog({
                     <label htmlFor="settlement-notes" className="field-label">
                         Notes (optional)
                     </label>
-                    <Input id="settlement-notes" name="notes" maxLength={1000} />
+                    <Input id="settlement-notes" name="notes" defaultValue={settlement?.notes} maxLength={1000} />
                 </div>
                 <FormError error={error} />
                 <DialogFooter>
-                    <SaveButton busy={busy} label="Record settlement" />
+                    <SaveButton busy={busy} label={settlement ? "Save changes" : "Record settlement"} />
                 </DialogFooter>
             </form>
         </CircleModal>

@@ -10,6 +10,8 @@ import {
     EMPTY_RATES,
     dayLabel,
     timeLabel,
+    dateTimeLabel,
+    zonedInput,
 } from "../src/lib/domain.ts";
 test("decimal amounts are parsed exactly into integer cents", () => {
     assert.equal(parseMinorUnits("8.50"), 850);
@@ -76,4 +78,22 @@ test("transaction dates and times use the account timezone across midnight and d
     assert.equal(timeLabel(timestamp, "America/New_York"), "12:05");
     assert.equal(timeLabel("2026-03-08T06:59:00Z", "America/New_York"), "01:59");
     assert.equal(timeLabel("2026-03-08T07:00:00Z", "America/New_York"), "03:00");
+});
+
+test("12-hour and 24-hour formats distinguish midnight and noon without changing wall-clock inputs", () => {
+    for (const [instant, twelveHour, twentyFourHour] of [
+        ["2026-10-27T16:05:00Z", "12:05 AM", "00:05"],
+        ["2026-10-28T04:05:00Z", "12:05 PM", "12:05"],
+        ["2026-10-28T15:59:00Z", "11:59 PM", "23:59"],
+    ]) {
+        assert.equal(timeLabel(instant, "Asia/Singapore", "12h"), twelveHour);
+        assert.equal(timeLabel(instant, "Asia/Singapore", "24h"), twentyFourHour);
+        assert.ok(zonedInput(instant, "Asia/Singapore").endsWith(`T${twentyFourHour}`));
+    }
+
+    const instant = "2026-03-08T07:00:37Z";
+    assert.equal(timeLabel(instant, "America/New_York", "12h", true), "3:00:37 AM");
+    assert.equal(timeLabel(instant, "America/New_York", "24h", true), "03:00:37");
+    assert.equal(dateTimeLabel(instant, "America/New_York", "12h"), "8 Mar 2026, 3:00:37 AM");
+    assert.equal(dateTimeLabel(instant, "America/New_York", "24h"), "8 Mar 2026, 03:00:37");
 });

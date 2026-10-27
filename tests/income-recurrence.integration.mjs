@@ -151,6 +151,30 @@ test(
             await api(path, outside.token, { default_tab: "Overview" }, "PATCH", 404);
         });
         const root = "/api/expenditure/circles";
+        await t.test("time format is persisted per user, defaults to 24h and rejects unsupported values", async () => {
+            const before = await api("/api/expenditure/config", alice.token);
+            assert.equal(before.preferences.time_format, "24h");
+            const path = `/api/collections/preferences/records/${before.preferences.id}`;
+            await api(path, alice.token, { time_format: "12h" }, "PATCH");
+            let after = await api("/api/expenditure/config", alice.token);
+            assert.equal(after.preferences.time_format, "12h");
+            assert.equal(after.preferences.timezone, before.preferences.timezone);
+            assert.equal(after.preferences.default_tab, before.preferences.default_tab);
+            assert.equal((await api("/api/expenditure/config", bob.token)).preferences.time_format, "24h");
+            await api(path, outside.token, { time_format: "24h" }, "PATCH", 404);
+            for (const time_format of ["", "13h", "12", 12, null]) {
+                const response = await fetch(base + path, {
+                    method: "PATCH", headers: { Authorization: alice.token, "Content-Type": "application/json" },
+                    body: JSON.stringify({ time_format }),
+                });
+                assert.equal(response.status, 400, `time_format=${JSON.stringify(time_format)}`);
+            }
+
+            after = await api("/api/expenditure/config", alice.token);
+            assert.equal(after.preferences.time_format, "12h");
+            await api(path, alice.token, { time_format: "24h" }, "PATCH");
+            assert.equal((await api("/api/expenditure/config", alice.token)).preferences.time_format, "24h");
+        });
         const circle = await api(root, alice.token, { name: "Shared income", icon: "users", currency: "SGD" }, "POST", 201);
         const me = (await api(`${root}/${circle.id}`, alice.token)).me;
         const invitation = await api(`${root}/${circle.id}/invitations`, alice.token, { email: bob.email }, "POST", 201);

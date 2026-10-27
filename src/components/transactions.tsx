@@ -37,6 +37,7 @@ export function Transactions({
     emptyAction: () => void;
     filtered?: boolean;
 }) {
+    const { preferences } = useWorkspace();
     if (!rows.length)
         return (
             <EmptyState
@@ -84,7 +85,7 @@ export function Transactions({
                                                 (expense.source === "api" ? "Via API" : "Manual entry")}
                                         </span>
                                         <span className="mt-1 block text-[9px] text-muted-foreground sm:hidden">
-                                            {dayLabel(expense.occurred_at, timezone)} · {timeLabel(expense.occurred_at, timezone)}
+                                            {dayLabel(expense.occurred_at, timezone)} · {timeLabel(expense.occurred_at, timezone, preferences.time_format)}
                                         </span>
                                     </span>
                                 </button>
@@ -96,7 +97,7 @@ export function Transactions({
                             </td>
                             <td className="hidden pr-4 text-[10px] text-muted-foreground sm:table-cell">
                                 <span className="block whitespace-nowrap">{dayLabel(expense.occurred_at, timezone)}</span>
-                                <span className="mt-1 block tabular-nums">{timeLabel(expense.occurred_at, timezone)}</span>
+                                <span className="mt-1 block whitespace-nowrap tabular-nums">{timeLabel(expense.occurred_at, timezone, preferences.time_format)}</span>
                             </td>
                             <td className="text-right text-xs whitespace-nowrap tabular-nums">
                                 <div className={expense.kind === "income" ? "text-primary" : ""}>

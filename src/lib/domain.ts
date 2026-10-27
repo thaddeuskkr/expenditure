@@ -34,6 +34,7 @@ export const CATEGORY_COLORS = [
 ];
 export const DEFAULT_TABS = ["Overview", "Transactions", "Categories", "Budgets", "Circles", "API keys", "Settings"] as const;
 export type DefaultTab = typeof DEFAULT_TABS[number];
+export type TimeFormat = "24h" | "12h";
 export type Recurrence = "" | "daily" | "weekly" | "monthly" | "yearly";
 export interface RecurringFields {
     recurrence: Recurrence;
@@ -62,6 +63,7 @@ export interface Budget extends RecordModel {
 }
 export interface Preferences extends RecordModel {
     default_tab: DefaultTab;
+    time_format: TimeFormat;
     currency: string;
     timezone: string;
     currencies: string[];
@@ -287,13 +289,24 @@ export function dayLabel(date: string, timezone: string) {
     }).format(asDate(date));
 }
 
-export function timeLabel(date: string, timezone: string) {
+export function timeLabel(date: Date | string, timezone: string, timeFormat: TimeFormat = "24h", includeSeconds = false) {
     return new Intl.DateTimeFormat("en-SG", {
-        hour: "2-digit",
+        hour: timeFormat === "12h" ? "numeric" : "2-digit",
         minute: "2-digit",
-        hourCycle: "h23",
+        ...(includeSeconds ? { second: "2-digit" } : {}),
+        hourCycle: timeFormat === "12h" ? "h12" : "h23",
+        timeZone: timezone,
+    }).format(asDate(date)).toUpperCase();
+}
+
+export function dateTimeLabel(date: Date | string, timezone: string, timeFormat: TimeFormat) {
+    const day = new Intl.DateTimeFormat("en-SG", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
         timeZone: timezone,
     }).format(asDate(date));
+    return `${day}, ${timeLabel(date, timezone, timeFormat, true)}`;
 }
 
 export function errorMessage(error: unknown) {

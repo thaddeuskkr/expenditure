@@ -5,6 +5,8 @@ import {
     convertAmount,
     rateDate,
     EMPTY_RATES,
+    timeLabel,
+    type TimeFormat,
     type ExchangeRates,
     type Expense,
 } from "./domain.ts";
@@ -15,6 +17,7 @@ type ExportOptions = {
     month: string;
     currency: string;
     timezone: string;
+    timeFormat: TimeFormat;
     mainCurrency?: string;
     rates?: ExchangeRates;
 };
@@ -96,12 +99,12 @@ function exportValues(
     return [...row, expense.kind, expense.recurrence];
 }
 
-function csvCell(value: ExportCell, decimalPlaces?: number) {
+function csvCell(value: ExportCell, decimalPlaces?: number, timeFormat: TimeFormat = "24h") {
     let text: string;
     if (value === null) {
         text = "";
     } else if (value instanceof Date) {
-        text = value.toISOString().slice(0, 19).replace("T", " ");
+        text = `${value.toISOString().slice(0, 10)} ${timeLabel(value, "UTC", timeFormat, true)}`;
     } else if (typeof value === "number" && decimalPlaces !== undefined) {
         text = value.toFixed(decimalPlaces);
     } else {
@@ -118,6 +121,7 @@ export function csvExport(
     timezone: string,
     mainCurrency?: string,
     rates = EMPTY_RATES,
+    timeFormat: TimeFormat = "24h",
 ) {
     const rows = [
         exportHeaders(timezone, mainCurrency),
@@ -136,7 +140,7 @@ export function csvExport(
                             return csvCell(value, currencyDigits(String(row[2])));
                         if (index === 9 && mainCurrency)
                             return csvCell(value, currencyDigits(mainCurrency));
-                        return csvCell(value);
+                        return csvCell(value, undefined, timeFormat);
                     })
                     .join(","),
             )
@@ -149,6 +153,7 @@ export async function expenseWorkbook(
     timezone: string,
     mainCurrency?: string,
     rates = EMPTY_RATES,
+    timeFormat: TimeFormat = "24h",
 ) {
     // Keep the Excel writer out of the initial application bundle.
     const ExcelJS = (await import("exceljs")).default;
@@ -179,7 +184,7 @@ export async function expenseWorkbook(
         sheet.getColumn(11).numFmt = "0.000000";
     }
 
-    sheet.getColumn(5).numFmt = "yyyy-mm-dd hh:mm:ss";
+    sheet.getColumn(5).numFmt = timeFormat === "12h" ? "yyyy-mm-dd h:mm:ss AM/PM" : "yyyy-mm-dd hh:mm:ss";
     sheet.autoFilter = {
         from: "A1",
         to: `${mainCurrency ? "O" : "K"}${sheet.rowCount}`,
@@ -206,6 +211,7 @@ export async function downloadExpenses(
             options.timezone,
             options.mainCurrency,
             options.rates,
+            options.timeFormat,
         );
         const buffer = await workbook.xlsx.writeBuffer();
         blob = new Blob([new Uint8Array(buffer)], {
@@ -219,6 +225,7 @@ export async function downloadExpenses(
                     options.timezone,
                     options.mainCurrency,
                     options.rates,
+                    options.timeFormat,
                 ),
             ],
             {

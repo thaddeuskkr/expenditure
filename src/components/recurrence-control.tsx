@@ -1,7 +1,8 @@
 "use client";
 import { Switch } from "radix-ui";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
-import type { Recurrence } from "@/lib/domain";
+import { dateTimeLabel, type Recurrence } from "@/lib/domain";
+import { useWorkspace } from "./workspace-context";
 
 export function RecurrenceControl({ value, onChange, next, timezone, error }: {
     value: Recurrence;
@@ -10,6 +11,7 @@ export function RecurrenceControl({ value, onChange, next, timezone, error }: {
     timezone: string;
     error?: string;
 }) {
+    const { preferences } = useWorkspace();
     return (
         <div className="space-y-3 border-t pt-4">
             <div className="flex items-center justify-between gap-4">
@@ -28,7 +30,7 @@ export function RecurrenceControl({ value, onChange, next, timezone, error }: {
                         </SelectContent>
                     </Select>
                     <p className="text-[11px] leading-5 text-muted-foreground">Repeats automatically in {timezone.replaceAll("_", " ")}. Turning this off stops future entries.</p>
-                    {next && <p className="text-[11px] text-muted-foreground">Next: {new Date(next).toLocaleString("en-SG", { timeZone: timezone })}</p>}
+                    {next && <p className="text-[11px] text-muted-foreground">Next: {dateTimeLabel(next, timezone, preferences.time_format)}</p>}
                     {error && <p role="status" className="text-xs text-destructive">Paused: {error} Save to retry after resolving this.</p>}
                 </>
             )}

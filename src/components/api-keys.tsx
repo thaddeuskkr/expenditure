@@ -145,30 +145,23 @@ export function ApiKeys({ timezone }: { timezone: string }) {
     "payment_method": "Visa",
     "notes": "Afternoon coffee"
   }'`;
-    const circleExample = `curl -X POST '${pocketbaseUrl}/api/expenditure/circles/CIRCLE_ID/expenses' \\
-  -H 'Authorization: YOUR_USER_SESSION_TOKEN' \\
+    const circleExample = `curl -X POST '${pocketbaseUrl}/api/expenses/circles/CIRCLE_ID/transactions' \\
+  -H 'X-API-Key: YOUR_API_KEY' \\
   -H 'Content-Type: application/json' \\
   -d '{
     "title": "Coffee together",
-    "kind": "expense",
     "amount": 650,
     "currency": "SGD",
     "category": "Food & drinks",
-    "paid_by": "YOUR_MEMBERSHIP_ID",
-    "split_mode": "even",
-    "shares": [
-      { "member": "YOUR_MEMBERSHIP_ID" },
-      { "member": "OTHER_MEMBERSHIP_ID" }
-    ],
     "payment_method": "Visa"
   }'`;
     return (
         <div className="animate-enter">
             <div className="flex items-center justify-between border-b pb-6">
                 <div>
-                    <h2 className="text-base font-medium">Personal API keys</h2>
+                    <h2 className="text-base font-medium">API keys</h2>
                     <p className="mt-2 text-xs leading-6 text-muted-foreground">
-                        Add or read personal expenses from other apps.
+                        Add personal or Circle expenses, or read personal expenses from other apps.
                     </p>
                 </div>
                 <Button
@@ -280,31 +273,29 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                             Choose who paid or received the money and how to split it.
                         </p>
                         <p className="mt-4 text-xs leading-6 text-muted-foreground">
-                            For API requests, sign in as a normal PocketBase user through OAuth and use the
-                            session token in the Authorization header. With the JavaScript SDK, this is
-                            <code className="text-foreground"> pb.authStore.token</code>.
-                            Personal API keys do not grant Circle access. You must be an active member.
+                            Use your API key with write access in the X-API-Key header.
+                            You must be an active member of the Circle.
                         </p>
                         <ol className="mt-4 list-decimal space-y-3 pl-4 text-xs leading-6 text-muted-foreground">
                             <li>
-                                Send <code className="break-all text-foreground">GET /api/expenditure/circles</code> with the same
-                                Authorization header. Use a Circle ID from <code className="text-foreground">circles</code>.
+                                Open the Circle in the app, open its three-dot menu, and choose Copy Circle ID.
                             </li>
                             <li>
-                                Send <code className="break-all text-foreground">GET /api/expenditure/circles/CIRCLE_ID</code>.
-                                The response includes <code className="text-foreground">me</code> (your membership ID),
-                                <code className="text-foreground"> members</code>, and <code className="text-foreground">categories</code>.
+                                Replace <code className="text-foreground">CIRCLE_ID</code> and
+                                <code className="text-foreground"> YOUR_API_KEY</code> in the example.
+                                Send a title and amount, plus any optional fields you need.
                             </li>
                             <li>
-                                Replace the IDs in the example. Use active membership IDs for
-                                <code className="text-foreground"> paid_by</code> and each <code className="text-foreground">member</code>,
-                                and an active Circle category name. The example splits equally between two members.
+                                You are always the payer and initially cover 100% of the expense.
+                                To share the cost, open the transaction on the website, choose Edit expense,
+                                and change its split. The initial entry creates no shared debt.
                             </li>
                         </ol>
                         <p className="mt-4 text-xs leading-6 text-muted-foreground">
-                            For income, set <code className="text-foreground">kind</code> to <code className="text-foreground">income</code>;
-                            <code className="text-foreground"> paid_by</code> is the recipient. Omit
+                            Omit currency to use the Circle currency, and category to use its default active category.
+                            An explicit category must belong to that Circle. Omit
                             <code className="text-foreground"> occurred_at</code> to use the current time, or send a timestamp with a timezone.
+                            Payer, split, income and recurrence fields are not accepted by this API endpoint.
                         </p>
                     </div>
                     <RequestExample
@@ -379,7 +370,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="write">Write · add expenses</SelectItem>
-                                                <SelectItem value="read">Read · list expenses</SelectItem>
+                                                <SelectItem value="read">Read · list personal expenses</SelectItem>
                                                 <SelectItem value="both">Read and write</SelectItem>
                                             </SelectContent>
                                         </Select>

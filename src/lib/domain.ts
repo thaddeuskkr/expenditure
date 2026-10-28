@@ -55,12 +55,50 @@ export interface Budget extends RecordModel {
     amount: number;
 }
 export interface Preferences extends RecordModel {
+    show_circle_transactions: boolean;
     default_tab: DefaultTab;
     time_format: TimeFormat;
     currency: string;
     timezone: string;
     currencies: string[];
 }
+
+export interface CircleTransaction extends RecordModel, RecurringFields {
+    kind: "expense" | "income";
+    title: string;
+    amount: number;
+    allocated_amount: number;
+    currency: string;
+    category: string;
+    budget_category: string;
+    occurred_at: string;
+    notes: string;
+    payment_method: string;
+    source: "manual" | "api";
+    circle: string;
+    membership_active: boolean;
+    expand: { circle: { id: string; name: string; icon: string } };
+}
+export type Transaction = Expense | CircleTransaction;
+export interface TransactionPage {
+    items: Transaction[];
+    page: number;
+    perPage: number;
+    totalItems: number;
+    totalPages: number;
+}
+export function isCircleTransaction(row: Transaction): row is CircleTransaction {
+    return row.collectionName === "circle_expenses";
+}
+
+export function transactionName(row: Transaction) {
+    return isCircleTransaction(row) ? row.title : row.merchant;
+}
+
+export function transactionAmount(row: Transaction) {
+    return isCircleTransaction(row) ? row.allocated_amount : row.amount;
+}
+
 export interface CategoryDefinition {
     id: string;
     name: string;

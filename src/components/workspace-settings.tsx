@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState, type FormEvent } from "react";
 import { Check, Loader2 } from "lucide-react";
+import { Switch } from "radix-ui";
 import { Button } from "./ui/button";
 import { CurrencyPicker, EnabledCurrenciesPicker } from "./currency-picker";
 import { SearchableSelect } from "./ui/searchable-select";
@@ -27,7 +28,7 @@ export function WorkspaceSettings({
     onEditRecurring: (expense: Expense) => void;
     recurringRevision: number;
     onSave: (
-        data: Pick<Preferences, "currency" | "timezone" | "currencies" | "default_tab" | "time_format">,
+        data: Pick<Preferences, "currency" | "timezone" | "currencies" | "default_tab" | "time_format" | "show_circle_transactions">,
     ) => Promise<void>;
     onCategoriesChanged: () => Promise<void>;
 }) {
@@ -36,6 +37,7 @@ export function WorkspaceSettings({
     const [main, setMain] = useState(preferences.currency);
     const [timezone, setTimezone] = useState(preferences.timezone);
     const [timeFormat, setTimeFormat] = useState(preferences.time_format);
+    const [showCircleTransactions, setShowCircleTransactions] = useState(preferences.show_circle_transactions);
     const [enabled, setEnabled] = useState(preferences.currencies);
     const [timezoneDate, setTimezoneDate] = useState(() => new Date());
     const timezoneOptions = useMemo(() => {
@@ -48,7 +50,7 @@ export function WorkspaceSettings({
         setBusy(true);
         setError("");
         try {
-            await onSave({ currency: main, timezone, currencies: enabled, default_tab: defaultTab, time_format: timeFormat });
+            await onSave({ currency: main, timezone, currencies: enabled, default_tab: defaultTab, time_format: timeFormat, show_circle_transactions: showCircleTransactions });
         } catch (e) {
             setError(errorMessage(e));
         } finally {
@@ -101,6 +103,15 @@ export function WorkspaceSettings({
                             <SelectItem value="12h">12-hour (1:00 PM)</SelectItem>
                         </SelectContent>
                     </Select>
+                </div>
+                <div className="flex items-center justify-between gap-5 border-y py-5">
+                    <div>
+                        <label htmlFor="show-circle-transactions" className="text-sm">Show Circle transactions</label>
+                        <p id="circle-transactions-description" className="mt-2 text-[11px] leading-5 text-muted-foreground">Include your allocated Circle shares alongside personal transactions. Budget totals are unchanged.</p>
+                    </div>
+                    <Switch.Root id="show-circle-transactions" checked={showCircleTransactions} onCheckedChange={setShowCircleTransactions} aria-describedby="circle-transactions-description" className="flex h-6 w-11 shrink-0 items-center rounded-full bg-muted p-0.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-primary">
+                        <Switch.Thumb className="block size-5 rounded-full bg-background shadow transition-transform data-[state=checked]:translate-x-5" />
+                    </Switch.Root>
                 </div>
                 <div>
                     <label className="field-label" htmlFor="enabled-currencies">Enabled currencies</label>

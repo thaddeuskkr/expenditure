@@ -3,18 +3,7 @@ function summarize(app, user, range) {
     const fx = require(`${__hooks}/exchange-rates.js`);
     const main = config.preferences(app, user).currency;
     const snapshot = fx.read(app);
-    const categoryNames = config.categories(app, user).map((category) => category.name);
-    const categoryKey = (name) => name.trim().replace(/\s+/g, " ").toLowerCase();
-    const other = categoryNames.find((name) => categoryKey(name) === "other") || "Other";
-    const circleCategories = Object.create(null);
-    function personalCategory(name) {
-        if (Object.prototype.hasOwnProperty.call(circleCategories, name)) return circleCategories[name];
-        const exact = categoryNames.find((category) => category === name);
-        const matches = exact ? [exact] : categoryNames.filter((category) => categoryKey(category) === categoryKey(name));
-        circleCategories[name] = matches.length === 1 ? matches[0] : other;
-        return circleCategories[name];
-    }
-
+    const personalCategory = config.personalCategoryMapper(app, user);
     const rows = arrayOf(
         new DynamicModel({
             amount: 0,

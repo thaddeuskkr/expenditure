@@ -46,6 +46,7 @@ const eslintConfig = defineConfig([
                 $security: "readonly",
                 ApiError: "readonly",
                 BadRequestError: "readonly",
+                BoolField: "readonly",
                 Collection: "readonly",
                 DynamicModel: "readonly",
                 DateTime: "readonly",

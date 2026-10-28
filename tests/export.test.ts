@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import ExcelJS from "exceljs";
 import { csvExport, expenseWorkbook } from "../src/lib/export.ts";
-import { EMPTY_RATES, type Expense } from "../src/lib/domain.ts";
+import { EMPTY_RATES, type CircleTransaction, type Expense } from "../src/lib/domain.ts";
 
 const expense = {
     merchant: "=HYPERLINK(\"bad\")",
@@ -106,4 +106,32 @@ test("export time formats change local display while retaining typed Excel dates
     assert.equal((sheet.getCell("E3").value as Date).toISOString(), "2026-10-01T12:05:30.000Z");
     assert.equal(sheet.getCell("I2").value, "2026-09-30T16:05:30.000Z");
     assert.equal((await expenseWorkbook(rows, "Asia/Singapore")).getWorksheet("Expenses")!.getCell("E2").numFmt, "yyyy-mm-dd hh:mm:ss");
+});
+
+test("combined exports preserve allocated amounts, full Circle totals and provenance in CSV and Excel", async () => {
+    const shared = {
+        ...expense, id: "shared123456789", collectionName: "circle_expenses", title: "Shared dinner", amount: 1000, allocated_amount: 350,
+        category: "Circle dining", budget_category: "Other", circle: "circle123456789", expand: { circle: { id: "circle123456789", name: "Friends", icon: "users" } },
+    } as unknown as CircleTransaction;
+    const rows = [expense, shared];
+    const csv = csvExport(rows, "Asia/Singapore");
+    assert.ok(csv.includes("\"Amount (your share)\""));
+    assert.ok(csv.includes("\"Shared dinner\",\"3.50\""));
+    assert.ok(csv.includes("\"circle\",\"Friends\",\"circle123456789\",\"10.00\",\"Other\""));
+    const workbook = await expenseWorkbook(rows, "Asia/Singapore", "SGD");
+    const loaded = new ExcelJS.Workbook();
+    await loaded.xlsx.load(await workbook.xlsx.writeBuffer());
+    const sheet = loaded.getWorksheet("Expenses")!;
+    assert.equal(sheet.getCell("B3").value, 3.5);
+    assert.equal(sheet.getCell("J3").value, 3.5);
+    assert.equal(sheet.getCell("P3").value, "circle");
+    assert.equal(sheet.getCell("Q3").value, "Friends");
+    assert.equal(sheet.getCell("R3").value, "circle123456789");
+    assert.equal(sheet.getCell("S3").value, 10);
+    assert.equal(sheet.getCell("S3").numFmt, "#,##0.00");
+    assert.equal(sheet.getCell("T3").value, "Other");
+    assert.equal(sheet.getCell("P2").value, "personal");
+    assert.equal(sheet.getCell("S2").value, 8.5);
+    assert.equal(sheet.autoFilter, "A1:T3");
+    assert.equal(sheet.getCell("I3").value, "2026-09-30T16:05:30.000Z");
 });

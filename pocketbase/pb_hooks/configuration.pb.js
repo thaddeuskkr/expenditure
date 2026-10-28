@@ -8,17 +8,24 @@ routerAdd(
     (e) => {
         const config = require(`${__hooks}/configuration.js`);
         config.initialize(e.app, e.auth.id);
+        const preferences = config.preferences(e.app, e.auth.id);
         const used = arrayOf(new DynamicModel({ currency: "" }));
         e.app
             .db()
             .newQuery(
-                "SELECT DISTINCT currency FROM expenses WHERE user = {:user} AND moved_to = '' UNION SELECT DISTINCT currency FROM budgets WHERE user = {:user}",
+                "SELECT DISTINCT currency FROM expenses WHERE user = {:user} AND moved_to = '' UNION SELECT DISTINCT currency FROM budgets WHERE user = {:user}" +
+                (preferences.show_circle_transactions ?
+                    ` UNION SELECT DISTINCT shared.currency FROM circle_expenses shared
+                    JOIN circle_members membership ON membership.circle = shared.circle
+                    JOIN json_each(shared.shares) allocation ON json_extract(allocation.value, '$.member') = membership.id
+                    WHERE membership.user = {:user} AND json_extract(allocation.value, '$.amount') > 0` :
+                    ""),
             )
             .bind({ user: e.auth.id })
             .all(used);
         e.response.header().set("Cache-Control", "no-store");
         return e.json(200, {
-            preferences: config.preferences(e.app, e.auth.id),
+            preferences,
             categories: config.categories(e.app, e.auth.id),
             used_currencies: used.map((r) => r.currency),
         });

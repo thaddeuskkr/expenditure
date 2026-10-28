@@ -76,6 +76,7 @@ import { WorkspaceSettings } from "./workspace-settings";
 import { CirclesView } from "./circles/circles-view";
 import { MoveExpenseDialog } from "./circles/move-expense-dialog";
 import { CircleInvitationGate } from "./circles/circle-invitation";
+import { CircleTransactionDialog } from "./circles/circle-transaction-dialog";
 import { pb } from "@/lib/pocketbase";
 import { downloadExpenses, type ExportFormat } from "@/lib/export";
 import {
@@ -94,7 +95,14 @@ import {
     type ExpenseInput,
     type Overview,
     type Preferences,
+    type Transaction,
+    type TransactionPage,
+    type CircleTransaction,
 } from "@/lib/domain";
+
+function transactionPage(params: URLSearchParams, page: number, perPage = 15) {
+    return pb.send<TransactionPage>(`/api/expenditure/transactions?${new URLSearchParams({ ...Object.fromEntries(params), page: String(page), perPage: String(perPage) })}`, { method: "GET" });
+}
 
 type Section =
     | "Overview" |
@@ -164,8 +172,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 13)
-                    throw new Error("This app requires backend version 13. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 14)
+                    throw new Error("This app requires backend version 14. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -257,7 +265,8 @@ function Workspace({
     const [deleteBusy, setDeleteBusy] = useState(false);
     const [budgetEditor, setBudgetEditor] = useState<Budget | "new" | null>(null);
     const [overview, setOverview] = useState<Overview>(blank);
-    const [expenses, setExpenses] = useState<Expense[]>([]);
+    const [expenses, setExpenses] = useState<Transaction[]>([]);
+    const [circleTransaction, setCircleTransaction] = useState<CircleTransaction | null>(null);
     const [budgets, setBudgets] = useState<Budget[]>([]);
     const [total, setTotal] = useState(0);
     const [page, setPage] = useState(1);
@@ -284,6 +293,9 @@ function Workspace({
         setConfiguration(result);
     }, []);
     const categoryNames = configuration.categories.map((c) => c.name);
+    const showCircleTransactions = section === "Transactions" && preferences.show_circle_transactions;
+    if (showCircleTransactions && !categoryNames.some((name) => name.toLowerCase() === "other")) categoryNames.push("Other");
+    const transactionParams = useMemo(() => new URLSearchParams({ from: range.from, to: range.to, currency: filterCurrency, category, search: debouncedSearch.trim() }), [range, filterCurrency, category, debouncedSearch]);
     const visibleCurrencies = Array.from(
         new Set([...preferences.currencies, ...configuration.used_currencies]),
     ).sort();
@@ -365,6 +377,7 @@ function Workspace({
             setLoading(true);
             setError("");
             try {
+                if (showCircleTransactions) await reloadConfiguration();
                 const snapshot = await pb.send<ExchangeRates>(
                     "/api/expenditure/rates",
                     { method: "GET" },
@@ -378,9 +391,11 @@ function Workspace({
                     pb.send<Overview>(`/api/expenditure/overview?${params}`, {
                         method: "GET",
                     }),
-                    pb
-                        .collection<Expense>("expenses")
-                        .getList(page, 15, { filter, sort: "-occurred_at,-created" }),
+                    showCircleTransactions ?
+                            transactionPage(transactionParams, page) :
+                            pb
+                                .collection<Expense>("expenses")
+                                .getList(page, 15, { filter, sort: "-occurred_at,-created,-id" }),
                     pb.collection<Budget>("budgets").getFullList({
                         filter: pb.filter("month = {:month} && currency = {:currency}", {
                             month,
@@ -419,6 +434,9 @@ function Workspace({
         range,
         filter,
         revision,
+        showCircleTransactions,
+        transactionParams,
+        reloadConfiguration,
     ]);
 
     function navigate(next: Section) {
@@ -493,9 +511,17 @@ function Workspace({
     async function exportExpenses(format: ExportFormat) {
         setExporting(true);
         try {
-            const rows = await pb
-                .collection<Expense>("expenses")
-                .getFullList({ filter, sort: "-occurred_at,-created" });
+            let rows: Transaction[];
+            if (showCircleTransactions) {
+                rows = [];
+                let current = 1, pages = 1;
+                do {
+                    const result = await transactionPage(transactionParams, current, 100);
+                    rows.push(...result.items);
+                    pages = result.totalPages;
+                    current++;
+                } while (current <= pages);
+            } else rows = await pb.collection<Expense>("expenses").getFullList({ filter, sort: "-occurred_at,-created,-id" });
             await downloadExpenses(rows, {
                 format,
                 month,
@@ -932,9 +958,10 @@ function Workspace({
                                         <Search className="absolute top-3 left-3 size-3.5 text-muted-foreground" />
                                         <Input
                                             aria-label="Search transactions"
+                                            maxLength={200}
                                             value={search}
                                             onChange={(e) => setSearch(e.target.value)}
-                                            placeholder="Search merchants, notes, payment methods…"
+                                            placeholder={showCircleTransactions ? "Search merchants, Circles, notes…" : "Search merchants, notes, payment methods…"}
                                             className="h-10 pl-9 text-xs"
                                         />
                                         {search && (
@@ -970,6 +997,7 @@ function Workspace({
                                 {!error && (
                                     <Transactions
                                         rows={expenses}
+                                        onCircle={setCircleTransaction}
                                         timezone={timezone}
                                         onEdit={setEditor}
                                         onDelete={setDeleting}
@@ -1179,6 +1207,17 @@ function Workspace({
                         )}
                     </main>
                 </div>
+                {circleTransaction && (
+                    <CircleTransactionDialog
+                        transaction={circleTransaction}
+                        onClose={() => setCircleTransaction(null)}
+                        onOpenCircle={(id) => {
+                            setCircleTransaction(null);
+                            setFocusedCircle(id);
+                            navigate("Circles");
+                        }}
+                    />
+                )}
                 <CircleInvitationGate onJoined={(id) => {
                     setFocusedCircle(id);
                     navigate("Circles");

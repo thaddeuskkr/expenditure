@@ -66,7 +66,7 @@ function initialize(app, user) {
     app.runInTransaction((tx) => {
         if (tx.countRecords("preferences", $dbx.hashExp({ user })) === 0) {
             const record = new Record(tx.findCollectionByNameOrId("preferences"));
-            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview", time_format: "24h" });
+            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview", time_format: "24h", show_circle_transactions: false });
             tx.save(record);
         }
 
@@ -92,6 +92,20 @@ function category(app, user, name, allowArchived) {
     if (!match || (!match.active && !allowArchived))
         throw new BadRequestError("Choose an active category from your account.");
     return match.name;
+}
+
+function personalCategoryMapper(app, user) {
+    const names = categories(app, user).map((item) => item.name);
+    const key = (name) => name.trim().replace(/\s+/g, " ").toLowerCase();
+    const other = names.find((name) => key(name) === "other") || "Other";
+    const cached = Object.create(null);
+    return (name) => {
+        if (Object.prototype.hasOwnProperty.call(cached, name)) return cached[name];
+        const exact = names.find((item) => item === name);
+        const matches = exact ? [exact] : names.filter((item) => key(item) === key(name));
+        cached[name] = matches.length === 1 ? matches[0] : other;
+        return cached[name];
+    };
 }
 
 function validate(record, app) {
@@ -134,5 +148,6 @@ module.exports = {
     categories,
     initialize,
     category,
+    personalCategoryMapper,
     validate,
 };

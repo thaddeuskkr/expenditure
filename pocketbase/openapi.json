@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "13.0.0",
+    "version": "14.0.0",
     "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring expenses run on the PocketBase server every minute, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -1344,7 +1344,7 @@
             }
           }
         },
-        "description": "Aggregates all matching personal expenses and the requesting user's positive allocated shares of Circle expenses, regardless of who paid. Uses the expense instant and supplied account-timezone month boundaries, including historical shares for inactive memberships. Moved personal receipts are excluded to prevent double counting. Circle categories match personal categories by exact name, then by a unique case/whitespace-insensitive name; unmatched or ambiguous names count as the personal Other category or a report-only Other bucket. Split edits update consumption without creating personal transactions or changing Circle balances. Circle income and repayments do not consume budgets. Native personal transaction lists and exports remain personal-only."
+        "description": "Aggregates all matching personal expenses and the requesting user's positive allocated shares of Circle expenses, regardless of who paid. Uses the expense instant and supplied account-timezone month boundaries, including historical shares for inactive memberships. Moved personal receipts are excluded to prevent double counting. Circle categories match personal categories by exact name, then by a unique case/whitespace-insensitive name; unmatched or ambiguous names count as the personal Other category or a report-only Other bucket. Split edits update consumption without creating personal transactions or changing Circle balances. Circle income and repayments do not consume budgets. Native personal collection lists remain personal-only. The Transactions page and its exports can use the preference-aware combined transaction feed."
       }
     },
     "/api/expenditure/circles/{id}/categories": {
@@ -1707,6 +1707,104 @@
           },
           "404": {
             "description": "Circle not found or the key owner is not an active member"
+          }
+        }
+      }
+    },
+    "/api/expenditure/transactions": {
+      "get": {
+        "summary": "List personal transactions with optional allocated Circle entries",
+        "description": "Session-only feed controlled by the requesting account show_circle_transactions preference. Positive own Circle expense and income shares are included when enabled, regardless of payer, including retained inactive membership history. Zero/unallocated entries, repayments and moved personal receipts are excluded. Filtering, counts and descending occurred_at/created/collectionName/id ordering apply to the complete combined dataset before pagination. Native record fields remain unchanged: Circle amount is the full original amount; allocated_amount is the account share; budget_category maps the Circle category to the personal account. No personal record copies or financial mutations are made. Personal automation read scopes do not grant access.",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone-explicit instant. The complete interval must be positive and at most 32 days."
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone-explicit instant. The complete interval must be positive and at most 32 days."
+          },
+          {
+            "in": "query",
+            "name": "currency",
+            "schema": {
+              "type": "string",
+              "default": "all"
+            },
+            "description": "Currency code or all."
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "schema": {
+              "type": "string",
+              "default": "all"
+            },
+            "description": "Personal category name or all. Circle categories use the budget category mapping, including Other for unmatched names."
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string",
+              "default": ""
+            },
+            "description": "Literal, case-insensitive substring of merchant/title, notes, payment_method or Circle name. Up to 200 characters."
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000,
+              "default": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "perPage",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 15
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated records for the signed-in account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid monthly range, filter or pagination"
+          },
+          "401": {
+            "description": "A user session is required"
           }
         }
       }
@@ -5517,6 +5615,11 @@
             ],
             "default": "24h",
             "description": "Persisted display preference for all app times and local export columns. New and upgraded accounts default to 24h. API and UTC timestamps retain ISO notation; stored instants and recurrence schedules do not change."
+          },
+          "show_circle_transactions": {
+            "type": "boolean",
+            "default": false,
+            "description": "Shows personal transactions and positive own Circle expense/income allocations together in the Transactions page and its exports. Off by default for new and upgraded accounts. Does not change monthly budgets or spending summaries."
           }
         },
         "description": "Persisted per-account preferences, editable through the owner-protected PocketBase preferences collection."
@@ -6174,6 +6277,110 @@
           }
         ],
         "description": "Replacement payer, recipient, currency and amount with the current version. Omitted notes and occurred_at preserve their saved values."
+      },
+      "CircleTransaction": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CircleExpense"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "collectionName": {
+                "type": "string",
+                "enum": [
+                  "circle_expenses"
+                ]
+              },
+              "circle": {
+                "type": "string",
+                "description": "Stored Circle ID."
+              },
+              "allocated_amount": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "The requesting account allocated share, in original currency minor units. Original amount remains the full Circle transaction amount."
+              },
+              "budget_category": {
+                "type": "string",
+                "description": "Matching personal category name or Other, using the same mapping as budgets."
+              },
+              "membership_active": {
+                "type": "boolean",
+                "description": "Whether the requesting account membership remains active. Inactive historical shares are readable but do not grant current Circle access."
+              },
+              "expand": {
+                "type": "object",
+                "properties": {
+                  "circle": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "icon": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "name",
+                      "icon"
+                    ]
+                  }
+                }
+              }
+            },
+            "required": [
+              "collectionName",
+              "circle",
+              "allocated_amount",
+              "budget_category",
+              "membership_active",
+              "expand"
+            ]
+          }
+        ]
+      },
+      "TransactionPage": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer"
+          },
+          "perPage": {
+            "type": "integer"
+          },
+          "totalItems": {
+            "type": "integer"
+          },
+          "totalPages": {
+            "type": "integer"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/Expense"
+                },
+                {
+                  "$ref": "#/components/schemas/CircleTransaction"
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "page",
+          "perPage",
+          "totalItems",
+          "totalPages",
+          "items"
+        ]
       }
     }
   }

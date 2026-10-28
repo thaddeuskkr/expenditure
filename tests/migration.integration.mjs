@@ -254,6 +254,7 @@ test(
         assert.equal(after.recurrence, "");
         assert.equal(storedPreferences.default_tab, "Overview");
         assert.equal(storedPreferences.time_format, "24h");
+        assert.equal(storedPreferences.show_circle_transactions, false);
         assert.equal(storedPreferences.timezone, preferencesBefore.timezone);
         assert.equal(after.payment_method, "Stored Visa");
         assert.equal(after.amount_cents, undefined);
@@ -392,7 +393,7 @@ test(
         assert.ok(memberSchema.indexes.some((index) => index.includes("idx_circle_members_user_circle")));
 
         // Re-running migration commands must not duplicate or reset user data.
-        await request(`/api/collections/preferences/records/${prefs.id}`, auth.token, { time_format: "12h", timezone: "Asia/Katmandu" }, "PATCH");
+        await request(`/api/collections/preferences/records/${prefs.id}`, auth.token, { time_format: "12h", timezone: "Asia/Katmandu", show_circle_transactions: true }, "PATCH");
         await stop();
         const repeat = spawnSync(binary, ["migrate", "up", ...newFlags], {
             encoding: "utf8",
@@ -400,6 +401,7 @@ test(
         assert.equal(repeat.status, 0, repeat.stderr);
         await start(newFlags);
         assert.equal((await request(`/api/collections/preferences/records/${prefs.id}`, auth.token)).time_format, "12h");
+        assert.equal((await request(`/api/collections/preferences/records/${prefs.id}`, auth.token)).show_circle_transactions, true);
         assert.equal((await request(`/api/collections/preferences/records/${prefs.id}`, auth.token)).timezone, "Asia/Katmandu");
     },
 );

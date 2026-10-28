@@ -8,7 +8,10 @@ import {
     timeLabel,
     type TimeFormat,
     type ExchangeRates,
-    type Expense,
+    isCircleTransaction,
+    transactionName,
+    transactionAmount,
+    type Transaction,
 } from "./domain.ts";
 
 export type ExportFormat = "csv" | "xlsx";
@@ -31,10 +34,10 @@ function localSpreadsheetDate(value: string, timezone: string) {
     return date;
 }
 
-function exportHeaders(timezone: string, mainCurrency?: string) {
+function exportHeaders(timezone: string, mainCurrency?: string, circles = false) {
     return [
         "Merchant",
-        "Amount",
+        circles ? "Amount (your share)" : "Amount",
         "Currency",
         "Category",
         `Date & time (${timezone})`,
@@ -52,18 +55,20 @@ function exportHeaders(timezone: string, mainCurrency?: string) {
                 []),
         "Type",
         "Recurrence",
+        ...(circles ? ["Ledger", "Circle", "Circle ID", "Transaction total", "Budget category"] : []),
     ];
 }
 
 function exportValues(
-    expense: Expense,
+    expense: Transaction,
     timezone: string,
     mainCurrency?: string,
     rates = EMPTY_RATES,
+    circles = false,
 ): ExportCell[] {
     const row: ExportCell[] = [
-        expense.merchant,
-        expense.amount / 10 ** currencyDigits(expense.currency),
+        transactionName(expense),
+        transactionAmount(expense) / 10 ** currencyDigits(expense.currency),
         expense.currency,
         expense.category,
         localSpreadsheetDate(expense.occurred_at, timezone),
@@ -72,10 +77,12 @@ function exportValues(
         expense.source,
         asDate(expense.occurred_at).toISOString(),
     ];
-    if (!mainCurrency) return [...row, expense.kind, expense.recurrence];
+    const circle = isCircleTransaction(expense) ? expense : null;
+    const tail: ExportCell[] = [expense.kind, expense.recurrence, ...(circles ? [circle ? "circle" : "personal", circle?.expand.circle.name || "", circle?.circle || "", expense.amount / 10 ** currencyDigits(expense.currency), circle?.budget_category || expense.category] : [])];
+    if (!mainCurrency) return [...row, ...tail];
 
     const convertedAmount = convertAmount(
-        expense.amount,
+        transactionAmount(expense),
         expense.currency,
         mainCurrency,
         rates,
@@ -96,7 +103,7 @@ function exportValues(
         sameCurrency ? "" : rateDate(expense.currency, mainCurrency, rates),
         rates.fetched_at ? asDate(rates.fetched_at).toISOString() : "",
     );
-    return [...row, expense.kind, expense.recurrence];
+    return [...row, ...tail];
 }
 
 function csvCell(value: ExportCell, decimalPlaces?: number, timeFormat: TimeFormat = "24h") {
@@ -117,16 +124,18 @@ function csvCell(value: ExportCell, decimalPlaces?: number, timeFormat: TimeForm
 }
 
 export function csvExport(
-    expenses: Expense[],
+    expenses: Transaction[],
     timezone: string,
     mainCurrency?: string,
     rates = EMPTY_RATES,
     timeFormat: TimeFormat = "24h",
 ) {
+    const circles = expenses.some(isCircleTransaction);
+    const headers = exportHeaders(timezone, mainCurrency, circles);
     const rows = [
-        exportHeaders(timezone, mainCurrency),
+        headers,
         ...expenses.map((expense) =>
-            exportValues(expense, timezone, mainCurrency, rates),
+            exportValues(expense, timezone, mainCurrency, rates, circles),
         ),
     ];
     return (
@@ -136,7 +145,7 @@ export function csvExport(
                 row
                     .map((value, index) => {
                     // Amount columns use their currency precision; rates stay numeric.
-                        if (index === 1)
+                        if (index === 1 || index === headers.indexOf("Transaction total"))
                             return csvCell(value, currencyDigits(String(row[2])));
                         if (index === 9 && mainCurrency)
                             return csvCell(value, currencyDigits(mainCurrency));
@@ -149,7 +158,7 @@ export function csvExport(
 }
 
 export async function expenseWorkbook(
-    expenses: Expense[],
+    expenses: Transaction[],
     timezone: string,
     mainCurrency?: string,
     rates = EMPTY_RATES,
@@ -163,19 +172,22 @@ export async function expenseWorkbook(
         views: [{ state: "frozen", ySplit: 1 }],
     });
     const widths = [30, 16, 12, 22, 34, 25, 50, 12, 30, 25, 20, 16, 30];
-    sheet.columns = exportHeaders(timezone, mainCurrency).map((header, index) => ({
+    const circleWidths: Record<string, number> = { Ledger: 12, Circle: 28, "Circle ID": 24, "Transaction total": 20, "Budget category": 24 };
+    const circles = expenses.some(isCircleTransaction);
+    sheet.columns = exportHeaders(timezone, mainCurrency, circles).map((header, index) => ({
         header,
-        width: widths[index],
+        width: circleWidths[header] || widths[index] || 18,
     }));
     sheet.addRows(
         expenses.map((expense) =>
-            exportValues(expense, timezone, mainCurrency, rates),
+            exportValues(expense, timezone, mainCurrency, rates, circles),
         ),
     );
     expenses.forEach((expense, index) => {
         const digits = currencyDigits(expense.currency);
-        sheet.getCell(index + 2, 2).numFmt =
-            "#,##0" + (digits ? "." + "0".repeat(digits) : "");
+        const format = "#,##0" + (digits ? "." + "0".repeat(digits) : "");
+        sheet.getCell(index + 2, 2).numFmt = format;
+        if (circles) sheet.getCell(index + 2, sheet.columnCount - 1).numFmt = format;
     });
     if (mainCurrency) {
         const digits = currencyDigits(mainCurrency);
@@ -187,7 +199,7 @@ export async function expenseWorkbook(
     sheet.getColumn(5).numFmt = timeFormat === "12h" ? "yyyy-mm-dd h:mm:ss AM/PM" : "yyyy-mm-dd hh:mm:ss";
     sheet.autoFilter = {
         from: "A1",
-        to: `${mainCurrency ? "O" : "K"}${sheet.rowCount}`,
+        to: `${sheet.getColumn(sheet.columnCount).letter}${sheet.rowCount}`,
     };
     sheet.getRow(1).font = { bold: true, color: { argb: "FFF0EEEA" }, size: 11 };
     sheet.getRow(1).fill = {
@@ -201,7 +213,7 @@ export async function expenseWorkbook(
 }
 
 export async function downloadExpenses(
-    expenses: Expense[],
+    expenses: Transaction[],
     options: ExportOptions,
 ) {
     let blob: Blob;

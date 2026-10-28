@@ -17,6 +17,11 @@ import {
     money,
     rateDate,
     timeLabel,
+    isCircleTransaction,
+    transactionName,
+    transactionAmount,
+    type Transaction,
+    type CircleTransaction,
     type Expense,
 } from "@/lib/domain";
 
@@ -26,10 +31,12 @@ export function Transactions({
     onEdit,
     onDelete,
     onMove,
+    onCircle,
     emptyAction,
     filtered = false,
 }: {
-    rows: Expense[];
+    rows: Transaction[];
+    onCircle?: (transaction: CircleTransaction) => void;
     timezone: string;
     onEdit: (expense: Expense) => void;
     onDelete: (expense: Expense) => void;
@@ -66,87 +73,101 @@ export function Transactions({
                     </tr>
                 </thead>
                 <tbody>
-                    {rows.map((expense) => (
-                        <tr
-                            key={expense.id}
-                            className="group border-b border-border/60 transition-colors hover:bg-white/1.5">
-                            <td className="py-4 pr-4">
-                                <button
-                                    onClick={() => onEdit(expense)}
-                                    className="flex max-w-full items-center gap-3 text-left">
-                                    <CategoryIcon category={expense.category} />
-                                    <span>
-                                        <span className="block max-w-32 truncate text-xs sm:max-w-52">
-                                            {expense.merchant}
-                                            {expense.recurrence && <span className="ml-2 text-[9px] text-muted-foreground">{expense.recurrence}</span>}
+                    {rows.map((expense) => {
+                        const circle = isCircleTransaction(expense) ? expense : null;
+                        const label = transactionName(expense);
+                        const open = () => circle ? onCircle?.(circle) : onEdit(expense as Expense);
+                        return (
+                            <tr
+                                key={`${expense.collectionName}:${expense.id}`}
+                                className="group border-b border-border/60 transition-colors hover:bg-white/1.5">
+                                <td className="py-4 pr-4">
+                                    <button
+                                        onClick={open}
+                                        className="flex max-w-full items-center gap-3 text-left">
+                                        <CategoryIcon category={expense.category} />
+                                        <span>
+                                            <span className="block max-w-32 truncate text-xs sm:max-w-52">
+                                                {label}
+                                                {expense.recurrence && <span className="ml-2 text-[9px] text-muted-foreground">{expense.recurrence}</span>}
+                                            </span>
+                                            <span className="mt-1 block max-w-36 truncate text-[9px] text-muted-foreground">
+                                                {circle ?
+                                                    `Circle · ${circle.expand.circle.name}` :
+                                                    expense.payment_method ||
+                                                    (expense.source === "api" ? "Via API" : "Manual entry")}
+                                            </span>
+                                            <span className="mt-1 block text-[9px] text-muted-foreground sm:hidden">
+                                                {dayLabel(expense.occurred_at, timezone)} · {timeLabel(expense.occurred_at, timezone, preferences.time_format)}
+                                            </span>
                                         </span>
-                                        <span className="mt-1 block max-w-36 truncate text-[9px] text-muted-foreground">
-                                            {expense.payment_method ||
-                                                (expense.source === "api" ? "Via API" : "Manual entry")}
-                                        </span>
-                                        <span className="mt-1 block text-[9px] text-muted-foreground sm:hidden">
-                                            {dayLabel(expense.occurred_at, timezone)} · {timeLabel(expense.occurred_at, timezone, preferences.time_format)}
-                                        </span>
+                                    </button>
+                                </td>
+                                <td className="hidden pr-4 text-[10px] text-muted-foreground md:table-cell">
+                                    <span className="rounded-md border border-white/5 bg-white/2 px-2 py-1">
+                                        {circle?.budget_category || expense.category}
                                     </span>
-                                </button>
-                            </td>
-                            <td className="hidden pr-4 text-[10px] text-muted-foreground md:table-cell">
-                                <span className="rounded-md border border-white/5 bg-white/2 px-2 py-1">
-                                    {expense.category}
-                                </span>
-                            </td>
-                            <td className="hidden pr-4 text-[10px] text-muted-foreground sm:table-cell">
-                                <span className="block whitespace-nowrap">{dayLabel(expense.occurred_at, timezone)}</span>
-                                <span className="mt-1 block whitespace-nowrap tabular-nums">{timeLabel(expense.occurred_at, timezone, preferences.time_format)}</span>
-                            </td>
-                            <td className="text-right text-xs whitespace-nowrap tabular-nums">
-                                <div className={expense.kind === "income" ? "text-primary" : ""}>
-                                    {expense.kind === "income" ? "+ " : ""}{money(expense.amount, expense.currency)}{" "}
-                                    <span className="text-[9px] text-muted-foreground">
-                                        {expense.currency}
-                                    </span>
-                                </div>
-                                <ConvertedAmount expense={expense} />
-                            </td>
-                            <td className="pl-2">
-                                <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                        <Button
-                                            variant="ghost"
-                                            size="icon-sm"
-                                            aria-label={`Actions for ${expense.merchant}`}
-                                            className="text-muted-foreground">
-                                            <Ellipsis className="size-4" />
-                                        </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end">
-                                        <DropdownMenuItem onClick={() => onEdit(expense)}>
-                                            Edit {expense.kind}
-                                        </DropdownMenuItem>
-                                        {expense.kind === "expense" && <DropdownMenuItem onClick={() => onMove(expense)}>Move to Circle</DropdownMenuItem>}
-                                        <DropdownMenuItem
-                                            variant="destructive"
-                                            onClick={() => onDelete(expense)}>
-                                            Delete {expense.kind}
-                                        </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                </DropdownMenu>
-                            </td>
-                        </tr>
-                    ))}
+                                </td>
+                                <td className="hidden pr-4 text-[10px] text-muted-foreground sm:table-cell">
+                                    <span className="block whitespace-nowrap">{dayLabel(expense.occurred_at, timezone)}</span>
+                                    <span className="mt-1 block whitespace-nowrap tabular-nums">{timeLabel(expense.occurred_at, timezone, preferences.time_format)}</span>
+                                </td>
+                                <td className="text-right text-xs whitespace-nowrap tabular-nums">
+                                    <div className={expense.kind === "income" ? "text-primary" : ""}>
+                                        {expense.kind === "income" ? "+ " : ""}{money(transactionAmount(expense), expense.currency)}{" "}
+                                        <span className="text-[9px] text-muted-foreground">
+                                            {expense.currency}
+                                        </span>
+                                    </div>
+                                    {circle && <div className="mt-1 text-[9px] text-muted-foreground">Your share</div>}
+                                    <ConvertedAmount expense={expense} />
+                                </td>
+                                <td className="pl-2">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon-sm"
+                                                aria-label={`Actions for ${label}`}
+                                                className="text-muted-foreground">
+                                                <Ellipsis className="size-4" />
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            {circle ?
+                                                    <DropdownMenuItem onClick={open}>View Circle transaction</DropdownMenuItem> :
+                                                    (
+                                                        <>
+                                                            <DropdownMenuItem onClick={open}>
+                                                                Edit {expense.kind}
+                                                            </DropdownMenuItem>
+                                                            {expense.kind === "expense" && <DropdownMenuItem onClick={() => onMove(expense as Expense)}>Move to Circle</DropdownMenuItem>}
+                                                            <DropdownMenuItem
+                                                                variant="destructive"
+                                                                onClick={() => onDelete(expense as Expense)}>
+                                                                Delete {expense.kind}
+                                                            </DropdownMenuItem>
+                                                        </>
+                                                    )}
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </td>
+                            </tr>
+                        );
+                    })}
                 </tbody>
             </table>
         </div>
     );
 }
 
-function ConvertedAmount({ expense }: { expense: Expense }) {
+function ConvertedAmount({ expense }: { expense: Transaction }) {
     const { preferences, rates } = useWorkspace();
     const mainCurrency = preferences.currency;
     if (expense.currency === mainCurrency) return null;
 
     const convertedAmount = convertAmount(
-        expense.amount,
+        transactionAmount(expense),
         expense.currency,
         mainCurrency,
         rates,

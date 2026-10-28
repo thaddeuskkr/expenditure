@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "14.0.0",
+    "version": "15.0.0",
     "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring expenses run on the PocketBase server every minute, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -3924,6 +3924,14 @@
             "type": "string",
             "maxLength": 60,
             "description": "An active category name from the target Circle. Omission on creation selects Other or the first active category; unchanged archived categories remain valid on edit."
+          },
+          "receipt": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CircleReceipt"
+              }
+            ],
+            "description": "Send null to remove receipt mode. On edit, omission retains and revalidates the saved receipt. Only kind=expense and split_mode=exact are accepted with a receipt; amount and shares must exactly match the calculation."
           }
         },
         "required": [
@@ -4241,6 +4249,9 @@
             "type": "string",
             "readOnly": true,
             "description": "Original personal expense ID when transferred; empty for entries created directly in the Circle."
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/CircleReceipt"
           }
         },
         "required": [
@@ -4256,7 +4267,8 @@
           "version",
           "category",
           "source",
-          "origin_expense"
+          "origin_expense",
+          "receipt"
         ]
       },
       "CircleSettlementInput": {
@@ -6381,6 +6393,116 @@
           "totalPages",
           "items"
         ]
+      },
+      "CircleReceipt": {
+        "type": "object",
+        "nullable": true,
+        "additionalProperties": false,
+        "required": [
+          "input_mode",
+          "items",
+          "discount",
+          "service_rate_bp",
+          "service_amount",
+          "gst_mode",
+          "gst_rate_bp",
+          "gst_amount",
+          "adjustment"
+        ],
+        "properties": {
+          "input_mode": {
+            "type": "string",
+            "enum": [
+              "items",
+              "subtotals"
+            ],
+            "description": "Subtotals require exactly one item per participant, assigned only to that member."
+          },
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "label",
+                "amount",
+                "members"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 120
+                },
+                "amount": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 99999999999
+                },
+                "members": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 50,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9]{15}$"
+                  },
+                  "description": "Circle membership IDs. Each line total is divided equally among these members with deterministic rounding."
+                }
+              }
+            }
+          },
+          "discount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99999999999,
+            "description": "Discount in minor units, smaller than subtotal. Distributed proportionally before calculating charges."
+          },
+          "service_rate_bp": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "description": "1000 = 10%. Applied to the discounted subtotal excluding included GST."
+          },
+          "service_amount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99999999999,
+            "nullable": true,
+            "description": "Printed service charge in minor units, or null to calculate using the rate. Zero explicitly waives the charge."
+          },
+          "gst_mode": {
+            "type": "string",
+            "enum": [
+              "included",
+              "added",
+              "none"
+            ]
+          },
+          "gst_rate_bp": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "description": "900 = 9%. Added GST applies to discounted items plus service. Included GST is extracted from item prices; added service incurs additional GST."
+          },
+          "gst_amount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99999999999,
+            "nullable": true,
+            "description": "Printed added GST amount, or null for automatic calculation. Must be null for included or no GST."
+          },
+          "adjustment": {
+            "type": "integer",
+            "minimum": -99999999999,
+            "maximum": 99999999999,
+            "description": "Signed final adjustment for receipt rounding or other fees. Distributed proportionally; total must stay positive and shares non-negative."
+          }
+        },
+        "description": "Saved receipt calculation for expense entries with exact splits. The server recomputes amount and shares and rejects mismatches. At most 50 participants across all items. No floating-point money; all money is in currency minor units. Charges use receipt-level half-up rounding and deterministic largest-remainder allocation."
       }
     }
   }

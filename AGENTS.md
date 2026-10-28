@@ -33,6 +33,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - `pocketbase/pb_hooks/circles.pb.js`, `circles-service.js`: Circle routes, permissions, transactions, and ledger operations.
 - `pocketbase/pb_hooks/circle-categories.js`, `circle-categories.pb.js`: owner-only Circle category creation, rename/archive/restore, ordering and replacement from the owner personal settings. Unmatched categories used in history remain archived.
 - `pocketbase/pb_hooks/expense-moves.js`, `expense-moves.pb.js`: atomic member-owned personal expense transfers; self-only initial allocation, recurring schedule transfer, and immutable retry receipts.
+- `pocketbase/pb_hooks/receipt-core.cjs`, `receipt-core.d.cts`: shared receipt math and types. Receipt expenses retain items, assignments and charge settings in `receipt`, with server-verified exact shares. Discounts precede charges; added GST includes service charge; included GST is extracted before calculating added service and GST on that service. Allocate charges with deterministic integer rounding.
 - `pocketbase/pb_hooks/circles-core.cjs`: allocation and settlement calculations shared by frontend and backend. Keep `circles-core.d.cts` in sync.
 - `pocketbase/pb_hooks/exchange-rates.js`, `overview.js`, `request.js`: cached rates, complete-dataset reports, and timestamp validation.
 - `pocketbase/pb_hooks/recurrence.js`, `recurrence.pb.js`: recurring schedules, timezone/calendar advancement, transactional generation and pause errors. Schedules live on the original expense; generated entries have no recurrence.
@@ -74,7 +75,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - The frontend URL is `expenditure.tkkr.dev`; the configured PocketBase URL is `e.tkkr.dev`. `NEXT_PUBLIC_POCKETBASE_URL` is public and baked into the client at build time. Do not change a running server or deployment without authorization.
 - Prepare installable PocketBase files for the user; do not assume server access. Copy all hook files, including JSON/CJS modules, together with all unapplied migrations. Keep the matching frontend/schema/hooks coordinated.
 - Add new migrations; do not rewrite applied history or remove old migrations because they contain earlier field names. Historical migrations are not runtime compatibility aliases. Back up before applying; some down migrations delete collections/data.
-- Current backend status is version 14 in `main.pb.js`, checked by workspace startup. When a contract changes, update both the reported and required version together.
+- Current backend status is version 15 in `main.pb.js`, checked by workspace startup. When a contract changes, update both the reported and required version together.
 - Test fresh installation and upgrades with existing records. Preserve IDs, amounts, timestamps, provider configuration, and ledger balances unless the requested change explicitly requires otherwise.
 - PocketBase 0.40.6 is the validated server version; do not confuse it with the JS SDK version. Read `package.json` for installed frontend/tool versions.
 - OAuth callback uses the PocketBase URL with `/api/oauth2-redirect`. Preserve exact allowed origins and realtime/SSE support. The frontend does not need a separate OAuth callback or privileged API proxy.

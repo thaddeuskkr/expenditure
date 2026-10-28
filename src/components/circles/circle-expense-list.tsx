@@ -54,7 +54,7 @@ export function CircleExpenseList({
                                 <span className="mt-2 block text-[10px] text-muted-foreground">
                                     {name(expense.paid_by)} {expense.kind === "income" ? "received" : "paid"} ·{" "}
                                     {dayLabel(expense.occurred_at, preferences.timezone)} · {timeLabel(expense.occurred_at, preferences.timezone, preferences.time_format)} ·{" "}
-                                    {SPLIT_LABELS[expense.split_mode]}
+                                    {expense.receipt ? "Receipt" : SPLIT_LABELS[expense.split_mode]}
                                 </span>
                                 <span className="mt-1 block text-[10px] text-muted-foreground">
                                     {expense.category}

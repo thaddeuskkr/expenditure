@@ -75,14 +75,14 @@ routerAdd(
     "/api/expenditure/circles/{id}/expenses",
     (e) => require(`${__hooks}/circles-service.js`).saveExpense(e),
     $apis.requireAuth("users"),
-    $apis.bodyLimit(16384),
+    $apis.bodyLimit(262144),
 );
 routerAdd(
     "PATCH",
     "/api/expenditure/circles/{id}/expenses/{expense}",
     (e) => require(`${__hooks}/circles-service.js`).saveExpense(e),
     $apis.requireAuth("users"),
-    $apis.bodyLimit(16384),
+    $apis.bodyLimit(262144),
 );
 routerAdd(
     "DELETE",

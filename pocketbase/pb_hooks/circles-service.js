@@ -596,6 +596,7 @@ function saveExpense(e) {
         "paid_by",
         "split_mode",
         "shares",
+        "receipt",
         "payment_method",
         "notes",
         "occurred_at",
@@ -641,6 +642,20 @@ function saveExpense(e) {
                 throw new BadRequestError(String(error.message || error));
             }
 
+            const receipt = data.receipt === undefined ? (expense ? JSON.parse(expense.getString("receipt") || "null") : null) : data.receipt;
+            if (receipt !== null) {
+                try {
+                    const calculation = require(`${__hooks}/receipt-core.cjs`).calculate(receipt);
+                    const kind = data.kind === undefined ? (expense ? expense.getString("kind") : "expense") : data.kind;
+                    if (kind !== "expense" || data.split_mode !== "exact" || total !== calculation.amount || shares.length !== calculation.shares.length || shares.some((share) => !calculation.shares.some((expected) => expected.member === share.member && expected.amount === share.amount)))
+                        throw new Error("Receipt totals and exact shares must match the calculated expense.");
+                    // Check every assigned member, even when their rounded share is zero.
+                    receipt.items.forEach((item) => item.members.forEach((id) => memberInCircle(members, id, formerAllowed)));
+                } catch (error) {
+                    throw new BadRequestError(String(error.message || error));
+                }
+            }
+
             shares.forEach((share) => memberInCircle(members, share.member, formerAllowed));
             const fields = {
                 circle: circle.id,
@@ -654,6 +669,7 @@ function saveExpense(e) {
                 paid_by: data.paid_by,
                 split_mode: data.split_mode,
                 shares,
+                receipt,
                 payment_method: text(data.payment_method, "Payment method", 80, false),
                 notes: text(data.notes, "Notes", 2000, false),
                 occurred_at: occurredAt(data.occurred_at),

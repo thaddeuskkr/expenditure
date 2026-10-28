@@ -329,6 +329,7 @@ test(
             assert.equal(migrated.category, "Other");
             assert.equal(migrated.source, "manual");
             assert.equal(migrated.amount_minor, undefined);
+            assert.equal(migrated.receipt, null);
             assert.deepEqual(migrated.shares, original.shares.map(({ amount_minor, ...share }) => ({ ...share, amount: amount_minor })));
             assert.equal(migrated.payment_method, original.payment_method);
             assert.equal(migrated.notes, original.notes);

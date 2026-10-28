@@ -1,8 +1,11 @@
+import receiptCore from "../../pocketbase/pb_hooks/receipt-core.cjs";
 import core from "../../pocketbase/pb_hooks/circles-core.cjs";
 import type { Expense, CategoryDefinition, RecurringFields, Recurrence } from "./domain";
 import { pb } from "./pocketbase";
 
-export { core as circleCore };
+export { core as circleCore, receiptCore };
+export type CircleReceipt = receiptCore.Receipt;
+export type ReceiptResult = receiptCore.Result;
 export const SPLIT_LABELS = { even: "Equal", percentage: "Percentage", exact: "Exact amounts" };
 export type SplitMode = core.SplitMode;
 export type CircleIconName = core.CircleIcon;
@@ -37,6 +40,7 @@ export interface CircleExpense extends RecurringFields {
     amount: number;
     paid_by: string;
     created_by: string;
+    receipt: CircleReceipt | null;
     split_mode: SplitMode;
     shares: CircleShare[];
     payment_method: string;
@@ -91,6 +95,7 @@ export interface CircleExpenseInput {
     currency: string;
     amount: number;
     paid_by: string;
+    receipt?: CircleReceipt | null;
     split_mode: SplitMode;
     shares: core.SplitInput[];
     payment_method: string;

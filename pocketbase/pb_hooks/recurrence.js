@@ -104,7 +104,7 @@ function generate(app, collection, id, now) {
                 before = service.balances(tx, seed.getString("circle"));
             } else tx.findRecordById("users", seed.getString("user"));
             const copy = new Record(tx.findCollectionByNameOrId(collection));
-            const fields = shared ? ["circle", "title", "category", "source", "paid_by", "created_by", "split_mode", "shares"] : ["user", "merchant", "category"];
+            const fields = shared ? ["circle", "title", "category", "source", "paid_by", "created_by", "split_mode", "shares", "receipt"] : ["user", "merchant", "category"];
             fields.concat(["kind", "amount", "currency", "notes", "payment_method"]).forEach((field) => copy.set(field, seed.get(field)));
             copy.set("occurred_at", next);
             if (shared) copy.set("version", 1);

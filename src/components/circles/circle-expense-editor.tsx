@@ -22,12 +22,16 @@ import {
 } from "@/lib/domain";
 import {
     circleCore,
+    receiptCore,
+    type ReceiptResult,
+    type CircleReceipt,
     circlesApi,
     type CircleDetail,
     type CircleExpense,
     type CircleShare,
     type SplitMode,
 } from "@/lib/circles";
+import { ReceiptEditor, receiptDraft, parseReceipt } from "./receipt-editor";
 import { CircleModal, CurrencySelect, FormError, SaveButton } from "./circle-dialogs";
 
 export function CircleExpenseEditor({
@@ -59,7 +63,8 @@ export function CircleExpenseEditor({
         expense ? formatAmountInput(expense.amount, expense.currency) : "",
     );
     const [payer, setPayer] = useState(expense?.paid_by || data.me);
-    const [mode, setMode] = useState<SplitMode>(expense?.split_mode || "even");
+    const [mode, setMode] = useState<SplitMode | "receipt">(expense?.receipt ? "receipt" : expense?.split_mode || "even");
+    const [receipt, setReceipt] = useState(() => receiptDraft(expense?.receipt, eligible, expense?.currency || data.circle.currency));
     const [selected, setSelected] = useState(
         expense?.shares.map((share) => share.member) ||
         eligible.filter((m) => m.active).map((m) => m.id),
@@ -76,9 +81,12 @@ export function CircleExpenseEditor({
     );
     const [busy, setBusy] = useState(false),
         [error, setError] = useState("");
+    let receiptResult: ReceiptResult | null = null;
+    let receiptInput: CircleReceipt | null = null;
     let preview: CircleShare[] = [],
         splitError = "";
     function splitInputs() {
+        if (mode === "receipt") return receiptResult?.shares || [];
         return selected.map((member) => ({
             member,
             ...(mode === "percentage" ?
@@ -88,25 +96,33 @@ export function CircleExpenseEditor({
     }
 
     try {
-        preview = circleCore.allocate(
-            parseMinorUnits(amount, code),
-            mode,
-            splitInputs(),
-        );
+        if (mode === "receipt") {
+            receiptInput = parseReceipt(receipt, code);
+            receiptResult = receiptCore.calculate(receiptInput);
+            preview = receiptResult.shares;
+        } else {
+            preview = circleCore.allocate(parseMinorUnits(amount, code), mode, splitInputs());
+        }
     } catch (e) {
         splitError = errorMessage(e);
     }
 
-    function changeMode(next: SplitMode) {
+    function changeMode(next: SplitMode | "receipt") {
         setMode(next);
-        if (next === "percentage" && selected.length) {
+        const participants = mode === "receipt" && receiptResult ? receiptResult.shares.map((share) => share.member) : selected;
+        if (mode === "receipt" && receiptResult) {
+            setAmount(formatAmountInput(receiptResult.amount, code));
+            setSelected(participants);
+        }
+
+        if (next === "percentage" && participants.length) {
             setValues(
                 Object.fromEntries(
                     circleCore
                         .allocate(
                             10000,
                             "even",
-                            selected.map((member) => ({ member })),
+                            participants.map((member) => ({ member })),
                         )
                         .map((share) => [share.member, (share.amount / 100).toFixed(2)]),
                 ),
@@ -141,10 +157,11 @@ export function CircleExpenseEditor({
                     recurrence: entryKind === "expense" ? recurrence : "",
                     title: String(form.get("title")).trim(),
                     category,
-                    amount: parseMinorUnits(amount, code),
+                    amount: mode === "receipt" ? receiptResult!.amount : parseMinorUnits(amount, code),
                     currency: code,
                     paid_by: payer,
-                    split_mode: mode,
+                    split_mode: mode === "receipt" ? "exact" : mode,
+                    receipt: mode === "receipt" ? receiptInput : null,
                     shares: splitInputs(),
                     payment_method: String(form.get("payment_method") || ""),
                     notes: String(form.get("notes") || ""),
@@ -191,17 +208,18 @@ export function CircleExpenseEditor({
                 <div className="grid grid-cols-2 gap-4">
                     <div>
                         <label htmlFor="shared-amount" className="field-label">
-                            Amount
+                            {mode === "receipt" ? "Receipt total" : "Amount"}
                         </label>
                         <Input
                             id="shared-amount"
                             name="amount"
                             inputMode="decimal"
-                            value={amount}
+                            value={mode === "receipt" ? receiptResult ? formatAmountInput(receiptResult.amount, code) : "" : amount}
+                            readOnly={mode === "receipt"}
                             onChange={(e) => setAmount(e.target.value)}
                             placeholder={formatAmountInput(0, code)}
-                            required
-                            className="h-10"
+                            required={mode !== "receipt"}
+                            className={`h-10 ${mode === "receipt" ? "border-primary/20 bg-primary/4 text-primary" : ""}`}
                         />
                     </div>
                     <div>
@@ -253,12 +271,13 @@ export function CircleExpenseEditor({
                 </div>
                 <fieldset className="border-t pt-5">
                     <legend className="field-label pt-5">Split between</legend>
-                    <div className="mb-5 flex gap-1 rounded-lg border p-1">
+                    <div className={`mb-5 grid gap-1 rounded-lg border p-1 ${entryKind === "expense" ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
                         {(
                             [
                                 ["even", "Equal"],
                                 ["percentage", "Percentage"],
                                 ["exact", "Exact amounts"],
+                                ...(entryKind === "expense" ? [["receipt", "Receipt"] as const] : []),
                             ] as const
                         ).map(([value, label]) => (
                             <Button
@@ -272,81 +291,89 @@ export function CircleExpenseEditor({
                             </Button>
                         ))}
                     </div>
-                    <div className="mb-2 flex justify-end">
-                        <button
-                            type="button"
-                            className="text-[11px] text-primary"
-                            onClick={() =>
-                                setSelected(eligible.filter((m) => m.active).map((m) => m.id))}>
-                            Select all active members
-                        </button>
-                    </div>
-                    <div className="divide-y rounded-lg border px-4">
-                        {eligible.map((member) => {
-                            const checked = selected.includes(member.id),
-                                share = preview.find((part) => part.member === member.id);
-                            return (
-                                <div key={member.id} className="flex items-center gap-3 py-3">
-                                    <label className="flex min-w-0 flex-1 items-center gap-3">
-                                        <Checkbox
-                                            checked={checked}
-                                            onCheckedChange={(next) =>
-                                                setSelected((previous) =>
-                                                    next === true ?
-                                                            [...previous, member.id] :
-                                                            previous.filter((id) => id !== member.id),
-                                                )}
-                                        />
-                                        {member.expand.user && (
-                                            <UserAvatar user={member.expand.user} name={member.name} />
-                                        )}
-                                        <span className="min-w-0 truncate text-xs">
-                                            {member.name}
-                                            {member.id === data.me ? " (you)" : ""}
-                                            {!member.active ? " · former" : ""}
-                                        </span>
-                                    </label>
-                                    {checked && mode !== "even" && (
-                                        <div className="flex w-28 items-center gap-2">
-                                            <Input
-                                                aria-label={`${member.name} ${mode === "percentage" ? "percentage" : "exact amount"}`}
-                                                value={values[member.id] || ""}
-                                                onChange={(e) =>
-                                                    setValues((previous) => ({
-                                                        ...previous,
-                                                        [member.id]: e.target.value,
-                                                    }))}
-                                                inputMode="decimal"
-                                                placeholder="0"
-                                                className="h-9 text-right"
-                                            />
-                                            {mode === "percentage" && (
-                                                <span className="text-xs text-muted-foreground">
-                                                    %
-                                                </span>
-                                            )}
-                                        </div>
+                    {mode === "receipt" ?
+                            (
+                                <ReceiptEditor draft={receipt} onChange={setReceipt} members={eligible} me={data.me} currency={code} result={receiptResult} error={splitError} />
+                            ) :
+                            (
+                                <>
+                                    <div className="mb-2 flex justify-end">
+                                        <button
+                                            type="button"
+                                            className="text-[11px] text-primary"
+                                            onClick={() =>
+                                                setSelected(eligible.filter((m) => m.active).map((m) => m.id))}>
+                                            Select all active members
+                                        </button>
+                                    </div>
+                                    <div className="divide-y rounded-lg border px-4">
+                                        {eligible.map((member) => {
+                                            const checked = selected.includes(member.id),
+                                                share = preview.find((part) => part.member === member.id);
+                                            return (
+                                                <div key={member.id} className="flex items-center gap-3 py-3">
+                                                    <label className="flex min-w-0 flex-1 items-center gap-3">
+                                                        <Checkbox
+                                                            checked={checked}
+                                                            onCheckedChange={(next) =>
+                                                                setSelected((previous) =>
+                                                                    next === true ?
+                                                                            [...previous, member.id] :
+                                                                            previous.filter((id) => id !== member.id),
+                                                                )}
+                                                        />
+                                                        {member.expand.user && (
+                                                            <UserAvatar user={member.expand.user} name={member.name} />
+                                                        )}
+                                                        <span className="min-w-0 truncate text-xs">
+                                                            {member.name}
+                                                            {member.id === data.me ? " (you)" : ""}
+                                                            {!member.active ? " · former" : ""}
+                                                        </span>
+                                                    </label>
+                                                    {checked && mode !== "even" && (
+                                                        <div className="flex w-28 items-center gap-2">
+                                                            <Input
+                                                                aria-label={`${member.name} ${mode === "percentage" ? "percentage" : "exact amount"}`}
+                                                                value={values[member.id] || ""}
+                                                                onChange={(e) =>
+                                                                    setValues((previous) => ({
+                                                                        ...previous,
+                                                                        [member.id]: e.target.value,
+                                                                    }))}
+                                                                inputMode="decimal"
+                                                                placeholder="0"
+                                                                className="h-9 text-right"
+                                                            />
+                                                            {mode === "percentage" && (
+                                                                <span className="text-xs text-muted-foreground">
+                                                                    %
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                    {checked && mode === "even" && (
+                                                        <span className="text-xs tabular-nums text-muted-foreground">
+                                                            {share ? money(share.amount, code) : "—"}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {amount && (
+                                        <p
+                                            className={`mt-3 text-[11px] leading-5 ${splitError ? "text-destructive" : "text-muted-foreground"}`}
+                                            aria-live="polite">
+                                            {splitError ||
+                                                `${selected.length} participant${selected.length === 1 ? "" : "s"} · ${money(
+                                                    preview.reduce((sum, share) => sum + share.amount, 0),
+                                                    code,
+                                                )} allocated${mode === "even" ? "; rounding is distributed automatically." : "."}`}
+                                        </p>
                                     )}
-                                    {checked && mode === "even" && (
-                                        <span className="text-xs tabular-nums text-muted-foreground">
-                                            {share ? money(share.amount, code) : "—"}
-                                        </span>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                    {amount && (
-                        <p
-                            className={`mt-3 text-[11px] leading-5 ${splitError ? "text-destructive" : "text-muted-foreground"}`}
-                            aria-live="polite">
-                            {splitError ||
-                                `${selected.length} participant${selected.length === 1 ? "" : "s"} · ${money(
-                                    preview.reduce((sum, share) => sum + share.amount, 0),
-                                    code,
-                                )} allocated${mode === "even" ? "; rounding is distributed automatically." : "."}`}
-                        </p>
-                    )}
+                                </>
+                            )}
                 </fieldset>
                 <div>
                     <label htmlFor="shared-payment" className="field-label">

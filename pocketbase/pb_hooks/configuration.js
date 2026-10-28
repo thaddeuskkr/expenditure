@@ -66,7 +66,7 @@ function initialize(app, user) {
     app.runInTransaction((tx) => {
         if (tx.countRecords("preferences", $dbx.hashExp({ user })) === 0) {
             const record = new Record(tx.findCollectionByNameOrId("preferences"));
-            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview", time_format: "24h", show_circle_transactions: false });
+            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview", time_format: "24h", show_circle_transactions: false, include_circle_in_budgets: true });
             tx.save(record);
         }
 

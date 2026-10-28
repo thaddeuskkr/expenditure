@@ -175,8 +175,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 17)
-                    throw new Error("This app requires backend version 17. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 18)
+                    throw new Error("This app requires backend version 18. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -890,7 +890,7 @@ function Workspace({
                                             <span className="flex size-5 items-center justify-center rounded-full bg-white/4">
                                                 <Wallet className="size-2.5" />
                                             </span>
-                                            {overview.count} expenses this month, including Circle shares
+                                            {overview.count} expenses this month{preferences.include_circle_in_budgets ? ", including Circle shares" : ""}
                                             <span className="mx-1 text-white/15">·</span>
                                             {mainCurrency} · converted total
                                         </div>

@@ -45,7 +45,7 @@ test("Personal monthly spending and budgets include allocated Circle expenses", 
         });
         const content = await response.text();
         const data = content ? JSON.parse(content) : null;
-        assert.equal(response.status, expected, JSON.stringify({ path, data }) + (response.status >= 500 ? logs : ""));
+        assert.equal(response.status, expected, JSON.stringify({ path, data, body }) + (response.status >= 500 ? logs : ""));
         return data;
     }
 
@@ -96,6 +96,63 @@ test("Personal monthly spending and budgets include allocated Circle expenses", 
     } });
     const editInput = (entry, fields) => ({ title: entry.title, kind: entry.kind, amount: entry.amount, currency: entry.currency, category: entry.category, paid_by: entry.paid_by, split_mode: entry.split_mode, shares: entry.shares.map(({ member, amount }) => ({ member, amount })), occurred_at: new Date(entry.occurred_at.replace(" ", "T")).toISOString(), version: entry.version, ...fields });
 
+    await t.test("native preference creation defaults on and respects an explicit opt-out", async () => {
+        for (const include of [undefined, false]) {
+            const account = await api("/api/collections/users/records", { token: admin, body: { email: `native-${include}@example.com`, password, passwordConfirm: password, verified: true } });
+            const preferences = await api("/api/collections/preferences/records", { token: admin, body: {
+                user: account.id, currency: "SGD", currencies: ["SGD"], timezone: "Asia/Singapore",
+                ...(include === undefined ? {} : { include_circle_in_budgets: include }),
+            } });
+            assert.equal(preferences.include_circle_in_budgets, include === undefined);
+        }
+    });
+    await t.test("Circle budgets default on and persist independently of transaction visibility and other accounts", async () => {
+        const g = await group();
+        const config = await api("/api/expenditure/config", { token: g.member.token });
+        assert.equal(config.preferences.include_circle_in_budgets, true);
+        assert.equal(config.preferences.show_circle_transactions, false);
+        const path = `/api/collections/preferences/records/${config.preferences.id}`;
+        await personal(g.member);
+        await personal(g.member, { kind: "income", amount: 500 });
+        const moved = await personal(g.member, { amount: 300 });
+        await api(`${g.path}/expenses/move`, { token: g.member.token, body: { expense: moved.id, previous_updated: moved.updated, category: "Other" } });
+        await create(g, { shares: [{ member: g.ids.member, amount: 800 }, { member: g.ids.owner, amount: 200 }] });
+        await create(g, { occurred_at: "2026-09-15T04:00:00Z" });
+        await create(g, { currency: "AED" });
+        const ledger = await detail(g);
+        assert.equal((await report(g.member)).total, 1300);
+        for (const show_circle_transactions of [false, true]) {
+            await api(path, { token: g.member.token, method: "PATCH", body: { include_circle_in_budgets: false, show_circle_transactions } });
+            const saved = await api("/api/expenditure/config", { token: g.member.token });
+            assert.equal(saved.preferences.include_circle_in_budgets, false);
+            assert.equal(saved.preferences.show_circle_transactions, show_circle_transactions);
+            await api(path, { token: g.member.token, method: "PATCH", body: { time_format: "12h" } });
+            assert.equal((await api("/api/expenditure/config", { token: g.member.token })).preferences.include_circle_in_budgets, false);
+            const summary = await report(g.member);
+            assert.equal(summary.total, 200);
+            assert.equal(summary.count, 1);
+            assert.equal(summary.previous, 0);
+            assert.equal(summary.income, 500);
+            assert.equal(summary.missing_count, 0);
+            assert.equal(summary.previous_missing_count, 0);
+            assert.deepEqual(summary.missing_currencies, []);
+            assert.deepEqual(summary.categories, [{ category: "Other", total: 200, count: 1 }]);
+            assert.deepEqual(summary.original_totals, [{ currency: "SGD", total: 200 }]);
+            assert.equal(summary.activity.reduce((sum, row) => sum + row.total, 0), 200);
+            assert.equal((await report(g.member, { currency: "AED" })).count, 0);
+            assert.equal((await report(g.owner)).total, 200);
+            await api(path, { token: g.member.token, method: "PATCH", body: { include_circle_in_budgets: true } });
+            const enabled = await report(g.member);
+            assert.equal(enabled.total, 1300);
+            assert.equal(enabled.previous, 1000);
+            assert.equal(enabled.missing_count, 1);
+        }
+
+        await api(path, { token: g.other.token, method: "PATCH", body: { include_circle_in_budgets: false }, expected: 404 });
+        assert.equal((await api("/api/expenditure/config", { token: g.member.token })).preferences.include_circle_in_budgets, true);
+        assert.deepEqual((await detail(g)).balances, ledger.balances);
+        assert.deepEqual((await detail(g)).expenses, ledger.expenses);
+    });
     await t.test("budgets use each user's allocation and canonical personal category rather than the payer total", async () => {
         const g = await group();
         await category(g.member, "Dining");
@@ -196,6 +253,11 @@ test("Personal monthly spending and budgets include allocated Circle expenses", 
         await api(`${g.path}/members/${g.ids.member}`, { token: g.member.token, method: "DELETE" });
         await api(g.path, { token: g.member.token, expected: 404 });
         assert.equal((await report(g.member)).total, 1000);
+        const config = await api("/api/expenditure/config", { token: g.member.token });
+        const path = `/api/collections/preferences/records/${config.preferences.id}`;
+        await api(path, { token: g.member.token, method: "PATCH", body: { include_circle_in_budgets: false } });
+        assert.equal((await report(g.member)).total, 0);
+        await api(path, { token: g.member.token, method: "PATCH", body: { include_circle_in_budgets: true } });
         const invitation = await api(`${g.path}/invitations`, { token: g.owner.token, body: { email: g.member.email }, expected: 201 });
         const joined = await api(`/api/expenditure/circle-invitations/${invitation.id}/accept`, { token: g.member.token, body: {} });
         assert.equal(joined.member, g.ids.member);

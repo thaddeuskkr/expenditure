@@ -232,6 +232,12 @@ routerAdd(
     $apis.requireAuth("users"),
 );
 
+onRecordCreateRequest((e) => {
+    if (e.requestInfo().body.include_circle_in_budgets === undefined)
+        e.record.set("include_circle_in_budgets", true);
+    return e.next();
+}, "preferences");
+
 onRecordValidate(
     (e) => {
         require(`${__hooks}/configuration.js`).validate(e.record, e.app);

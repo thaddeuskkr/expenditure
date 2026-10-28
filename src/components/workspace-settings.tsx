@@ -28,7 +28,7 @@ export function WorkspaceSettings({
     onEditRecurring: (expense: Expense) => void;
     recurringRevision: number;
     onSave: (
-        data: Pick<Preferences, "currency" | "timezone" | "currencies" | "default_tab" | "time_format" | "show_circle_transactions">,
+        data: Pick<Preferences, "currency" | "timezone" | "currencies" | "default_tab" | "time_format" | "show_circle_transactions" | "include_circle_in_budgets">,
     ) => Promise<void>;
     onCategoriesChanged: () => Promise<void>;
 }) {
@@ -38,6 +38,7 @@ export function WorkspaceSettings({
     const [timezone, setTimezone] = useState(preferences.timezone);
     const [timeFormat, setTimeFormat] = useState(preferences.time_format);
     const [showCircleTransactions, setShowCircleTransactions] = useState(preferences.show_circle_transactions);
+    const [includeCircleInBudgets, setIncludeCircleInBudgets] = useState(preferences.include_circle_in_budgets);
     const [enabled, setEnabled] = useState(preferences.currencies);
     const [timezoneDate, setTimezoneDate] = useState(() => new Date());
     const timezoneOptions = useMemo(() => {
@@ -50,7 +51,7 @@ export function WorkspaceSettings({
         setBusy(true);
         setError("");
         try {
-            await onSave({ currency: main, timezone, currencies: enabled, default_tab: defaultTab, time_format: timeFormat, show_circle_transactions: showCircleTransactions });
+            await onSave({ currency: main, timezone, currencies: enabled, default_tab: defaultTab, time_format: timeFormat, show_circle_transactions: showCircleTransactions, include_circle_in_budgets: includeCircleInBudgets });
         } catch (e) {
             setError(errorMessage(e));
         } finally {
@@ -104,14 +105,25 @@ export function WorkspaceSettings({
                         </SelectContent>
                     </Select>
                 </div>
-                <div className="flex items-center justify-between gap-5 border-y py-5">
-                    <div>
-                        <label htmlFor="show-circle-transactions" className="text-sm">Show Circle transactions</label>
-                        <p id="circle-transactions-description" className="mt-2 text-[11px] leading-5 text-muted-foreground">Include your allocated Circle shares alongside personal transactions. Budget totals are unchanged.</p>
+                <div className="divide-y border-y">
+                    <div className="flex items-center justify-between gap-5 py-5">
+                        <div>
+                            <label htmlFor="include-circle-in-budgets" className="text-sm">Include Circle spending in budgets</label>
+                            <p id="circle-budgets-description" className="mt-2 text-[11px] leading-5 text-muted-foreground">Count your allocated Circle expense shares in personal budgets and spending summaries.</p>
+                        </div>
+                        <Switch.Root id="include-circle-in-budgets" checked={includeCircleInBudgets} onCheckedChange={setIncludeCircleInBudgets} aria-describedby="circle-budgets-description" className="flex h-6 w-11 shrink-0 items-center rounded-full bg-muted p-0.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-primary">
+                            <Switch.Thumb className="block size-5 rounded-full bg-background shadow transition-transform data-[state=checked]:translate-x-5" />
+                        </Switch.Root>
                     </div>
-                    <Switch.Root id="show-circle-transactions" checked={showCircleTransactions} onCheckedChange={setShowCircleTransactions} aria-describedby="circle-transactions-description" className="flex h-6 w-11 shrink-0 items-center rounded-full bg-muted p-0.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-primary">
-                        <Switch.Thumb className="block size-5 rounded-full bg-background shadow transition-transform data-[state=checked]:translate-x-5" />
-                    </Switch.Root>
+                    <div className="flex items-center justify-between gap-5 py-5">
+                        <div>
+                            <label htmlFor="show-circle-transactions" className="text-sm">Show Circle transactions</label>
+                            <p id="circle-transactions-description" className="mt-2 text-[11px] leading-5 text-muted-foreground">Include your allocated Circle shares alongside personal transactions. Budget totals are unchanged.</p>
+                        </div>
+                        <Switch.Root id="show-circle-transactions" checked={showCircleTransactions} onCheckedChange={setShowCircleTransactions} aria-describedby="circle-transactions-description" className="flex h-6 w-11 shrink-0 items-center rounded-full bg-muted p-0.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-primary">
+                            <Switch.Thumb className="block size-5 rounded-full bg-background shadow transition-transform data-[state=checked]:translate-x-5" />
+                        </Switch.Root>
+                    </div>
                 </div>
                 <div>
                     <label className="field-label" htmlFor="enabled-currencies">Enabled currencies</label>

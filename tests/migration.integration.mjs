@@ -255,6 +255,7 @@ test(
         assert.equal(storedPreferences.default_tab, "Overview");
         assert.equal(storedPreferences.time_format, "24h");
         assert.equal(storedPreferences.show_circle_transactions, false);
+        assert.equal(storedPreferences.include_circle_in_budgets, true);
         assert.equal(storedPreferences.timezone, preferencesBefore.timezone);
         assert.equal(after.payment_method, "Stored Visa");
         assert.equal(after.amount_cents, undefined);

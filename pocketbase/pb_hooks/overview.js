@@ -1,7 +1,8 @@
 function summarize(app, user, range) {
     const config = require(`${__hooks}/configuration.js`);
     const fx = require(`${__hooks}/exchange-rates.js`);
-    const main = config.preferences(app, user).currency;
+    const preferences = config.preferences(app, user);
+    const main = preferences.currency;
     const snapshot = fx.read(app);
     const personalCategory = config.personalCategoryMapper(app, user);
     const rows = arrayOf(
@@ -21,7 +22,8 @@ function summarize(app, user, range) {
              FROM expenses
              WHERE user = {:user} AND moved_to = '' AND occurred_at >= {:previous} AND occurred_at < {:to}
              ${range.currency === "all" ? "" : "AND currency = {:currency}"}
-             UNION ALL
+             ${preferences.include_circle_in_budgets ?
+                    `UNION ALL
              SELECT json_extract(allocation.value, '$.amount') AS amount,
                     shared.kind, shared.currency, shared.category, shared.occurred_at, 1 AS circle_share
              FROM circle_members membership
@@ -30,7 +32,8 @@ function summarize(app, user, range) {
              WHERE membership.user = {:user} AND shared.kind = 'expense'
                AND json_extract(allocation.value, '$.amount') > 0
                AND shared.occurred_at >= {:previous} AND shared.occurred_at < {:to}
-               ${range.currency === "all" ? "" : "AND shared.currency = {:currency}"}`,
+               ${range.currency === "all" ? "" : "AND shared.currency = {:currency}"}` :
+                    ""}`,
         )
         .bind({ ...range, user })
         .all(rows);

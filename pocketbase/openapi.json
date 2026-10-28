@@ -5730,7 +5730,7 @@
           "show_circle_transactions": {
             "type": "boolean",
             "default": false,
-            "description": "Shows personal transactions and positive own Circle expense/income allocations together in the Transactions page and its exports. Off by default for new and upgraded accounts. Does not change monthly budgets or spending summaries."
+            "description": "Shows personal transactions and positive own Circle expense/income allocations together in dashboard recent transactions, the Transactions page and its exports. Off by default for new and upgraded accounts. Does not change monthly budgets or spending summaries."
           }
         },
         "description": "Persisted per-account preferences, editable through the owner-protected PocketBase preferences collection."

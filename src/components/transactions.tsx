@@ -21,6 +21,7 @@ import {
     transactionName,
     transactionAmount,
     recurrenceLabel,
+    recurrenceFrequencyLabel,
     type Transaction,
     type CircleTransaction,
     type Expense,
@@ -87,16 +88,18 @@ export function Transactions({
                                         onClick={open}
                                         className="flex max-w-full items-center gap-3 text-left">
                                         <CategoryIcon category={expense.category} />
-                                        <span>
-                                            <span className="block max-w-32 truncate text-xs sm:max-w-52">
+                                        <span className="min-w-0">
+                                            <span className="block max-w-32 truncate text-xs sm:max-w-52" title={label}>
                                                 {label}
-                                                {expense.recurrence && <span className="ml-2 text-[9px] text-muted-foreground">{recurrenceLabel(expense)}</span>}
                                             </span>
-                                            <span className="mt-1 block max-w-36 truncate text-[9px] text-muted-foreground">
-                                                {circle ?
-                                                    `Circle · ${circle.expand.circle.name}` :
-                                                    expense.payment_method ||
-                                                    (expense.source === "api" ? "Via API" : "Manual entry")}
+                                            <span className="mt-1 flex max-w-36 flex-wrap items-center gap-x-2 gap-y-1 text-[9px] text-muted-foreground sm:max-w-52">
+                                                <span className="max-w-full truncate">
+                                                    {circle ?
+                                                        `Circle · ${circle.expand.circle.name}` :
+                                                        expense.payment_method ||
+                                                        (expense.source === "api" ? "Via API" : "Manual entry")}
+                                                </span>
+                                                {expense.recurrence && <span className="shrink-0 whitespace-nowrap" title={recurrenceLabel(expense)}>{recurrenceFrequencyLabel(expense)}</span>}
                                             </span>
                                             <span className="mt-1 block text-[9px] text-muted-foreground sm:hidden">
                                                 {dayLabel(expense.occurred_at, timezone)} · {timeLabel(expense.occurred_at, timezone, preferences.time_format)}

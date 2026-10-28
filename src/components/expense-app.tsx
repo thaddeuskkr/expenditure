@@ -291,7 +291,7 @@ function Workspace({
         setConfiguration(result);
     }, []);
     const categoryNames = configuration.categories.map((c) => c.name);
-    const showCircleTransactions = section === "Transactions" && preferences.show_circle_transactions;
+    const showCircleTransactions = (section === "Overview" || section === "Transactions") && preferences.show_circle_transactions;
     if (showCircleTransactions && !categoryNames.some((name) => name.toLowerCase() === "other")) categoryNames.push("Other");
     const transactionParams = useMemo(() => new URLSearchParams({ from: range.from, to: range.to, currency: filterCurrency, category, search: debouncedSearch.trim() }), [range, filterCurrency, category, debouncedSearch]);
     const visibleCurrencies = Array.from(
@@ -940,6 +940,7 @@ function Workspace({
                                     </div>
                                     <Transactions
                                         rows={expenses.slice(0, 5)}
+                                        onCircle={setCircleTransaction}
                                         timezone={timezone}
                                         onEdit={setEditor}
                                         onDelete={setDeleting}

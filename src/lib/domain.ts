@@ -47,11 +47,16 @@ export interface RecurringFields extends RecurrenceSchedule {
 }
 export const RECURRENCE_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 export const RECURRENCE_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-export function recurrenceLabel(schedule: RecurrenceSchedule & { recurrence_anchor?: string }, start = schedule.recurrence_anchor) {
-    const { recurrence, recurrence_interval: interval, recurrence_day: day } = schedule;
+export function recurrenceFrequencyLabel({ recurrence, recurrence_interval: interval }: Pick<RecurrenceSchedule, "recurrence" | "recurrence_interval">) {
     if (!recurrence) return "";
     const units = { daily: "day", weekly: "week", monthly: "month", yearly: "year" };
-    const frequency = interval === 1 ? recurrence[0].toUpperCase() + recurrence.slice(1) : `Every ${interval} ${units[recurrence]}s`;
+    return interval === 1 ? recurrence[0].toUpperCase() + recurrence.slice(1) : `Every ${interval} ${units[recurrence]}s`;
+}
+
+export function recurrenceLabel(schedule: RecurrenceSchedule & { recurrence_anchor?: string }, start = schedule.recurrence_anchor) {
+    const { recurrence, recurrence_day: day } = schedule;
+    if (!recurrence) return "";
+    const frequency = recurrenceFrequencyLabel(schedule);
     if (recurrence === "weekly") {
         const weekdays = schedule.recurrence_weekdays?.length ? schedule.recurrence_weekdays : start ? [new Date(start.slice(0, 10) + "T12:00:00Z").getUTCDay() || 7] : [];
         if (weekdays.length === 7) return frequency + " on every day";

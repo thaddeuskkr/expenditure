@@ -26,7 +26,7 @@ export function CircleExpenseDetails({ expense, detail, onClose, onEdit, onDelet
     const payer = detail.members.find((member) => member.id === expense.paid_by);
     const payerName = payer?.name || "Former member";
     const receiptResult = expense.receipt ? receiptCore.calculate(expense.receipt) : null;
-    const splitLabel = expense.receipt ? "Receipt split" : `${SPLIT_LABELS[expense.split_mode]}${expense.split_mode === "exact" ? " amounts" : " split"}`;
+    const splitLabel = expense.receipt ? "Receipt split" : `${SPLIT_LABELS[expense.split_mode]}${expense.split_mode === "exact" ? "" : " split"}`;
     return (
         <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
             <DialogContent className="gap-5 p-5 sm:max-w-lg sm:p-6">

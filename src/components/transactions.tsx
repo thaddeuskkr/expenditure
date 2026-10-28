@@ -99,7 +99,7 @@ export function Transactions({
                                                         expense.payment_method ||
                                                         (expense.source === "api" ? "Via API" : "Manual entry")}
                                                 </span>
-                                                {expense.recurrence && <span className="shrink-0 whitespace-nowrap" title={recurrenceLabel(expense)}>{recurrenceFrequencyLabel(expense)}</span>}
+                                                {expense.recurrence && <span className="shrink-0 whitespace-nowrap" title={recurrenceLabel(expense)}><span aria-hidden="true" className="mr-2">·</span>{recurrenceFrequencyLabel(expense)}</span>}
                                             </span>
                                             <span className="mt-1 block text-[9px] text-muted-foreground sm:hidden">
                                                 {dayLabel(expense.occurred_at, timezone)} · {timeLabel(expense.occurred_at, timezone, preferences.time_format)}

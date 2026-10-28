@@ -12,10 +12,9 @@ import {
     DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useWorkspace } from "../workspace-context";
-import { dayLabel, errorMessage, money, timeLabel } from "@/lib/domain";
+import { dayLabel, errorMessage, money } from "@/lib/domain";
 import {
     circlesApi,
-    SPLIT_LABELS,
     type CircleSettlement,
     type CircleMember,
     type CircleInvitation,
@@ -31,7 +30,6 @@ import { CircleBalances } from "./circle-balances";
 import { CircleMembers } from "./circle-members";
 import {
     CircleConfirmDialog,
-    CircleModal,
     CircleSettingsDialog,
     CurrencySelect,
     FormError,
@@ -40,6 +38,7 @@ import {
 } from "./circle-dialogs";
 import { CircleCategorySettings } from "./circle-category-settings";
 import { CircleExpenseEditor } from "./circle-expense-editor";
+import { CircleExpenseDetails } from "./circle-expense-details";
 import { SettlementDialog } from "./settlement-dialog";
 
 type Confirmation = {
@@ -132,7 +131,6 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
     }
 
     const detail = data?.circle.id === selected ? data : null;
-    const name = (id: string) => detail?.members.find((m) => m.id === id)?.name || "Former member";
     const currencies = [
         ...new Set([
             detail?.circle.currency || preferences.currency,
@@ -628,62 +626,18 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                 />
             )}
             {detail && viewing && (
-                <CircleModal
-                    title={viewing.title}
-                    description={`${name(viewing.paid_by)} ${viewing.kind === "income" ? "received" : "paid"} ${money(viewing.amount, viewing.currency)} ${viewing.currency} · ${SPLIT_LABELS[viewing.split_mode]}`}
-                    onClose={() => setViewing(null)}>
-                    <div className="space-y-5 pt-2">
-                        <p className="text-xs text-muted-foreground">{viewing.category}{viewing.source === "api" ? " · Via API" : ""}</p>
-                        <p className="text-xs text-muted-foreground">
-                            {dayLabel(viewing.occurred_at, preferences.timezone)} · {timeLabel(viewing.occurred_at, preferences.timezone, preferences.time_format)} · {preferences.timezone.replaceAll("_", " ")}
-                        </p>
-                        <div className="divide-y">
-                            {viewing.shares.map((share) => (
-                                <div
-                                    key={share.member}
-                                    className="flex items-center justify-between gap-4 py-3 text-xs">
-                                    <span>
-                                        {name(share.member)}
-                                        {share.percentage_bp !== undefined ?
-                                            ` · ${(share.percentage_bp / 100).toFixed(2)}%` :
-                                            ""}
-                                    </span>
-                                    <span className="tabular-nums">
-                                        {money(share.amount, viewing.currency)}{" "}
-                                        {viewing.currency}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                        {viewing.payment_method && (
-                            <p className="text-xs text-muted-foreground">
-                                Paid with {viewing.payment_method}
-                            </p>
-                        )}
-                        {viewing.notes && (
-                            <p className="text-xs leading-6 whitespace-pre-wrap text-muted-foreground">
-                                {viewing.notes}
-                            </p>
-                        )}
-                        {canModify(viewing.created_by) && (
-                            <div className="flex justify-between border-t pt-4">
-                                <Button
-                                    variant="ghost"
-                                    className="text-destructive"
-                                    onClick={() => removeExpense(viewing)}>
-                                    Delete {viewing.kind}
-                                </Button>
-                                <Button
-                                    onClick={() => {
-                                        setEditor(viewing);
-                                        setViewing(null);
-                                    }}>
-                                    Edit {viewing.kind}
-                                </Button>
-                            </div>
-                        )}
-                    </div>
-                </CircleModal>
+                <CircleExpenseDetails
+                    expense={viewing}
+                    detail={detail}
+                    onClose={() => setViewing(null)}
+                    onDelete={canModify(viewing.created_by) ? () => removeExpense(viewing) : undefined}
+                    onEdit={canModify(viewing.created_by) ?
+                            () => {
+                                setEditor(viewing);
+                                setViewing(null);
+                            } :
+                        undefined}
+                />
             )}
         </section>
     );

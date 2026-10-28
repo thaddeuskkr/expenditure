@@ -133,7 +133,7 @@ export function Transactions({
                                                 <Ellipsis className="size-4" />
                                             </Button>
                                         </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
+                                        <DropdownMenuContent align="end" className="w-max max-w-(--radix-dropdown-menu-content-available-width) whitespace-nowrap">
                                             {circle ?
                                                     <DropdownMenuItem onClick={open}>View Circle transaction</DropdownMenuItem> :
                                                     (

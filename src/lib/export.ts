@@ -56,8 +56,10 @@ function exportHeaders(timezone: string, mainCurrency?: string, circles = false)
         "Type",
         "Recurrence",
         "Repeat interval",
-        "Monthly day",
+        "Repeat day",
         ...(circles ? ["Ledger", "Circle", "Circle ID", "Transaction total", "Budget category"] : []),
+        "Repeat weekdays (Monday=1)",
+        "Yearly month",
     ];
 }
 
@@ -80,7 +82,7 @@ function exportValues(
         asDate(expense.occurred_at).toISOString(),
     ];
     const circle = isCircleTransaction(expense) ? expense : null;
-    const tail: ExportCell[] = [expense.kind, expense.recurrence, expense.recurrence ? expense.recurrence_interval : null, expense.recurrence === "monthly" ? expense.recurrence_day : null, ...(circles ? [circle ? "circle" : "personal", circle?.expand.circle.name || "", circle?.circle || "", expense.amount / 10 ** currencyDigits(expense.currency), circle?.budget_category || expense.category] : [])];
+    const tail: ExportCell[] = [expense.kind, expense.recurrence, expense.recurrence ? expense.recurrence_interval : null, ["monthly", "yearly"].includes(expense.recurrence) ? expense.recurrence_day : null, ...(circles ? [circle ? "circle" : "personal", circle?.expand.circle.name || "", circle?.circle || "", expense.amount / 10 ** currencyDigits(expense.currency), circle?.budget_category || expense.category] : []), expense.recurrence === "weekly" ? (expense.recurrence_weekdays || []).join(",") : "", expense.recurrence === "yearly" ? expense.recurrence_month : null];
     if (!mainCurrency) return [...row, ...tail];
 
     const convertedAmount = convertAmount(
@@ -174,9 +176,10 @@ export async function expenseWorkbook(
         views: [{ state: "frozen", ySplit: 1 }],
     });
     const widths = [30, 16, 12, 22, 34, 25, 50, 12, 30, 25, 20, 16, 30];
-    const circleWidths: Record<string, number> = { Ledger: 12, Circle: 28, "Circle ID": 24, "Transaction total": 20, "Budget category": 24 };
+    const circleWidths: Record<string, number> = { Ledger: 12, Circle: 28, "Circle ID": 24, "Transaction total": 20, "Budget category": 24, "Repeat weekdays (Monday=1)": 30 };
     const circles = expenses.some(isCircleTransaction);
-    sheet.columns = exportHeaders(timezone, mainCurrency, circles).map((header, index) => ({
+    const headers = exportHeaders(timezone, mainCurrency, circles);
+    sheet.columns = headers.map((header, index) => ({
         header,
         width: circleWidths[header] || widths[index] || 18,
     }));
@@ -189,7 +192,7 @@ export async function expenseWorkbook(
         const digits = currencyDigits(expense.currency);
         const format = "#,##0" + (digits ? "." + "0".repeat(digits) : "");
         sheet.getCell(index + 2, 2).numFmt = format;
-        if (circles) sheet.getCell(index + 2, sheet.columnCount - 1).numFmt = format;
+        if (circles) sheet.getCell(index + 2, headers.indexOf("Transaction total") + 1).numFmt = format;
     });
     if (mainCurrency) {
         const digits = currencyDigits(mainCurrency);

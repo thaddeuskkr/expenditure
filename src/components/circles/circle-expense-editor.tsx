@@ -51,7 +51,8 @@ export function CircleExpenseEditor({
     const entryKind = expense?.kind || kind;
     const categories = data.categories.filter((item) => item.active || item.name === expense?.category);
     const [category, setCategory] = useState(expense?.category || categories.find((item) => item.name === "Other")?.name || categories[0]?.name || "");
-    const [recurrence, setRecurrence] = useState<RecurrenceSchedule>({ recurrence: expense?.recurrence || "", recurrence_interval: expense?.recurrence_interval || 0, recurrence_day: expense?.recurrence_day || 0 });
+    const [recurrence, setRecurrence] = useState<RecurrenceSchedule>({ recurrence: expense?.recurrence || "", recurrence_interval: expense?.recurrence_interval || 0, recurrence_day: expense?.recurrence_day || 0, recurrence_weekdays: expense?.recurrence_weekdays || [], recurrence_month: expense?.recurrence_month || 0 });
+    const [occurredAt, setOccurredAt] = useState(() => zonedInput(expense?.occurred_at || new Date(), preferences.timezone));
     const eligible = data.members.filter(
         (member) =>
             member.active ||
@@ -253,10 +254,8 @@ export function CircleExpenseEditor({
                         <DateTimePicker
                             id="shared-date"
                             name="occurred_at"
-                            defaultValue={zonedInput(
-                                expense?.occurred_at || new Date(),
-                                preferences.timezone,
-                            )}
+                            defaultValue={occurredAt}
+                            onChange={setOccurredAt}
                             timezone={preferences.timezone}
                             className="h-10"
                         />
@@ -402,7 +401,7 @@ export function CircleExpenseEditor({
                         className="w-full appearance-none rounded-lg border bg-transparent p-3 text-base outline-none focus:border-ring md:text-xs"
                     />
                 </div>
-                <RecurrenceControl kind={entryKind} value={recurrence} onChange={setRecurrence} next={recurrence.recurrence === expense?.recurrence && recurrence.recurrence_interval === expense?.recurrence_interval && recurrence.recurrence_day === expense?.recurrence_day ? expense?.recurrence_next : undefined} timezone={expense?.recurrence_timezone || preferences.timezone} error={expense?.recurrence_error} />
+                <RecurrenceControl kind={entryKind} value={recurrence} onChange={setRecurrence} start={occurredAt} saved={expense} timezone={preferences.timezone} />
                 <FormError error={error} />
                 <DialogFooter>
                     <SaveButton busy={busy} label={expense ? "Save changes" : `Add ${entryKind}`} />

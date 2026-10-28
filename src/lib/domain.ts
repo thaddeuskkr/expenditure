@@ -34,18 +34,40 @@ export interface RecurrenceSchedule {
     recurrence_interval: number;
     /** 0 keeps the original day; -1 means the last day of the month. */
     recurrence_day: number;
+    /** ISO weekdays: Monday = 1, Sunday = 7. Empty uses the entry's weekday. */
+    recurrence_weekdays: number[];
+    /** Yearly month, 1–12. Zero keeps the entry's month. */
+    recurrence_month: number;
 }
 export interface RecurringFields extends RecurrenceSchedule {
+    recurrence_anchor: string;
     recurrence_next: string;
     recurrence_timezone: string;
     recurrence_error: string;
 }
-export function recurrenceLabel(schedule: RecurrenceSchedule) {
+export const RECURRENCE_WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+export const RECURRENCE_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+export function recurrenceLabel(schedule: RecurrenceSchedule & { recurrence_anchor?: string }, start = schedule.recurrence_anchor) {
     const { recurrence, recurrence_interval: interval, recurrence_day: day } = schedule;
     if (!recurrence) return "";
     const units = { daily: "day", weekly: "week", monthly: "month", yearly: "year" };
     const frequency = interval === 1 ? recurrence[0].toUpperCase() + recurrence.slice(1) : `Every ${interval} ${units[recurrence]}s`;
-    return frequency + (recurrence === "monthly" && day ? day === -1 ? " on the last day" : ` on day ${day}` : "");
+    if (recurrence === "weekly") {
+        const weekdays = schedule.recurrence_weekdays?.length ? schedule.recurrence_weekdays : start ? [new Date(start.slice(0, 10) + "T12:00:00Z").getUTCDay() || 7] : [];
+        if (weekdays.length === 7) return frequency + " on every day";
+        if (weekdays.join(",") === "1,2,3,4,5") return frequency + " on weekdays";
+        return frequency + (weekdays.length ? " on " + weekdays.map((value) => RECURRENCE_WEEKDAYS[value - 1].slice(0, 3)).join(", ") : "");
+    }
+
+    const selectedDay = day || Number(start?.slice(8, 10));
+    if (recurrence === "monthly") return frequency + (selectedDay ? selectedDay === -1 ? " on the last day" : ` on day ${selectedDay}` : "");
+    if (recurrence === "yearly") {
+        const month = schedule.recurrence_month || Number(start?.slice(5, 7));
+        const lastDay = new Date(Date.UTC(2028, month, 0)).getUTCDate();
+        if (month && selectedDay) return frequency + (selectedDay === -1 || selectedDay > lastDay ? ` on the last day of ${RECURRENCE_MONTHS[month - 1]}` : ` on ${selectedDay} ${RECURRENCE_MONTHS[month - 1]}`);
+    }
+
+    return frequency;
 }
 
 export interface Expense extends RecordModel, RecurringFields {
@@ -173,6 +195,8 @@ export type ExpenseInput = Pick<
     "recurrence" |
     "recurrence_interval" |
     "recurrence_day" |
+    "recurrence_weekdays" |
+    "recurrence_month" |
     "merchant" |
     "amount" |
     "currency" |

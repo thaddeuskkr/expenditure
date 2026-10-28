@@ -47,7 +47,7 @@ test("Excel export round-trips typed amounts, sortable local dates, headers and 
     assert.equal(sheet.getCell("A2").type, ExcelJS.ValueType.String);
     assert.equal(sheet.getCell("A2").value, expense.merchant);
     assert.equal(sheet.getCell("G2").value, expense.notes);
-    assert.equal(sheet.autoFilter, "A1:M2");
+    assert.equal(sheet.autoFilter, "A1:O2");
     assert.equal(sheet.views[0].state, "frozen");
 });
 
@@ -132,14 +132,15 @@ test("combined exports preserve allocated amounts, full Circle totals and proven
     assert.equal(sheet.getCell("V3").value, "Other");
     assert.equal(sheet.getCell("R2").value, "personal");
     assert.equal(sheet.getCell("U2").value, 8.5);
-    assert.equal(sheet.autoFilter, "A1:V3");
+    assert.equal(sheet.autoFilter, "A1:X3");
     assert.equal(sheet.getCell("I3").value, "2026-09-30T16:05:30.000Z");
 });
 
 test("exports preserve custom income and expense schedules with typed interval and day values", async () => {
     const rows = [
-        { ...expense, kind: "income" as const, recurrence: "weekly" as const, recurrence_interval: 2, recurrence_day: 0 },
+        { ...expense, kind: "income" as const, recurrence: "weekly" as const, recurrence_interval: 2, recurrence_day: 0, recurrence_weekdays: [1, 3, 5] },
         { ...expense, recurrence: "monthly" as const, recurrence_interval: 3, recurrence_day: -1 },
+        { ...expense, recurrence: "yearly" as const, recurrence_interval: 2, recurrence_month: 2, recurrence_day: 29 },
     ];
     const csv = csvExport(rows, "Asia/Singapore");
     assert.ok(csv.includes("\"income\",\"weekly\",\"2\",\"\""));
@@ -156,4 +157,10 @@ test("exports preserve custom income and expense schedules with typed interval a
     assert.equal(sheet.getCell("L3").value, 3);
     assert.equal(sheet.getCell("M3").type, ExcelJS.ValueType.Number);
     assert.equal(sheet.getCell("M3").value, -1);
+    assert.equal(sheet.getCell("N1").value, "Repeat weekdays (Monday=1)");
+    assert.equal(sheet.getCell("N2").value, "1,3,5");
+    assert.equal(sheet.getCell("M4").value, 29);
+    assert.equal(sheet.getCell("O4").type, ExcelJS.ValueType.Number);
+    assert.equal(sheet.getCell("O4").value, 2);
+    assert.ok(csv.includes("\"expense\",\"yearly\",\"2\",\"29\",\"\",\"2\""));
 });

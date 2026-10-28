@@ -108,6 +108,8 @@ test("API-key Circle expenses use the key owner's membership and start fully sel
         assert.equal(imported.source, "api");
         assert.equal(imported.kind, "expense");
         assert.equal(imported.recurrence, "");
+        assert.deepEqual(imported.recurrence_weekdays, []);
+        assert.equal(imported.recurrence_month, 0);
         assert.equal(imported.origin_expense, "");
         assert.equal(imported.version, 1);
         assert.ok(Date.parse(imported.occurred_at) >= before - 1000);
@@ -124,7 +126,7 @@ test("API-key Circle expenses use the key owner's membership and start fully sel
             { paid_by: ownerId }, { paid_by: memberId }, { created_by: ownerId }, { user: owner.id },
             { circle: otherCircle.id }, { shares: [{ member: ownerId }] }, { split_mode: "even" },
             { source: "manual" }, { origin_expense: "existingexpense" }, { kind: "income" },
-            { recurrence: "daily" }, { recurrence_interval: 2 }, { recurrence_day: 15 }, { version: 2 }, { idempotency_key: "attempt" },
+            { recurrence: "daily" }, { recurrence_interval: 2 }, { recurrence_day: 15 }, { recurrence_weekdays: [1] }, { recurrence_month: 12 }, { version: 2 }, { idempotency_key: "attempt" },
         ]) await api(path, { key: memberKey.key, body: { ...input, ...fields }, expected: 400 });
         assert.equal((await detail()).expenses.totalItems, total);
     });

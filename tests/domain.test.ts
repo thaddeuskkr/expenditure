@@ -14,7 +14,19 @@ import {
     zonedInput,
     TIMEZONES,
     timezoneLabel,
+    recurrenceLabel,
+    type RecurrenceSchedule,
 } from "../src/lib/domain.ts";
+test("recurrence summaries distinguish weekdays, month ends and yearly dates", () => {
+    const schedule: RecurrenceSchedule = { recurrence: "weekly", recurrence_interval: 2, recurrence_day: 0, recurrence_weekdays: [1, 3, 5], recurrence_month: 0 };
+    assert.equal(recurrenceLabel(schedule), "Every 2 weeks on Mon, Wed, Fri");
+    assert.equal(recurrenceLabel({ ...schedule, recurrence_weekdays: [] }, "2091-01-01T12:00"), "Every 2 weeks on Mon");
+    assert.equal(recurrenceLabel({ ...schedule, recurrence_weekdays: [], recurrence_anchor: "2091-01-01T12:00:00" }), "Every 2 weeks on Mon");
+    assert.equal(recurrenceLabel({ ...schedule, recurrence: "monthly", recurrence_day: -1, recurrence_interval: 1 }), "Monthly on the last day");
+    assert.equal(recurrenceLabel({ ...schedule, recurrence: "yearly", recurrence_month: 2, recurrence_day: 29 }), "Every 2 years on 29 February");
+    assert.equal(recurrenceLabel({ ...schedule, recurrence: "yearly", recurrence_month: 2, recurrence_day: 31 }), "Every 2 years on the last day of February");
+    assert.equal(recurrenceLabel({ ...schedule, recurrence: "yearly", recurrence_day: 0 }, "2091-12-25T12:00"), "Every 2 years on 25 December");
+});
 test("decimal amounts are parsed exactly into integer cents", () => {
     assert.equal(parseMinorUnits("8.50"), 850);
     assert.equal(parseMinorUnits("0.29"), 29);

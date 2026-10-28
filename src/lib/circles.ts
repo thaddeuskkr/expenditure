@@ -1,6 +1,6 @@
 import receiptCore from "../../pocketbase/pb_hooks/receipt-core.cjs";
 import core from "../../pocketbase/pb_hooks/circles-core.cjs";
-import type { Expense, CategoryDefinition, RecurringFields, Recurrence } from "./domain";
+import type { Expense, CategoryDefinition, RecurringFields, RecurrenceSchedule } from "./domain";
 import { pb } from "./pocketbase";
 
 export { core as circleCore, receiptCore };
@@ -87,12 +87,9 @@ export interface CircleIndex {
     circles: Circle[];
     invitations: IncomingInvitation[];
 }
-export interface CircleExpenseInput {
+export interface CircleExpenseInput extends RecurrenceSchedule {
     category: string;
     kind: "expense" | "income";
-    recurrence: Recurrence;
-    recurrence_interval: number;
-    recurrence_day: number;
     title: string;
     currency: string;
     amount: number;

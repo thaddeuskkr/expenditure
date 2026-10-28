@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "16.0.0",
+    "version": "17.0.0",
     "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring income and expenses run on the PocketBase server every minute, with custom intervals and monthly dates, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -2269,7 +2269,7 @@
               "monthly",
               "yearly"
             ],
-            "description": "Empty disables recurrence for expenses or income. The original entry holds the schedule; generated copies have empty recurrence and zero interval/day fields. Enabling, changing or resuming a paused schedule starts at its next future occurrence after both the entry and the current time; active schedules catch up after downtime. Days/weeks retain the original weekday and wall-clock time in the saved timezone. Monthly and yearly dates clamp to shorter months without losing their anchor."
+            "description": "Empty disables recurrence for expenses or income. Only the original entry holds a schedule; generated copies have empty recurrence, zero interval/day/month and empty weekdays. Enabling, changing or resuming starts strictly after both the entry instant and now; active schedules catch up after downtime. Occurrences retain the entry wall-clock time in the saved timezone. Monthly and yearly dates clamp to shorter months without losing the requested day."
           },
           "recurrence_interval": {
             "type": "integer",
@@ -2283,7 +2283,7 @@
             "minimum": -1,
             "maximum": 31,
             "default": 0,
-            "description": "Monthly schedules only: 0 keeps the original calendar day, -1 selects the last day of each scheduled month, and 1 to 31 selects that day (clamped in shorter months). A chosen day can generate later in the original month; custom intervals are anchored to that month. Other frequencies require 0."
+            "description": "Monthly or yearly schedules: 0 keeps the original calendar day, -1 selects the last day of the scheduled month, and 1 to 31 selects that day, clamped in shorter months. Explicit dates may recur later in the original month or year. Other frequencies require 0."
           },
           "recurrence_timezone": {
             "type": "string",
@@ -2314,6 +2314,25 @@
             "type": "string",
             "readOnly": true,
             "description": "Destination Circle ID on a transfer receipt."
+          },
+          "recurrence_weekdays": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "maxItems": 7,
+            "uniqueItems": true,
+            "default": [],
+            "description": "Weekly only: ISO weekdays (Monday=1, Sunday=7), stored in ascending order. Empty selects the original entry weekday. Weeks start Monday; every-N-week schedules remain anchored to the original entry week. Selected days later in the original week can recur. Other frequencies require an empty array."
+          },
+          "recurrence_month": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12,
+            "default": 0,
+            "description": "Yearly only: month 1 to 12, or 0 to use the original entry month. The year interval stays anchored to the entry year. Other frequencies require 0."
           }
         },
         "required": [
@@ -3931,7 +3950,7 @@
               "monthly",
               "yearly"
             ],
-            "description": "Empty disables recurrence for expenses or income. The original entry holds the schedule; generated copies have empty recurrence and zero interval/day fields. Enabling, changing or resuming a paused schedule starts at its next future occurrence after both the entry and the current time; active schedules catch up after downtime. Days/weeks retain the original weekday and wall-clock time in the saved timezone. Monthly and yearly dates clamp to shorter months without losing their anchor.",
+            "description": "Empty disables recurrence for expenses or income. Only the original entry holds a schedule; generated copies have empty recurrence, zero interval/day/month and empty weekdays. Enabling, changing or resuming starts strictly after both the entry instant and now; active schedules catch up after downtime. Occurrences retain the entry wall-clock time in the saved timezone. Monthly and yearly dates clamp to shorter months without losing the requested day.",
             "default": ""
           },
           "recurrence_interval": {
@@ -3946,7 +3965,7 @@
             "minimum": -1,
             "maximum": 31,
             "default": 0,
-            "description": "Monthly schedules only: 0 keeps the original calendar day, -1 selects the last day of each scheduled month, and 1 to 31 selects that day (clamped in shorter months). A chosen day can generate later in the original month; custom intervals are anchored to that month. Other frequencies require 0."
+            "description": "Monthly or yearly schedules: 0 keeps the original calendar day, -1 selects the last day of the scheduled month, and 1 to 31 selects that day, clamped in shorter months. Explicit dates may recur later in the original month or year. Other frequencies require 0."
           },
           "category": {
             "type": "string",
@@ -3960,6 +3979,25 @@
               }
             ],
             "description": "Send null to remove receipt mode. On edit, omission retains and revalidates the saved receipt. Only kind=expense and split_mode=exact are accepted with a receipt; amount and shares must exactly match the calculation."
+          },
+          "recurrence_weekdays": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "maxItems": 7,
+            "uniqueItems": true,
+            "default": [],
+            "description": "Weekly only: ISO weekdays (Monday=1, Sunday=7), stored in ascending order. Empty selects the original entry weekday. Weeks start Monday; every-N-week schedules remain anchored to the original entry week. Selected days later in the original week can recur. Other frequencies require an empty array."
+          },
+          "recurrence_month": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12,
+            "default": 0,
+            "description": "Yearly only: month 1 to 12, or 0 to use the original entry month. The year interval stays anchored to the entry year. Other frequencies require 0."
           }
         },
         "required": [
@@ -4240,7 +4278,7 @@
               "monthly",
               "yearly"
             ],
-            "description": "Empty disables recurrence for expenses or income. The original entry holds the schedule; generated copies have empty recurrence and zero interval/day fields. Enabling, changing or resuming a paused schedule starts at its next future occurrence after both the entry and the current time; active schedules catch up after downtime. Days/weeks retain the original weekday and wall-clock time in the saved timezone. Monthly and yearly dates clamp to shorter months without losing their anchor."
+            "description": "Empty disables recurrence for expenses or income. Only the original entry holds a schedule; generated copies have empty recurrence, zero interval/day/month and empty weekdays. Enabling, changing or resuming starts strictly after both the entry instant and now; active schedules catch up after downtime. Occurrences retain the entry wall-clock time in the saved timezone. Monthly and yearly dates clamp to shorter months without losing the requested day."
           },
           "recurrence_interval": {
             "type": "integer",
@@ -4254,7 +4292,7 @@
             "minimum": -1,
             "maximum": 31,
             "default": 0,
-            "description": "Monthly schedules only: 0 keeps the original calendar day, -1 selects the last day of each scheduled month, and 1 to 31 selects that day (clamped in shorter months). A chosen day can generate later in the original month; custom intervals are anchored to that month. Other frequencies require 0."
+            "description": "Monthly or yearly schedules: 0 keeps the original calendar day, -1 selects the last day of the scheduled month, and 1 to 31 selects that day, clamped in shorter months. Explicit dates may recur later in the original month or year. Other frequencies require 0."
           },
           "recurrence_timezone": {
             "type": "string",
@@ -4294,6 +4332,25 @@
           },
           "receipt": {
             "$ref": "#/components/schemas/CircleReceipt"
+          },
+          "recurrence_weekdays": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "maxItems": 7,
+            "uniqueItems": true,
+            "default": [],
+            "description": "Weekly only: ISO weekdays (Monday=1, Sunday=7), stored in ascending order. Empty selects the original entry weekday. Weeks start Monday; every-N-week schedules remain anchored to the original entry week. Selected days later in the original week can recur. Other frequencies require an empty array."
+          },
+          "recurrence_month": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12,
+            "default": 0,
+            "description": "Yearly only: month 1 to 12, or 0 to use the original entry month. The year interval stays anchored to the entry year. Other frequencies require 0."
           }
         },
         "required": [
@@ -5891,7 +5948,7 @@
               "monthly",
               "yearly"
             ],
-            "description": "Empty disables recurrence for expenses or income. The original entry holds the schedule; generated copies have empty recurrence and zero interval/day fields. Enabling, changing or resuming a paused schedule starts at its next future occurrence after both the entry and the current time; active schedules catch up after downtime. Days/weeks retain the original weekday and wall-clock time in the saved timezone. Monthly and yearly dates clamp to shorter months without losing their anchor."
+            "description": "Empty disables recurrence for expenses or income. Only the original entry holds a schedule; generated copies have empty recurrence, zero interval/day/month and empty weekdays. Enabling, changing or resuming starts strictly after both the entry instant and now; active schedules catch up after downtime. Occurrences retain the entry wall-clock time in the saved timezone. Monthly and yearly dates clamp to shorter months without losing the requested day."
           },
           "recurrence_interval": {
             "type": "integer",
@@ -5905,10 +5962,29 @@
             "minimum": -1,
             "maximum": 31,
             "default": 0,
-            "description": "Monthly schedules only: 0 keeps the original calendar day, -1 selects the last day of each scheduled month, and 1 to 31 selects that day (clamped in shorter months). A chosen day can generate later in the original month; custom intervals are anchored to that month. Other frequencies require 0."
+            "description": "Monthly or yearly schedules: 0 keeps the original calendar day, -1 selects the last day of the scheduled month, and 1 to 31 selects that day, clamped in shorter months. Explicit dates may recur later in the original month or year. Other frequencies require 0."
           },
           "user": {
             "type": "string"
+          },
+          "recurrence_weekdays": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "maxItems": 7,
+            "uniqueItems": true,
+            "default": [],
+            "description": "Weekly only: ISO weekdays (Monday=1, Sunday=7), stored in ascending order. Empty selects the original entry weekday. Weeks start Monday; every-N-week schedules remain anchored to the original entry week. Selected days later in the original week can recur. Other frequencies require an empty array."
+          },
+          "recurrence_month": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 12,
+            "default": 0,
+            "description": "Yearly only: month 1 to 12, or 0 to use the original entry month. The year interval stays anchored to the entry year. Other frequencies require 0."
           }
         },
         "description": "Native owner-protected expenses collection input. Recurrence metadata is managed by the server. The API-key automation endpoint accepts ExpenseInput only."

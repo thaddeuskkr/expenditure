@@ -56,7 +56,8 @@ export function ExpenseEditor({
 }) {
     const { categories, preferences } = useWorkspace();
     const entryKind = expense?.kind || kind;
-    const [recurrence, setRecurrence] = useState<RecurrenceSchedule>({ recurrence: expense?.recurrence || "", recurrence_interval: expense?.recurrence_interval || 0, recurrence_day: expense?.recurrence_day || 0 });
+    const [recurrence, setRecurrence] = useState<RecurrenceSchedule>({ recurrence: expense?.recurrence || "", recurrence_interval: expense?.recurrence_interval || 0, recurrence_day: expense?.recurrence_day || 0, recurrence_weekdays: expense?.recurrence_weekdays || [], recurrence_month: expense?.recurrence_month || 0 });
+    const [occurredAt, setOccurredAt] = useState(() => zonedInput(expense?.occurred_at || new Date(), timezone));
     const categoryNames = categories
         .filter((c) => c.active || c.name === expense?.category)
         .map((c) => c.name);
@@ -200,10 +201,8 @@ export function ExpenseEditor({
                         <DateTimePicker
                             id="occurred_at"
                             name="occurred_at"
-                            defaultValue={zonedInput(
-                                expense?.occurred_at || new Date(),
-                                timezone,
-                            )}
+                            defaultValue={occurredAt}
+                            onChange={setOccurredAt}
                             timezone={timezone}
                             className="h-11"
                         />
@@ -241,7 +240,7 @@ export function ExpenseEditor({
                             className="w-full resize-none appearance-none rounded-lg border bg-input/20 px-3 py-2 text-base outline-none focus:ring-2 focus:ring-ring/40 md:text-sm"
                         />
                     </div>
-                    <RecurrenceControl kind={entryKind} value={recurrence} onChange={setRecurrence} next={recurrence.recurrence === expense?.recurrence && recurrence.recurrence_interval === expense?.recurrence_interval && recurrence.recurrence_day === expense?.recurrence_day ? expense?.recurrence_next : undefined} timezone={expense?.recurrence_timezone || timezone} error={expense?.recurrence_error} />
+                    <RecurrenceControl kind={entryKind} value={recurrence} onChange={setRecurrence} start={occurredAt} saved={expense} timezone={timezone} />
                     {error && (
                         <p role="alert" className="text-sm text-destructive">
                             {error}

@@ -38,7 +38,7 @@ function move(e) {
             split_mode: "percentage", shares: [{ member: member.id, amount: personal.getInt("amount"), percentage_bp: 10000 }],
             origin_expense: personal.id,
         });
-        for (const field of ["amount", "currency", "payment_method", "notes", "occurred_at", "source", "recurrence", "recurrence_interval", "recurrence_day", "recurrence_timezone", "recurrence_anchor", "recurrence_next", "recurrence_error"]) shared.set(field, personal.get(field));
+        for (const field of ["amount", "currency", "payment_method", "notes", "occurred_at", "source", "recurrence", "recurrence_interval", "recurrence_day", "recurrence_weekdays", "recurrence_month", "recurrence_timezone", "recurrence_anchor", "recurrence_next", "recurrence_error"]) shared.set(field, personal.get(field));
         app.save(shared);
         app.db().newQuery("UPDATE circle_expenses SET created = {:created}, updated = {:updated} WHERE id = {:id}")
             .bind({ id: shared.id, created: personal.getString("created"), updated: personal.getString("updated") }).execute();

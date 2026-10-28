@@ -140,17 +140,20 @@ const blank: Overview = {
     original_totals: [],
 };
 
+function StartupLoading() {
+    return (
+        <main className="grid min-h-svh place-items-center px-6">
+            <div className="flex flex-col items-center gap-6" role="status" aria-label="Loading workspace">
+                <Brand />
+                <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            </div>
+        </main>
+    );
+}
+
 export function ExpenseApp() {
     const { user, ready, signOut } = useAuth();
-    if (!ready)
-        return (
-            <div className="grid min-h-svh place-items-center">
-                <div className="flex flex-col items-center gap-6">
-                    <Brand />
-                    <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                </div>
-            </div>
-        );
+    if (!ready) return <StartupLoading />;
     if (!user) return <SignIn />;
     return <AccountWorkspace key={user.id} user={user} onSignOut={signOut} />;
 }
@@ -192,38 +195,33 @@ function AccountWorkspace({
             active = false;
         };
     }, [revision]);
+    if (!configuration && !error) return <StartupLoading />;
     if (!configuration)
         return (
             <main className="flex min-h-svh flex-col items-center justify-center px-6">
                 <Brand />
-                {error ?
-                        (
-                            <div className="mt-10 max-w-md text-center">
-                                <h1 className="font-display text-3xl">Backend unavailable</h1>
-                                <p className="mt-4 text-sm leading-7 text-muted-foreground">
-                                    The Expenditure API is not available yet. Install this project’s
-                                    PocketBase migrations and hooks, then restart PocketBase.
-                                </p>
-                                <p role="alert" className="mt-4 text-xs text-destructive">
-                                    {error}
-                                </p>
-                                <div className="mt-6 flex justify-center gap-3">
-                                    <Button
-                                        onClick={() => {
-                                            setError("");
-                                            setRevision((r) => r + 1);
-                                        }}>
-                                        <RefreshCw /> Try again
-                                    </Button>
-                                    <Button variant="ghost" onClick={onSignOut}>
-                                        Sign out
-                                    </Button>
-                                </div>
-                            </div>
-                        ) :
-                        (
-                            <Loader2 className="mt-10 size-5 animate-spin text-primary" />
-                        )}
+                <div className="mt-10 max-w-md text-center">
+                    <h1 className="font-display text-3xl">Backend unavailable</h1>
+                    <p className="mt-4 text-sm leading-7 text-muted-foreground">
+                        The Expenditure API is not available yet. Install this project’s
+                        PocketBase migrations and hooks, then restart PocketBase.
+                    </p>
+                    <p role="alert" className="mt-4 text-xs text-destructive">
+                        {error}
+                    </p>
+                    <div className="mt-6 flex justify-center gap-3">
+                        <Button
+                            onClick={() => {
+                                setError("");
+                                setRevision((r) => r + 1);
+                            }}>
+                            <RefreshCw /> Try again
+                        </Button>
+                        <Button variant="ghost" onClick={onSignOut}>
+                            Sign out
+                        </Button>
+                    </div>
+                </div>
             </main>
         );
     return (

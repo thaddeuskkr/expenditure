@@ -5,6 +5,7 @@ import { Plus, ReceiptText, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Checkbox } from "../ui/checkbox";
+import { UserAvatar } from "../user-avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { money, formatAmountInput, currencyDigits } from "@/lib/domain";
 import { circleCore, type CircleMember, type CircleReceipt, type ReceiptResult } from "@/lib/circles";
@@ -126,7 +127,16 @@ export function ReceiptEditor({ draft, onChange, members, me, currency, result, 
                             <div className="divide-y border-y">
                                 {draft.items.map((item) => {
                                     const member = members.find((member) => member.id === item.members[0]);
-                                    return <div key={item.id} className="flex items-center gap-3 py-3"><span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] text-primary" aria-hidden="true">{item.label.slice(0, 2).toUpperCase()}</span><span className="min-w-0 flex-1 truncate text-xs">{member?.name || item.label}{item.members[0] === me ? " (you)" : ""}{!member?.active ? " · former" : ""}</span><div className="w-28 shrink-0"><AmountField label={`${item.label} item subtotal`} value={item.amount} onChange={(amount) => update(item.id, { amount })} placeholder={formatAmountInput(0, currency)} /></div></div>;
+                                    const name = member?.name || item.label;
+                                    return (
+                                        <div key={item.id} className="flex items-center gap-3 py-3">
+                                            {member?.expand.user ?
+                                                    <UserAvatar user={member.expand.user} name={name} /> :
+                                                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#363e30] text-[11px] text-[#d4dcc6]" aria-hidden="true">{name.slice(0, 2).toUpperCase()}</span>}
+                                            <span className="min-w-0 flex-1 truncate text-xs">{name}{item.members[0] === me ? " (you)" : ""}{!member?.active ? " · former" : ""}</span>
+                                            <div className="w-28 shrink-0"><AmountField label={`${item.label} item subtotal`} value={item.amount} onChange={(amount) => update(item.id, { amount })} placeholder={formatAmountInput(0, currency)} /></div>
+                                        </div>
+                                    );
                                 })}
                             </div>
                         ) :

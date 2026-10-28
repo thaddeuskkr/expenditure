@@ -113,7 +113,7 @@ export function SettlementDialog({
                                 {label}
                             </label>
                             <Select value={value} onValueChange={setter}>
-                                <SelectTrigger id={`settlement-${label}`} className="w-full">
+                                <SelectTrigger id={`settlement-${label}`} className="h-10! w-full">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -141,6 +141,7 @@ export function SettlementDialog({
                         inputMode="decimal"
                         required
                         autoFocus
+                        className="h-10"
                     />
                     <p className="mt-2 text-[11px] text-muted-foreground">
                         {settlement ? "Maximum" : "Remaining"}: {money(maximum, currency)} {currency}
@@ -161,7 +162,7 @@ export function SettlementDialog({
                     <label htmlFor="settlement-notes" className="field-label">
                         Notes (optional)
                     </label>
-                    <Input id="settlement-notes" name="notes" defaultValue={settlement?.notes} maxLength={1000} />
+                    <Input id="settlement-notes" name="notes" defaultValue={settlement?.notes} maxLength={1000} className="h-10" />
                 </div>
                 <FormError error={error} />
                 <DialogFooter>

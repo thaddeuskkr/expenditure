@@ -23,7 +23,7 @@ export function MonthPicker({ value, onChange, timezone }: {
     }
 
     return (
-        <div className="inline-flex items-center gap-1 rounded-lg border bg-white/1 p-1">
+        <div className="inline-flex h-10 items-center gap-1 rounded-lg border bg-white/1 px-1">
             <Button type="button" variant="ghost" size="icon" aria-label="Previous month" disabled={value === "2000-01"} onClick={() => onChange(shiftMonth(value, -1))}>
                 <ChevronLeft className="size-3.5" />
             </Button>

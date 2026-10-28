@@ -671,7 +671,7 @@ function Workspace({
                                     {section}
                                 </h1>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                                 {isDataPage && (
                                     <>
                                         <DropdownMenu>
@@ -703,11 +703,11 @@ function Workspace({
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
-                                        <Button variant="outline" className="h-10 px-3 sm:px-4" onClick={() => setEditor("income")}>
+                                        <Button variant="outline" className="h-10 px-3 text-xs sm:px-4 sm:text-sm" onClick={() => setEditor("income")}>
                                             <Plus className="hidden sm:block" /> Add income
                                         </Button>
                                         <Button
-                                            className="h-10 px-3 sm:px-4"
+                                            className="h-10 px-3 text-xs sm:px-4 sm:text-sm"
                                             onClick={() => setEditor("new")}>
                                             <Plus className="hidden sm:block" /> Add expense
                                         </Button>
@@ -728,7 +728,7 @@ function Workspace({
                                                 }}>
                                                 <SelectTrigger
                                                     aria-label="Filter currency"
-                                                    className="h-9! min-w-30 text-[11px]">
+                                                    className="h-10! min-w-30 text-xs">
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
@@ -962,11 +962,11 @@ function Workspace({
                                             value={search}
                                             onChange={(e) => setSearch(e.target.value)}
                                             placeholder={showCircleTransactions ? "Search merchants, Circles, notes…" : "Search merchants, notes, payment methods…"}
-                                            className="h-10 pl-9 text-xs"
+                                            className="h-10 pr-10 pl-9 text-xs"
                                         />
                                         {search && (
                                             <button
-                                                className="absolute top-3 right-3"
+                                                className="absolute top-1 right-1 flex size-8 items-center justify-center rounded-md transition-colors hover:bg-muted"
                                                 aria-label="Clear search"
                                                 onClick={() => setSearch("")}>
                                                 <X className="size-3.5 text-muted-foreground" />

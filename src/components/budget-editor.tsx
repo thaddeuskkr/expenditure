@@ -139,7 +139,7 @@ export function BudgetEditor({
                             <Button
                                 type="button"
                                 variant="ghost"
-                                className="mr-auto text-destructive"
+                                className="text-destructive sm:mr-auto"
                                 disabled={busy}
                                 onClick={async () => {
                                     setBusy(true);

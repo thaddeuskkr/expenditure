@@ -268,8 +268,8 @@ export function CircleExpenseEditor({
                         <SelectContent>{categories.map((item) => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}</SelectContent>
                     </Select>
                 </div>
-                <fieldset className="border-t pt-5">
-                    <legend className="field-label pt-5">Split between</legend>
+                <section aria-labelledby="shared-split-heading" className="min-w-0 border-t pt-5">
+                    <h3 id="shared-split-heading" className="field-label">Split between</h3>
                     <div className={`mb-5 grid gap-1 rounded-lg border p-1 ${entryKind === "expense" ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
                         {(
                             [
@@ -373,7 +373,7 @@ export function CircleExpenseEditor({
                                     )}
                                 </>
                             )}
-                </fieldset>
+                </section>
                 <div>
                     <label htmlFor="shared-payment" className="field-label">
                         Payment method{" "}

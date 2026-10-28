@@ -256,10 +256,10 @@ test(
         });
         await t.test("moving a recurring original transfers its exact schedule without moving prior occurrences", async () => {
             const prior = await api(personal, bob.token, { ...personalData, merchant: "Prior occurrence", occurred_at: "2090-01-01T04:00:00Z" });
-            const seed = await api(personal, bob.token, { ...personalData, merchant: "Subscription", recurrence: "daily", occurred_at: "2090-01-02T04:00:00Z" });
+            const seed = await api(personal, bob.token, { ...personalData, merchant: "Subscription", recurrence: "monthly", recurrence_interval: 2, recurrence_day: 31, occurred_at: "2090-01-02T04:00:00Z" });
             const shared = await api(`${root}/${circle.id}/expenses/move`, bob.token, { expense: seed.id, previous_updated: seed.updated, category: await activeCategory() });
-            for (const field of ["recurrence", "recurrence_anchor", "recurrence_timezone", "recurrence_next"]) assert.equal(shared[field], seed[field]);
-            await api("/api/test/recurrence", admin, { now: Date.parse("2090-01-04T04:00:00Z") });
+            for (const field of ["recurrence", "recurrence_interval", "recurrence_day", "recurrence_anchor", "recurrence_timezone", "recurrence_next"]) assert.equal(shared[field], seed[field]);
+            await api("/api/test/recurrence", admin, { now: Date.parse("2090-03-31T04:00:00Z") });
             assert.equal((await api(`${personal}/${prior.id}`, bob.token)).id, prior.id);
             assert.equal((await api(`${personal}?perPage=100`, bob.token)).items.filter((row) => row.merchant === "Subscription").length, 0);
             const entries = (await detail()).expenses.items.filter((row) => row.title === "Subscription");

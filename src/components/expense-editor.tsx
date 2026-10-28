@@ -32,7 +32,7 @@ import {
     rateDate,
     zonedInput,
     type Category,
-    type Recurrence,
+    type RecurrenceSchedule,
     type Expense,
     type ExpenseInput,
 } from "@/lib/domain";
@@ -56,7 +56,7 @@ export function ExpenseEditor({
 }) {
     const { categories, preferences } = useWorkspace();
     const entryKind = expense?.kind || kind;
-    const [recurrence, setRecurrence] = useState<Recurrence>(expense?.recurrence || "");
+    const [recurrence, setRecurrence] = useState<RecurrenceSchedule>({ recurrence: expense?.recurrence || "", recurrence_interval: expense?.recurrence_interval || 0, recurrence_day: expense?.recurrence_day || 0 });
     const categoryNames = categories
         .filter((c) => c.active || c.name === expense?.category)
         .map((c) => c.name);
@@ -89,7 +89,7 @@ export function ExpenseEditor({
             await onSave(
                 {
                     kind: entryKind,
-                    recurrence: entryKind === "expense" ? recurrence : "",
+                    ...recurrence,
                     merchant: String(form.get("merchant")).trim(),
                     amount: parseMinorUnits(
                         String(form.get("amount")),
@@ -241,7 +241,7 @@ export function ExpenseEditor({
                             className="w-full resize-none appearance-none rounded-lg border bg-input/20 px-3 py-2 text-base outline-none focus:ring-2 focus:ring-ring/40 md:text-sm"
                         />
                     </div>
-                    {entryKind === "expense" && <RecurrenceControl value={recurrence} onChange={setRecurrence} next={recurrence === expense?.recurrence ? expense?.recurrence_next : undefined} timezone={expense?.recurrence_timezone || timezone} error={expense?.recurrence_error} />}
+                    <RecurrenceControl kind={entryKind} value={recurrence} onChange={setRecurrence} next={recurrence.recurrence === expense?.recurrence && recurrence.recurrence_interval === expense?.recurrence_interval && recurrence.recurrence_day === expense?.recurrence_day ? expense?.recurrence_next : undefined} timezone={expense?.recurrence_timezone || timezone} error={expense?.recurrence_error} />
                     {error && (
                         <p role="alert" className="text-sm text-destructive">
                             {error}

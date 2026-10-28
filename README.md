@@ -1,6 +1,6 @@
 # Expenditure
 
-An income and expense tracker with recurring expenses, custom categories, budgets, multiple currencies, shared Circle ledgers, and Excel/CSV exports.
+An income and expense tracker with recurring income and expenses, custom categories, budgets, multiple currencies, shared Circle ledgers, and Excel/CSV exports.
 
 [Open Expenditure](https://expenditure.tkkr.dev)
 

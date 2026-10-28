@@ -9,7 +9,7 @@ import { randomBytes } from "node:crypto";
 import timezoneCatalog from "../pocketbase/pb_hooks/timezones.json" with { type: "json" };
 
 test(
-    "Income, recurring expenses and default login tab",
+    "Income, recurring transactions and custom schedules",
     { timeout: 60000 },
     async (t) => {
         const binary = process.env.POCKETBASE_BINARY;
@@ -28,7 +28,7 @@ test(
         routerAdd("POST", "/api/test/next", (e) => {
             const data = e.requestInfo().body;
             const lib = require(__hooks + "/recurrence.js");
-            return e.json(200, { next: data.now ? lib.firstFuture(data.previous, data.frequency, data.anchor, data.timezone, data.now) : lib.nextDate(data.previous, data.frequency, data.anchor, data.timezone) });
+            return e.json(200, { next: data.now ? lib.firstFuture(data.previous, data.frequency, data.anchor, data.timezone, data.now, data.interval, data.day) : lib.nextDate(data.previous, data.frequency, data.anchor, data.timezone, data.interval, data.day) });
         }, $apis.requireAuth("_superusers"));
         routerAdd("GET", "/api/test/timezones", (e) => e.json(200, {
             items: require(__hooks + "/timezones.json").map((zone) => ({
@@ -140,7 +140,7 @@ test(
             assert.equal(income.kind, "income");
             await api(`${personal}/${income.id}`, outside.token, undefined, "GET", 404);
             await api(personal, alice.token, { ...input, amount: -100 }, "POST", 400);
-            await api(personal, alice.token, { ...input, recurrence: "monthly" }, "POST", 400);
+            await api(personal, alice.token, { ...input, recurrence: "unknown" }, "POST", 400);
             await api(personal, alice.token, { ...input, kind: "invalid" }, "POST", 400);
             const query = new URLSearchParams({ from: "2026-10-01T00:00:00Z", to: "2026-11-01T00:00:00Z", previous: "2026-09-01T00:00:00Z", currency: "all" });
             const overview = await api(`/api/expenditure/overview?${query}`, alice.token);
@@ -225,7 +225,7 @@ test(
             }
 
             await api(`${root}/${circle.id}/expenses`, outside.token, shared, "POST", 404);
-            await api(`${root}/${circle.id}/expenses`, alice.token, { ...shared, recurrence: "weekly" }, "POST", 400);
+            await api(`${root}/${circle.id}/expenses`, alice.token, { ...shared, recurrence: "unknown" }, "POST", 400);
         });
         await t.test("calendar recurrence clamps month ends and keeps local times across DST", async () => {
             async function next(previous, frequency, anchor, timezone) {
@@ -242,6 +242,124 @@ test(
                 const result = await api("/api/test/next", admin, { previous: "2000-01-31T01:00:00Z", frequency, anchor: "2000-01-31T09:00:00", timezone: "Asia/Singapore", now: Date.parse("2026-10-27T04:00:00Z") });
                 assert.equal(result.next, expected);
             }
+        });
+        await t.test("custom calendar intervals preserve phase, month days and DST wall-clock times", async () => {
+            async function next(previous, frequency, anchor, timezone, interval, day = 0, now) {
+                return (await api("/api/test/next", admin, { previous, frequency, anchor, timezone, interval, day, now })).next;
+            }
+
+            assert.equal(await next("2091-01-01T04:00:00Z", "daily", "2091-01-01T12:00:00", "Asia/Singapore", 3), "2091-01-04T04:00:00.000Z");
+            assert.equal(await next("2027-03-07T14:00:00Z", "weekly", "2027-03-07T09:00:00", "America/New_York", 2), "2027-03-21T13:00:00.000Z");
+            assert.equal(await next("2027-10-31T13:00:00Z", "weekly", "2027-10-31T09:00:00", "America/New_York", 2), "2027-11-14T14:00:00.000Z");
+            assert.equal(await next("2027-01-31T01:00:00Z", "monthly", "2027-01-31T09:00:00", "Asia/Singapore", 3), "2027-04-30T01:00:00.000Z");
+            assert.equal(await next("2027-04-30T01:00:00Z", "monthly", "2027-01-31T09:00:00", "Asia/Singapore", 3), "2027-07-31T01:00:00.000Z");
+            assert.equal(await next("2028-02-29T01:00:00Z", "yearly", "2028-02-29T09:00:00", "Asia/Singapore", 4), "2032-02-29T01:00:00.000Z");
+            assert.equal(await next("2028-01-31T01:00:00Z", "monthly", "2028-01-02T09:00:00", "Asia/Singapore", 1, -1), "2028-02-29T01:00:00.000Z");
+            assert.equal(await next("2028-02-29T01:00:00Z", "monthly", "2028-01-02T09:00:00", "Asia/Singapore", 1, 31), "2028-03-31T01:00:00.000Z");
+            assert.equal(await next("2027-02-14T07:30:00Z", "monthly", "2027-02-14T02:30:00", "America/New_York", 1, 14), "2027-03-14T07:30:00.000Z");
+            assert.equal(await next("2027-03-14T07:30:00Z", "monthly", "2027-02-14T02:30:00", "America/New_York", 1, 14), "2027-04-14T06:30:00.000Z");
+            const before = Date.parse("2026-10-27T04:00:00Z");
+            assert.equal(await next("2091-01-01T04:00:00Z", "monthly", "2091-01-01T12:00:00", "Asia/Singapore", 2, 15, before), "2091-01-15T04:00:00.000Z");
+            assert.equal(await next("2091-01-20T04:00:00Z", "monthly", "2091-01-20T12:00:00", "Asia/Singapore", 2, 15, before), "2091-03-15T04:00:00.000Z");
+            assert.equal(await next("2000-01-01T04:00:00Z", "monthly", "2000-01-01T12:00:00", "Asia/Singapore", 3, -1, Date.parse("2026-10-31T04:00:00Z")), "2027-01-31T04:00:00.000Z");
+            assert.equal(await next("2000-01-01T04:00:00Z", "daily", "2000-01-01T12:00:00", "Asia/Singapore", 3, 0, Date.parse("2000-01-04T04:00:00Z")), "2000-01-07T04:00:00.000Z");
+        });
+        await t.test("personal recurring income catches up fortnightly without duplicate income or budget spending", async () => {
+            const account = await user("Schedules");
+            await api("/api/expenditure/config", account.token);
+            let seed = await api(personal, account.token, { ...input, user: account.id, merchant: "Fortnightly salary", recurrence: "weekly", recurrence_interval: 2, occurred_at: "2091-01-01T04:00:00Z" });
+            assert.equal(seed.recurrence_interval, 2);
+            assert.equal(seed.recurrence_next, "2091-01-15T04:00:00.000Z");
+            const run = () => api("/api/test/recurrence", admin, { now: Date.parse("2091-01-31T04:00:00Z") });
+            await Promise.all([run(), run()]);
+            let rows = (await api(`${personal}?perPage=100`, account.token)).items;
+            assert.equal(rows.length, 3);
+            assert.equal(new Set(rows.map((row) => row.occurred_at)).size, 3);
+            assert.ok(rows.every((row) => row.kind === "income" && row.amount === input.amount));
+            assert.ok(rows.filter((row) => row.id !== seed.id).every((row) => row.recurrence === "" && row.recurrence_interval === 0 && row.recurrence_day === 0));
+            seed = await api(`${personal}/${seed.id}`, account.token);
+            assert.equal(seed.recurrence_next, "2091-02-12T04:00:00.000Z");
+            const notesOnly = await api(`${personal}/${seed.id}`, account.token, { notes: "Future salary" }, "PATCH");
+            assert.equal(notesOnly.recurrence_next, seed.recurrence_next);
+            assert.equal(notesOnly.recurrence_anchor, seed.recurrence_anchor);
+            const query = new URLSearchParams({ from: "2091-01-01T00:00:00Z", to: "2091-02-01T00:00:00Z", previous: "2090-12-01T00:00:00Z", currency: "all" });
+            const overview = await api(`/api/expenditure/overview?${query}`, account.token);
+            assert.equal(overview.income, input.amount * 3);
+            assert.equal(overview.total, 0);
+            await api(`${personal}/${seed.id}`, outside.token, { recurrence_interval: 3 }, "PATCH", 404);
+            // Editing affects the original and future entries, never generated history.
+            const changed = await api(`${personal}/${seed.id}`, account.token, { recurrence: "monthly", recurrence_interval: 2, recurrence_day: 15, occurred_at: "2092-01-01T04:00:00Z" }, "PATCH");
+            assert.equal(changed.recurrence_next, "2092-01-15T04:00:00.000Z");
+            rows = (await api(`${personal}?perPage=100`, account.token)).items.filter((row) => row.id !== seed.id);
+            assert.ok(rows.every((row) => row.occurred_at.startsWith("2091-01") && row.kind === "income" && row.amount === input.amount));
+            const stopped = await api(`${personal}/${seed.id}`, account.token, { recurrence: "" }, "PATCH");
+            assert.equal(stopped.recurrence_interval, 0);
+            assert.equal(stopped.recurrence_day, 0);
+            assert.equal(stopped.recurrence_next, "");
+            await run();
+            assert.equal((await api(`${personal}?perPage=100`, account.token)).items.length, 3);
+        });
+        await t.test("Circle recurring income preserves shares, reversed balances and custom cadence", async () => {
+            const group = await api(root, alice.token, { name: "Recurring income", currency: "SGD" }, "POST", 201);
+            const path = `${root}/${group.id}`;
+            const recipient = (await api(path, alice.token)).me;
+            const invitation = await api(`${path}/invitations`, alice.token, { email: bob.email }, "POST", 201);
+            const entitled = (await api(`/api/expenditure/circle-invitations/${invitation.id}/accept`, bob.token, {})).member;
+            const fields = { ...shared, recurrence: "weekly", recurrence_interval: 2, paid_by: recipient, shares: [{ member: recipient }, { member: entitled }], occurred_at: "2091-01-01T04:00:00Z" };
+            const seed = await api(`${path}/expenses`, alice.token, fields, "POST", 201);
+            await Promise.all([1, 2].map(() => api("/api/test/recurrence", admin, { now: Date.parse("2091-01-31T04:00:00Z") })));
+            const detail = await api(path, alice.token);
+            assert.equal(detail.expenses.totalItems, 3);
+            assert.equal(detail.recurring.length, 1);
+            assert.equal(detail.recurring[0].recurrence_next, "2091-02-12T04:00:00.000Z");
+            assert.ok(detail.expenses.items.every((row) => row.kind === "income" && row.amount === seed.amount && JSON.stringify(row.shares) === JSON.stringify(seed.shares)));
+            assert.ok(detail.expenses.items.filter((row) => row.id !== seed.id).every((row) => row.recurrence_interval === 0 && row.recurrence_day === 0 && row.created_by === recipient));
+            assert.equal(detail.balances.find((row) => row.member === recipient).net, -seed.shares.find((row) => row.member === entitled).amount * 3);
+            assert.equal(detail.totals[0].income, 303);
+            assert.equal(detail.totals[0].total, 0);
+            const current = detail.recurring[0];
+            await api(`${path}/expenses/${seed.id}`, bob.token, { ...fields, version: current.version }, "PATCH", 403);
+            await api(`${path}/expenses/${seed.id}`, alice.token, { ...fields, recurrence: "", version: current.version }, "PATCH");
+            await api("/api/test/recurrence", admin, { now: Date.parse("2091-03-31T04:00:00Z") });
+            assert.equal((await api(path, alice.token)).expenses.totalItems, 3);
+        });
+        await t.test("chosen monthly dates, last-day income and every-N-day expenses generate their exact schedule", async () => {
+            const account = await user("CalendarSchedules");
+            await api("/api/expenditure/config", account.token);
+            const create = (merchant, fields) => api(personal, account.token, { ...input, user: account.id, merchant, occurred_at: "2091-01-01T04:00:00Z", ...fields });
+            const dated = await create("Every other month", { kind: "expense", recurrence: "monthly", recurrence_interval: 2, recurrence_day: 31 });
+            const last = await create("Last-day income", { recurrence: "monthly", recurrence_day: -1 });
+            const daily = await create("Every third day", { kind: "expense", recurrence: "daily", recurrence_interval: 3 });
+            assert.equal(dated.recurrence_next, "2091-01-31T04:00:00.000Z");
+            assert.equal(last.recurrence_next, "2091-01-31T04:00:00.000Z");
+            await api("/api/test/recurrence", admin, { now: Date.parse("2091-01-10T04:00:00Z") });
+            const thirdDayRows = (await api(`${personal}?perPage=100`, account.token)).items.filter((row) => row.merchant === daily.merchant);
+            assert.deepEqual(thirdDayRows.map((row) => row.occurred_at.slice(0, 10)).sort(), ["2091-01-01", "2091-01-04", "2091-01-07", "2091-01-10"]);
+            await api(`${personal}/${daily.id}`, account.token, { recurrence: "" }, "PATCH");
+            await api("/api/test/recurrence", admin, { now: Date.parse("2091-03-31T04:00:00Z") });
+            const rows = (await api(`${personal}?perPage=100`, account.token)).items;
+            assert.deepEqual(rows.filter((row) => row.merchant === dated.merchant).map((row) => row.occurred_at.slice(0, 10)).sort(), ["2091-01-01", "2091-01-31", "2091-03-31"]);
+            assert.deepEqual(rows.filter((row) => row.merchant === last.merchant).map((row) => row.occurred_at.slice(0, 10)).sort(), ["2091-01-01", "2091-01-31", "2091-02-28", "2091-03-31"]);
+            for (const seed of [dated, last]) await api(`${personal}/${seed.id}`, account.token, { recurrence: "" }, "PATCH");
+        });
+        await t.test("custom schedules reject invalid intervals and monthly dates on both ledgers", async () => {
+            for (const fields of [
+                { recurrence_interval: -1 }, { recurrence_interval: 366 }, { recurrence_interval: 1.5 },
+                { recurrence_day: -2 }, { recurrence_day: 32 }, { recurrence_day: 1.5 },
+                { recurrence: "weekly", recurrence_day: 15 },
+            ]) {
+                await api(personal, alice.token, { ...input, recurrence: "monthly", ...fields }, "POST", 400);
+                await api(`${root}/${circle.id}/expenses`, alice.token, { ...shared, recurrence: "monthly", ...fields }, "POST", 400);
+            }
+
+            // Custom JSON routes require number values. Native collection form
+            // requests use PocketBase's number-field normalization first.
+            for (const fields of [{ recurrence_interval: "2" }, { recurrence_interval: null }, { recurrence_interval: true }, { recurrence_day: "15" }, { recurrence_day: null }])
+                await api(`${root}/${circle.id}/expenses`, alice.token, { ...shared, recurrence: "monthly", ...fields }, "POST", 400);
+            const normalized = await api(personal, alice.token, { ...input, recurrence: "weekly", recurrence_interval: "2", occurred_at: "2092-01-01T04:00:00Z" });
+            assert.equal(normalized.recurrence_interval, 2);
+            assert.equal(normalized.recurrence_next, "2092-01-15T04:00:00.000Z");
+            await api(`${personal}/${normalized.id}`, alice.token, undefined, "DELETE", 204);
         });
         let recurring, recurringCircle;
         const now = Date.parse("2090-01-04T04:00:00Z");

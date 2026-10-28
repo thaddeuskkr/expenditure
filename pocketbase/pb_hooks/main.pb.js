@@ -1,5 +1,5 @@
 /// <reference path="../pb_data/types.d.ts" />
-routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 15 }));
+routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 16 }));
 
 routerAdd(
     "GET",
@@ -259,7 +259,7 @@ routerAdd(
 // Native collection calls also preserve source provenance and enforce invariants.
 onRecordCreateRequest((e) => {
     if (!e.hasSuperuserAuth()) {
-        require(`${__hooks}/recurrence.js`).protect(e.record);
+        require(`${__hooks}/recurrence.js`).protect(e.record, e.requestInfo().body);
         for (const field of ["moved_to", "moved_circle"]) e.record.set(field, e.record.isNew() ? "" : e.record.original().getString(field));
         e.record.set("source", "manual");
         e.record.set("idempotency_key", "");
@@ -270,7 +270,7 @@ onRecordCreateRequest((e) => {
 
 onRecordUpdateRequest((e) => {
     if (!e.hasSuperuserAuth()) {
-        require(`${__hooks}/recurrence.js`).protect(e.record);
+        require(`${__hooks}/recurrence.js`).protect(e.record, e.requestInfo().body);
         for (const field of ["moved_to", "moved_circle"]) e.record.set(field, e.record.isNew() ? "" : e.record.original().getString(field));
         e.record.set("source", e.record.original().getString("source"));
         e.record.set(

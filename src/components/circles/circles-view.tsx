@@ -12,7 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useWorkspace } from "../workspace-context";
-import { dayLabel, errorMessage, money } from "@/lib/domain";
+import { dateTimeLabel, dayLabel, errorMessage, money, recurrenceLabel } from "@/lib/domain";
 import {
     circlesApi,
     type CircleSettlement,
@@ -525,10 +525,10 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                     )}
                     {tab === "Expenses" && detail.recurring.length > 0 && (
                         <div className="space-y-3 border-b pb-5">
-                            <h3 className="text-xs font-medium">Recurring expenses</h3>
+                            <h3 className="text-xs font-medium">Recurring transactions</h3>
                             {detail.recurring.map((item) => (
                                 <button key={item.id} className="block w-full text-left text-xs text-muted-foreground" onClick={() => setViewing(item)}>
-                                    {item.title} · {item.recurrence} · {item.recurrence_error ? `Paused: ${item.recurrence_error}` : `Next ${new Date(item.recurrence_next).toLocaleDateString("en-SG", { timeZone: item.recurrence_timezone })}`}
+                                    {item.title} · {item.kind === "income" ? "Income" : "Expense"} · {recurrenceLabel(item)} · {item.recurrence_error ? `Paused: ${item.recurrence_error}` : `Next ${dateTimeLabel(item.recurrence_next, item.recurrence_timezone, preferences.time_format)}`}
                                 </button>
                             ))}
                         </div>

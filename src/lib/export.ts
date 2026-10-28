@@ -55,6 +55,8 @@ function exportHeaders(timezone: string, mainCurrency?: string, circles = false)
                 []),
         "Type",
         "Recurrence",
+        "Repeat interval",
+        "Monthly day",
         ...(circles ? ["Ledger", "Circle", "Circle ID", "Transaction total", "Budget category"] : []),
     ];
 }
@@ -78,7 +80,7 @@ function exportValues(
         asDate(expense.occurred_at).toISOString(),
     ];
     const circle = isCircleTransaction(expense) ? expense : null;
-    const tail: ExportCell[] = [expense.kind, expense.recurrence, ...(circles ? [circle ? "circle" : "personal", circle?.expand.circle.name || "", circle?.circle || "", expense.amount / 10 ** currencyDigits(expense.currency), circle?.budget_category || expense.category] : [])];
+    const tail: ExportCell[] = [expense.kind, expense.recurrence, expense.recurrence ? expense.recurrence_interval : null, expense.recurrence === "monthly" ? expense.recurrence_day : null, ...(circles ? [circle ? "circle" : "personal", circle?.expand.circle.name || "", circle?.circle || "", expense.amount / 10 ** currencyDigits(expense.currency), circle?.budget_category || expense.category] : [])];
     if (!mainCurrency) return [...row, ...tail];
 
     const convertedAmount = convertAmount(

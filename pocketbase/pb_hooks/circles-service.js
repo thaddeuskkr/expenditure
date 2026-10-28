@@ -591,6 +591,8 @@ function saveExpense(e) {
         "category",
         "kind",
         "recurrence",
+        "recurrence_interval",
+        "recurrence_day",
         "amount",
         "currency",
         "paid_by",
@@ -603,6 +605,7 @@ function saveExpense(e) {
         "version",
     ]);
     const editing = e.request.pathValue("expense");
+    require(`${__hooks}/recurrence.js`).validateInput(data);
     return write(
         e,
         (app) => {
@@ -661,6 +664,8 @@ function saveExpense(e) {
                 circle: circle.id,
                 kind: data.kind === undefined ? (expense ? expense.getString("kind") : "expense") : data.kind,
                 recurrence: data.recurrence === undefined ? (expense ? expense.getString("recurrence") : "") : data.recurrence,
+                recurrence_interval: data.recurrence_interval === undefined ? (expense ? expense.getInt("recurrence_interval") : 0) : data.recurrence_interval,
+                recurrence_day: data.recurrence_day === undefined ? (expense ? expense.getInt("recurrence_day") : 0) : data.recurrence_day,
                 title: text(data.title, "Title", 160, true),
                 category: require(`${__hooks}/circle-categories.js`).select(app, circle.id, data.category, expense),
                 source: expense ? expense.getString("source") : "manual",

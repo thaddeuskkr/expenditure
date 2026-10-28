@@ -91,6 +91,8 @@ export interface CircleExpenseInput {
     category: string;
     kind: "expense" | "income";
     recurrence: Recurrence;
+    recurrence_interval: number;
+    recurrence_day: number;
     title: string;
     currency: string;
     amount: number;

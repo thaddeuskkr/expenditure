@@ -7,7 +7,7 @@ import { CurrencyPicker, EnabledCurrenciesPicker } from "./currency-picker";
 import { SearchableSelect } from "./ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { CategorySettings } from "./category-settings";
-import { RecurringExpenses } from "./recurring-expenses";
+import { RecurringTransactions } from "./recurring-transactions";
 import { useWorkspace } from "./workspace-context";
 import {
     DEFAULT_TABS,
@@ -131,7 +131,7 @@ export function WorkspaceSettings({
                     preferences
                 </Button>
             </form>
-            <RecurringExpenses key={recurringRevision} onEdit={onEditRecurring} />
+            <RecurringTransactions key={recurringRevision} onEdit={onEditRecurring} />
             <CategorySettings categories={categories} onCategoriesChanged={onCategoriesChanged} />
             <section className="border-t pt-6">
                 <h2 className="text-sm font-medium">Exchange rates</h2>

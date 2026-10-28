@@ -29,12 +29,25 @@ export const DEFAULT_TABS = ["Overview", "Transactions", "Categories", "Budgets"
 export type DefaultTab = typeof DEFAULT_TABS[number];
 export type TimeFormat = "24h" | "12h";
 export type Recurrence = "" | "daily" | "weekly" | "monthly" | "yearly";
-export interface RecurringFields {
+export interface RecurrenceSchedule {
     recurrence: Recurrence;
+    recurrence_interval: number;
+    /** 0 keeps the original day; -1 means the last day of the month. */
+    recurrence_day: number;
+}
+export interface RecurringFields extends RecurrenceSchedule {
     recurrence_next: string;
     recurrence_timezone: string;
     recurrence_error: string;
 }
+export function recurrenceLabel(schedule: RecurrenceSchedule) {
+    const { recurrence, recurrence_interval: interval, recurrence_day: day } = schedule;
+    if (!recurrence) return "";
+    const units = { daily: "day", weekly: "week", monthly: "month", yearly: "year" };
+    const frequency = interval === 1 ? recurrence[0].toUpperCase() + recurrence.slice(1) : `Every ${interval} ${units[recurrence]}s`;
+    return frequency + (recurrence === "monthly" && day ? day === -1 ? " on the last day" : ` on day ${day}` : "");
+}
+
 export interface Expense extends RecordModel, RecurringFields {
     kind: "expense" | "income";
     merchant: string;
@@ -158,6 +171,8 @@ export type ExpenseInput = Pick<
     Expense,
     | "kind" |
     "recurrence" |
+    "recurrence_interval" |
+    "recurrence_day" |
     "merchant" |
     "amount" |
     "currency" |

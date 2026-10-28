@@ -124,7 +124,7 @@ test("API-key Circle expenses use the key owner's membership and start fully sel
             { paid_by: ownerId }, { paid_by: memberId }, { created_by: ownerId }, { user: owner.id },
             { circle: otherCircle.id }, { shares: [{ member: ownerId }] }, { split_mode: "even" },
             { source: "manual" }, { origin_expense: "existingexpense" }, { kind: "income" },
-            { recurrence: "daily" }, { version: 2 }, { idempotency_key: "attempt" },
+            { recurrence: "daily" }, { recurrence_interval: 2 }, { recurrence_day: 15 }, { version: 2 }, { idempotency_key: "attempt" },
         ]) await api(path, { key: memberKey.key, body: { ...input, ...fields }, expected: 400 });
         assert.equal((await detail()).expenses.totalItems, total);
     });

@@ -20,6 +20,7 @@ import {
     isCircleTransaction,
     transactionName,
     transactionAmount,
+    recurrenceLabel,
     type Transaction,
     type CircleTransaction,
     type Expense,
@@ -89,7 +90,7 @@ export function Transactions({
                                         <span>
                                             <span className="block max-w-32 truncate text-xs sm:max-w-52">
                                                 {label}
-                                                {expense.recurrence && <span className="ml-2 text-[9px] text-muted-foreground">{expense.recurrence}</span>}
+                                                {expense.recurrence && <span className="ml-2 text-[9px] text-muted-foreground">{recurrenceLabel(expense)}</span>}
                                             </span>
                                             <span className="mt-1 block max-w-36 truncate text-[9px] text-muted-foreground">
                                                 {circle ?

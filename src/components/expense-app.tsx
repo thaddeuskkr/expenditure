@@ -172,8 +172,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 15)
-                    throw new Error("This app requires backend version 15. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 16)
+                    throw new Error("This app requires backend version 16. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },

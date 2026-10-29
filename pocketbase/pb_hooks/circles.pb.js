@@ -65,6 +65,13 @@ routerAdd(
     $apis.requireAuth("users"),
 );
 routerAdd(
+    "PATCH",
+    "/api/expenditure/circles/{id}/members/{member}/permissions",
+    (e) => require(`${__hooks}/circles-service.js`).updateMemberPermissions(e),
+    $apis.requireAuth("users"),
+    $apis.bodyLimit(4096),
+);
+routerAdd(
     "DELETE",
     "/api/expenditure/circles/{id}/members/{member}",
     (e) => require(`${__hooks}/circles-service.js`).removeMember(e),

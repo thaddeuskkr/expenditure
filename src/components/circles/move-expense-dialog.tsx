@@ -24,8 +24,9 @@ export function MoveExpenseDialog({ expense, onClose, onMoved }: {
         let active = true;
         circlesApi.list().then((index) => {
             if (!active) return;
-            setCircles(index.circles);
-            setCircle(index.circles[0]?.id || "");
+            const available = index.circles.filter((item) => item.permissions.can_add);
+            setCircles(available);
+            setCircle(available[0]?.id || "");
         }).catch((failure) => {
             if (active) setError(errorMessage(failure));
         }).finally(() => {
@@ -51,7 +52,7 @@ export function MoveExpenseDialog({ expense, onClose, onMoved }: {
     }, [circle, expense]);
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
-        if (!detail || !category || busy) return;
+        if (!detail?.circle.permissions.can_add || !category || busy) return;
         setBusy(true);
         setError("");
         try {
@@ -71,7 +72,7 @@ export function MoveExpenseDialog({ expense, onClose, onMoved }: {
                 {loading ?
                         <p role="status" className="text-xs text-muted-foreground">Loading your Circles…</p> :
                         !circles.length ?
-                                <p className="text-xs text-muted-foreground">Join or create a Circle first.</p> :
+                                <p className="text-xs text-muted-foreground">You need a Circle where you can add transactions.</p> :
                                 (
                                     <>
                                         <div>
@@ -100,14 +101,14 @@ export function MoveExpenseDialog({ expense, onClose, onMoved }: {
                                                     </div>
                                                 ) :
                                                 <p role="status" className="text-xs text-muted-foreground">Loading Circle categories…</p>}
-                                        <p className="text-xs leading-6 text-muted-foreground">This expense will leave your personal ledger. You’ll be the payer with 100% assigned to you; you can change the split in the Circle.</p>
+                                        <p className="text-xs leading-6 text-muted-foreground">This expense will leave your personal ledger. You’ll be the payer with 100% assigned to you.</p>
                                         {expense.recurrence && <p className="text-xs leading-6 text-muted-foreground">The recurring schedule moves too. Earlier occurrences stay in your personal ledger.</p>}
                                     </>
                                 )}
                 <FormError error={error} />
                 <DialogFooter>
                     <Button type="button" variant="ghost" disabled={busy} onClick={onClose}>Cancel</Button>
-                    <Button type="submit" disabled={busy || !detail || !category}>{busy && <Loader2 className="animate-spin" />}Move expense</Button>
+                    <Button type="submit" disabled={busy || !detail?.circle.permissions.can_add || !category}>{busy && <Loader2 className="animate-spin" />}Move expense</Button>
                 </DialogFooter>
             </form>
         </CircleModal>

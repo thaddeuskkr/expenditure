@@ -22,7 +22,7 @@ export function CircleCategorySettings({ data, onClose, onSaved }: {
 
     return (
         <CircleModal title="Circle categories" description={data.circle.name} onClose={onClose} wide>
-            <CategorySettings categories={current.categories} basePath={`/api/expenditure/circles/${data.circle.id}/categories`} onCategoriesChanged={reload} readOnly={!current.circle.is_owner} action={current.circle.is_owner && <Button variant="outline" className="mt-4" onClick={() => setCopying(true)}><Copy /> Copy from my settings</Button>} />
+            <CategorySettings categories={current.categories} basePath={`/api/expenditure/circles/${data.circle.id}/categories`} onCategoriesChanged={reload} readOnly={!current.circle.can_manage} action={current.circle.can_manage && <Button variant="outline" className="mt-4" onClick={() => setCopying(true)}><Copy /> Copy from my settings</Button>} />
             {copying && (
                 <CircleConfirmDialog
                     title="Replace Circle categories?"

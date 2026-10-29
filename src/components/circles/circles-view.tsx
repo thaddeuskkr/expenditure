@@ -16,6 +16,7 @@ import { useAuth } from "../auth-provider";
 import { dateTimeLabel, dayLabel, errorMessage, money, recurrenceLabel } from "@/lib/domain";
 import {
     circlesApi,
+    canModifyCircleExpense,
     type CircleSettlement,
     type CircleMember,
     type CircleInvitation,
@@ -29,6 +30,7 @@ import { CircleIcon } from "./circle-icon";
 import { CircleExpenseList } from "./circle-expense-list";
 import { CircleBalances } from "./circle-balances";
 import { CircleMembers } from "./circle-members";
+import { CirclePermissionsDialog } from "./circle-permissions-dialog";
 import {
     CircleConfirmDialog,
     CircleSettingsDialog,
@@ -69,6 +71,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
     const [editor, setEditor] = useState<CircleExpense | "new" | "income" | null>(null),
         [viewing, setViewing] = useState<CircleExpense | null>(null);
     const [moving, setMoving] = useState<CircleExpense | null>(null);
+    const [permissionMember, setPermissionMember] = useState<CircleMember | null>(null);
     const [settlement, setSettlement] = useState<SettlementSuggestion | CircleSettlement | null>(null),
         [confirmation, setConfirmation] = useState<Confirmation | null>(null);
     const [filterCurrency, setFilterCurrency] = useState("");
@@ -115,6 +118,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
         const onKey = (event: KeyboardEvent) => {
             if (
                 data?.circle.id !== selected ||
+                !data?.circle.permissions.can_add ||
                 event.key.toLowerCase() !== "n" || event.metaKey || event.ctrlKey || event.altKey ||
                 (event.target instanceof HTMLElement && event.target.closest("input,textarea,select,[contenteditable]")) ||
                 document.querySelector("[role=\"dialog\"]")
@@ -149,8 +153,6 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
         detail?.balances.find((row) => row.member === detail.me && row.currency === currency)
             ?.net || 0;
     const summary = detail?.totals.find((row) => row.currency === currency);
-    const canModify = (createdBy: string) =>
-        !!detail && (detail.circle.is_owner || createdBy === detail.me);
     async function copyLink(id: string) {
         try {
             await navigator.clipboard.writeText(invitationLink(id));
@@ -337,7 +339,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                         {circle.member_count}{" "}
                                         {circle.member_count === 1 ? "member" : "members"} ·{" "}
                                         {circle.currency}
-                                        {circle.is_owner ? " · Owner" : ""}
+                                        {circle.is_owner ? " · Owner" : circle.can_manage ? " · Admin" : ""}
                                     </span>
                                 </span>
                                 <ArrowRight className="mr-2 size-4 text-muted-foreground transition-transform group-hover:translate-x-1" />
@@ -383,16 +385,20 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                 </h2>
                                 <p className="mt-2 text-[11px] text-muted-foreground">
                                     {detail.circle.member_count} {detail.circle.member_count === 1 ? "member" : "members"}
-                                    {detail.circle.is_owner ? " · You own this circle" : ""}
+                                    {detail.circle.is_owner ? " · You own this circle" : detail.circle.can_manage ? " · Admin" : ""}
                                 </p>
                             </div>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <Button variant="outline" onClick={() => setEditor("income")}><Plus /> Add income</Button>
-                            <Button onClick={() => setEditor("new")}>
-                                <Plus />
-                                Add expense
-                            </Button>
+                            {detail.circle.permissions.can_add && (
+                                <>
+                                    <Button variant="outline" onClick={() => setEditor("income")}><Plus /> Add income</Button>
+                                    <Button onClick={() => setEditor("new")}>
+                                        <Plus />
+                                        Add expense
+                                    </Button>
+                                </>
+                            )}
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <Button
@@ -407,16 +413,20 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                         <Copy /> Copy Circle ID
                                     </DropdownMenuItem>
                                     <DropdownMenuSeparator />
+                                    {detail.circle.can_manage && (
+                                        <>
+                                            <DropdownMenuItem onClick={() => setDialog("settings")}>
+                                                Rename, icon & currency
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => setDialog("categories")}>Categories</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => setDialog("invite")}>
+                                                Invite member
+                                            </DropdownMenuItem>
+                                        </>
+                                    )}
                                     {detail.circle.is_owner ?
                                             (
                                                 <>
-                                                    <DropdownMenuItem onClick={() => setDialog("settings")}>
-                                                        Rename, icon & currency
-                                                    </DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => setDialog("categories")}>Categories</DropdownMenuItem>
-                                                    <DropdownMenuItem onClick={() => setDialog("invite")}>
-                                                        Invite member
-                                                    </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => setDialog("transfer")}>
                                                         Transfer ownership
                                                     </DropdownMenuItem>
@@ -561,6 +571,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                             onCopy={copyLink}
                             onRemove={removeMember}
                             onRevoke={revokeInvitation}
+                            onPermissions={setPermissionMember}
                         />
                     )}
                 </>
@@ -577,6 +588,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                 />
             )}
             {detail && dialog === "categories" && <CircleCategorySettings data={detail} onClose={() => setDialog(null)} onSaved={refresh} />}
+            {detail && permissionMember && <CirclePermissionsDialog key={permissionMember.id} circle={detail.circle.id} member={permissionMember} onClose={() => setPermissionMember(null)} onSaved={refresh} />}
             {detail && dialog === "settings" && (
                 <CircleSettingsDialog
                     circle={detail.circle}
@@ -634,14 +646,14 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                     expense={viewing}
                     detail={detail}
                     onClose={() => setViewing(null)}
-                    onMove={user && detail.members.find((member) => member.id === viewing.paid_by)?.user === user.id ?
+                    onMove={canModifyCircleExpense(detail, viewing, "edit") && user && detail.members.find((member) => member.id === viewing.paid_by)?.user === user.id ?
                             () => {
                                 setMoving(viewing);
                                 setViewing(null);
                             } :
                         undefined}
-                    onDelete={canModify(viewing.created_by) ? () => removeExpense(viewing) : undefined}
-                    onEdit={canModify(viewing.created_by) ?
+                    onDelete={canModifyCircleExpense(detail, viewing, "delete") ? () => removeExpense(viewing) : undefined}
+                    onEdit={canModifyCircleExpense(detail, viewing, "edit") ?
                             () => {
                                 setEditor(viewing);
                                 setViewing(null);

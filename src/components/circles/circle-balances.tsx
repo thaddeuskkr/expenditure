@@ -27,7 +27,7 @@ export function CircleBalances({
     const { preferences } = useWorkspace();
     const name = (id: string) =>
         detail.members.find((member) => member.id === id)?.name || "Former member";
-    const canModify = (createdBy: string) => detail.circle.is_owner || createdBy === detail.me;
+    const canModify = (createdBy: string) => detail.circle.can_manage || createdBy === detail.me;
     return (
         <div className="space-y-9">
             <div className="divide-y">
@@ -92,7 +92,7 @@ export function CircleBalances({
                                     variant="outline"
                                     size="sm"
                                     disabled={
-                                        !detail.circle.is_owner &&
+                                        !detail.circle.can_manage &&
                                         suggestion.from_member !== detail.me &&
                                         suggestion.to_member !== detail.me
                                     }

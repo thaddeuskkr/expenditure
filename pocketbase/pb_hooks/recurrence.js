@@ -161,7 +161,8 @@ function generate(app, collection, id, now) {
             if (shared) {
                 const service = require(`${__hooks}/circles-service.js`);
                 actor = tx.findRecordById("circle_members", seed.getString("created_by"));
-                service.access(tx, seed.getString("circle"), actor.getString("user"));
+                const access = service.access(tx, seed.getString("circle"), actor.getString("user"));
+                service.requireExpensePermission(access.circle, access.member, "add");
                 members = service.memberRecords(tx, seed.getString("circle"));
                 service.memberInCircle(members, seed.getString("paid_by"), []);
                 JSON.parse(seed.getString("shares")).forEach((share) => service.memberInCircle(members, share.member, []));

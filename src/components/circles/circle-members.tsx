@@ -14,19 +14,21 @@ export function CircleMembers({
     onCopy,
     onRemove,
     onRevoke,
+    onPermissions,
 }: {
     detail: CircleDetail;
     onInvite: () => void;
     onCopy: (id: string) => void;
     onRemove: (member: CircleMember) => void;
     onRevoke: (invitation: CircleInvitation) => void;
+    onPermissions: (member: CircleMember) => void;
 }) {
     const { preferences } = useWorkspace();
     return (
         <div className="space-y-8">
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-medium">Members</h3>
-                {detail.circle.is_owner && (
+                {detail.circle.can_manage && (
                     <Button variant="outline" onClick={() => onInvite()}>
                         <UserPlus />
                         Invite member
@@ -37,33 +39,41 @@ export function CircleMembers({
                 {detail.members.map((member) => (
                     <div
                         key={member.id}
-                        className={`flex items-center gap-3 py-4 ${member.active && member.user ? "" : "opacity-55"}`}>
+                        className={`flex flex-wrap items-center gap-3 py-4 ${member.active && member.user ? "" : "opacity-55"}`}>
                         {member.expand.user && <UserAvatar user={member.expand.user} name={member.name} />}
-                        <div className="min-w-0 flex-1">
+                        <div className="min-w-0 flex-1 basis-32">
                             <p className="truncate text-xs">
                                 {member.name}
                                 {member.id === detail.me ? " (you)" : ""}
                             </p>
+                            {member.active && member.user && member.user !== detail.circle.owner && !member.is_admin && (
+                                <p className="mt-1 text-[10px] leading-5 text-muted-foreground">
+                                    {member.can_add ? "Can add" : "No adding"} · Edit {member.edit_scope} · Delete {member.delete_scope}
+                                </p>
+                            )}
                             <p className="mt-1 text-[10px] text-muted-foreground">
                                 {!member.active || !member.user ?
                                     "Former member" :
                                     member.user === detail.circle.owner ?
                                         "Owner" :
-                                        "Member"}
+                                        member.is_admin ? "Admin" : "Member"}
                             </p>
                         </div>
-                        {detail.circle.is_owner &&
+                        {detail.circle.can_manage &&
                             member.active &&
                             member.user && member.user !== detail.circle.owner && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                disabled={detail.balances.some(
-                                    (row) => row.member === member.id && row.net !== 0,
-                                )}
-                                onClick={() => onRemove(member)}>
-                                Remove
-                            </Button>
+                            <div className="flex shrink-0 items-center gap-1">
+                                <Button variant="outline" size="sm" aria-label={`Permissions for ${member.name}`} onClick={() => onPermissions(member)}>Permissions</Button>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={detail.balances.some(
+                                        (row) => row.member === member.id && row.net !== 0,
+                                    )}
+                                    onClick={() => onRemove(member)}>
+                                    Remove
+                                </Button>
+                            </div>
                         )}
                     </div>
                 ))}
@@ -72,7 +82,7 @@ export function CircleMembers({
                 Members must settle all currencies before leaving or being removed. Former members
                 remain in expense history.
             </p>
-            {detail.circle.is_owner && detail.invitations.length > 0 && (
+            {detail.circle.can_manage && detail.invitations.length > 0 && (
                 <div>
                     <h3 className="mb-3 text-sm font-medium">Pending invitations</h3>
                     <div className="divide-y">

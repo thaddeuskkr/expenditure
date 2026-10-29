@@ -8,7 +8,7 @@ import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { randomBytes } from "node:crypto";
 
-test("Circle transactions move atomically to the paid-by personal ledger", { timeout: 60000 }, async (t) => {
+test("Circle transactions move atomically to the paid-by personal ledger with edit access", { timeout: 60000 }, async (t) => {
     const binary = process.env.POCKETBASE_BINARY;
     assert.ok(binary, "Set POCKETBASE_BINARY to a PocketBase 0.40.6 executable.");
     const directory = await mkdtemp(join(tmpdir(), "expenditure-circle-personal-"));
@@ -89,6 +89,8 @@ test("Circle transactions move atomically to the paid-by personal ledger", { tim
             ids[name] = (await api(`/api/expenditure/circle-invitations/${invite.id}/accept`, { token: account.token, body: {} })).member;
         }
 
+        const target = (await api(`${root}/${circle.id}`, { token: owner.token })).members.find((row) => row.id === ids.payer);
+        await api(`${root}/${circle.id}/members/${ids.payer}/permissions`, { token: owner.token, method: "PATCH", body: { is_admin: false, can_add: true, edit_scope: "all", delete_scope: "own", version: target.version } });
         return { circle, ids, path: `${root}/${circle.id}` };
     }
 
@@ -101,7 +103,7 @@ test("Circle transactions move atomically to the paid-by personal ledger", { tim
     const move = (g, expense, options = {}) => api(movePath(g, expense), { token: payer.token, body: { version: expense.version }, ...options });
     const detail = (g) => api(g.path, { token: owner.token });
     const balance = (d, id, currency = "SGD") => d.balances.find((row) => row.member === id && row.currency === currency)?.net || 0;
-    await t.test("only an active paid-by user can move, independently of the owner or author", async () => {
+    await t.test("only an active paid-by user with edit access can move", async () => {
         const g = await group(), expense = await create(g);
         assert.equal(expense.created_by, g.ids.owner);
         await move(g, expense, { token: undefined, expected: 401 });

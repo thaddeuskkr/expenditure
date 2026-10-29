@@ -25,6 +25,7 @@ function move(e) {
             return;
         }
 
+        service.requireExpensePermission(circle, member, "add");
         if (personal.getString("kind") !== "expense") throw new BadRequestError("Only expenses can be moved to a Circle.");
         if (personal.getString("updated") !== data.previous_updated) throw new ApiError(409, "This expense changed. Refresh it before moving.");
         if (app.countRecords("circle_expenses", $dbx.hashExp({ circle: circle.id })) >= 10000) throw new BadRequestError("This Circle has reached its entry limit.");
@@ -72,7 +73,7 @@ function moveToPersonal(e) {
     e.app.runInTransaction((app) => {
         const service = require(`${__hooks}/circles-service.js`);
         const configuration = require(`${__hooks}/configuration.js`);
-        const { circle } = service.access(app, e.request.pathValue("id"), e.auth.id);
+        const { circle, member } = service.access(app, e.request.pathValue("id"), e.auth.id);
         const id = e.request.pathValue("expense");
         if (!/^[a-z0-9]{15}$/.test(id)) throw new NotFoundError("Transaction not found.");
         let shared;
@@ -85,6 +86,7 @@ function moveToPersonal(e) {
         if (shared.getString("circle") !== circle.id) throw new NotFoundError("Transaction not found.");
         const payer = app.findRecordById("circle_members", shared.getString("paid_by"));
         if (payer.getString("user") !== e.auth.id) throw new ForbiddenError("Only the paid-by user can move this transaction.");
+        service.requireExpensePermission(circle, member, "edit", shared);
         if (shared.getInt("version") !== data.version) throw new ApiError(409, "This transaction changed. Refresh it before moving.");
         if (["expense", "income"].indexOf(shared.getString("kind")) < 0 || !configuration.currency(shared.getString("currency")) || shared.getInt("amount") < 1 || shared.getInt("amount") > require(`${__hooks}/circles-core.cjs`).MAX_AMOUNT)
             throw new BadRequestError("This transaction has invalid financial data.");

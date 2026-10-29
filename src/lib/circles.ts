@@ -12,6 +12,12 @@ export type CircleIconName = core.CircleIcon;
 export type CircleShare = core.Share;
 export type CircleBalance = core.Balance;
 export type SettlementSuggestion = core.SettlementSuggestion;
+export type CirclePermissionScope = "none" | "own" | "all";
+export interface CirclePermissions {
+    can_add: boolean;
+    edit_scope: CirclePermissionScope;
+    delete_scope: CirclePermissionScope;
+}
 export interface Circle {
     id: string;
     name: string;
@@ -19,14 +25,20 @@ export interface Circle {
     currency: string;
     owner: string;
     is_owner: boolean;
+    can_manage: boolean;
     member_count: number;
     version: number;
+    permissions: CirclePermissions;
 }
-export interface CircleMember {
+export interface CircleMemberPermissions extends CirclePermissions {
+    is_admin: boolean;
+}
+export interface CircleMember extends CircleMemberPermissions {
     id: string;
     name: string;
     active: boolean;
     user: string;
+    version: number;
     expand: { user?: { id: string; collectionId: string; name: string; avatar: string } };
 }
 export interface CircleExpense extends RecurringFields {
@@ -137,6 +149,10 @@ export const circlesApi = {
     revoke: (id: string) => pb.send(`${invitations}/${id}`, { method: "DELETE" }),
     removeMember: (circle: string, member: string) =>
         pb.send(`${base}/${circle}/members/${member}`, { method: "DELETE" }),
+    updateMemberPermissions: (circle: string, member: CircleMember, data: CircleMemberPermissions) =>
+        pb.send<CircleMember>(`${base}/${circle}/members/${member.id}/permissions`, {
+            method: "PATCH", body: { ...data, version: member.version },
+        }),
     moveExpense: (circle: string, expense: Expense, category: string) =>
         pb.send<CircleExpense>(`${base}/${circle}/expenses/move`, {
             method: "POST", body: { expense: expense.id, previous_updated: expense.updated, category },
@@ -168,6 +184,11 @@ export const circlesApi = {
             body: { version: settlement.version },
         }),
 };
+
+export function canModifyCircleExpense(detail: CircleDetail, expense: CircleExpense, action: "edit" | "delete") {
+    const scope = detail.circle.permissions[`${action}_scope`];
+    return scope === "all" || (scope === "own" && expense.created_by === detail.me);
+}
 
 export function invitationLink(id: string) {
     return `${window.location.origin}/?circle_invite=${encodeURIComponent(id)}`;

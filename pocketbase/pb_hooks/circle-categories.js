@@ -127,7 +127,7 @@ function copy(e) {
     return write(e, (app, circle) => {
         const existing = list(app, circle);
         checkPrevious(existing, data.previous_ids);
-        // Only the owner may copy, and only from their own personal settings.
+        // Owners and Admins may copy only from their own personal settings.
         const source = configuration.categories(app, e.auth.id);
         const desired = source.map((row) => row.name.toLowerCase());
         const historical = existing.filter((row) => desired.indexOf(row.name.toLowerCase()) < 0 && app.countRecords("circle_expenses", $dbx.hashExp({ circle, category: row.id })) > 0);

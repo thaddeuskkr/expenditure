@@ -77,7 +77,7 @@ function memberRecords(app, circle) {
     });
 }
 
-function access(app, circleId, user, ownerOnly) {
+function access(app, circleId, user, managerOnly) {
     const circle = find(app, "circles", circleId);
     let member;
     try {
@@ -91,8 +91,9 @@ function access(app, circleId, user, ownerOnly) {
     }
 
     const isOwner = circle.getString("owner") === user;
-    if (ownerOnly && !isOwner) throw new ForbiddenError("Only the circle owner can do this.");
-    return { circle, member, isOwner };
+    const canManage = isOwner || member.getBool("is_admin");
+    if (managerOnly && !canManage) throw new ForbiddenError("Only the Circle owner or an Admin can do this.");
+    return { circle, member, isOwner, canManage };
 }
 
 function displayName(user) {
@@ -101,6 +102,18 @@ function displayName(user) {
         user.getString("email").split("@")[0] ||
         "Member"
     ).slice(0, 80);
+}
+
+function permissions(circle, member) {
+    if (circle.getString("owner") === member.getString("user") || member.getBool("is_admin"))
+        return { can_add: true, edit_scope: "all", delete_scope: "all" };
+    return { can_add: member.getBool("can_add"), edit_scope: member.getString("edit_scope"), delete_scope: member.getString("delete_scope") };
+}
+
+function requireExpensePermission(circle, member, action, expense) {
+    const allowed = permissions(circle, member);
+    if (action === "add" ? allowed.can_add : allowed[action + "_scope"] === "all" || (allowed[action + "_scope"] === "own" && expense.getString("created_by") === member.id)) return;
+    throw new ForbiddenError(`You do not have permission to ${action} this Circle transaction.`);
 }
 
 function memberDTO(app, member) {
@@ -126,9 +139,12 @@ function memberDTO(app, member) {
 }
 
 function circleDTO(app, circle, user) {
+    const member = app.findFirstRecordByFilter("circle_members", "circle = {:circle} && user = {:user} && active = true", { circle: circle.id, user });
     return {
         ...circle.publicExport(),
         is_owner: circle.getString("owner") === user,
+        can_manage: circle.getString("owner") === user || member.getBool("is_admin"),
+        permissions: permissions(circle, member),
         member_count: app.countRecords(
             "circle_members",
             $dbx.exp("circle = {:circle} AND active = true AND user != ''", { circle: circle.id }),
@@ -322,6 +338,7 @@ function create(e) {
                 user: e.auth.id,
                 name: displayName(e.auth),
                 active: true,
+                is_admin: false, can_add: true, edit_scope: "own", delete_scope: "own", version: 1,
             });
             require(`${__hooks}/circle-categories.js`).initialize(app, circle.id);
             return circleDTO(app, circle, e.auth.id);
@@ -331,7 +348,7 @@ function create(e) {
 }
 
 function detail(e) {
-    const { circle, member, isOwner } = access(e.app, e.request.pathValue("id"), e.auth.id);
+    const { circle, member, canManage } = access(e.app, e.request.pathValue("id"), e.auth.id);
     const members = memberRecords(e.app, circle.id).map((row) => memberDTO(e.app, row));
     const totals = arrayOf(new DynamicModel({ currency: "", total: 0, income: 0, count: 0 }));
     e.app
@@ -343,7 +360,7 @@ function detail(e) {
         .all(totals);
     const net = balances(e.app, circle.id);
     const query = e.request.url.query();
-    const invitations = isOwner ?
+    const invitations = canManage ?
             e.app
                 .findRecordsByFilter(
                     "circle_invitations",
@@ -378,7 +395,7 @@ function detail(e) {
 function update(e) {
     const data = body(e, ["name", "icon", "currency", "owner", "version"]);
     return write(e, (app) => {
-        const { circle } = access(app, e.request.pathValue("id"), e.auth.id, true);
+        const { circle, isOwner } = access(app, e.request.pathValue("id"), e.auth.id, true);
         checkVersion(circle, data.version);
         if (data.name !== undefined) circle.set("name", text(data.name, "Circle name", 80, true));
         if (data.icon !== undefined) {
@@ -389,6 +406,7 @@ function update(e) {
 
         if (data.currency !== undefined) circle.set("currency", currency(data.currency));
         if (data.owner !== undefined) {
+            if (!isOwner) throw new ForbiddenError("Only the Circle owner can transfer ownership.");
             const next = memberRecords(app, circle.id).find((member) =>
                 member.getBool("active") && member.getString("user") && member.getString("user") === data.owner,
             );
@@ -407,7 +425,8 @@ function update(e) {
 function remove(e) {
     const data = body(e, ["confirmation", "version"]);
     return write(e, (app) => {
-        const { circle } = access(app, e.request.pathValue("id"), e.auth.id, true);
+        const { circle, isOwner } = access(app, e.request.pathValue("id"), e.auth.id, true);
+        if (!isOwner) throw new ForbiddenError("Only the Circle owner can delete the Circle.");
         checkVersion(circle, data.version);
         if (data.confirmation !== circle.getString("name"))
             throw new BadRequestError("Enter the circle name to confirm deletion.");
@@ -504,6 +523,7 @@ function acceptInvitation(e) {
                 throw new BadRequestError("You already belong to this circle.");
             member.set("active", true);
             member.set("name", displayName(e.auth));
+            member.set("version", member.getInt("version") + 1);
             app.save(member);
         } else {
             member = record(app, "circle_members", {
@@ -511,6 +531,7 @@ function acceptInvitation(e) {
                 user: e.auth.id,
                 name: displayName(e.auth),
                 active: true,
+                is_admin: false, can_add: true, edit_scope: "own", delete_scope: "own", version: 1,
             });
         }
 
@@ -535,18 +556,37 @@ function revokeInvitation(e) {
 
 function removeMember(e) {
     return write(e, (app) => {
-        const { circle, member: actor } = access(app, e.request.pathValue("id"), e.auth.id);
+        const { circle, member: actor, canManage } = access(app, e.request.pathValue("id"), e.auth.id);
         const target = find(app, "circle_members", e.request.pathValue("member"));
         if (target.getString("circle") !== circle.id) throw new NotFoundError("Member not found.");
-        if (actor.id !== target.id && circle.getString("owner") !== e.auth.id)
-            throw new ForbiddenError("Only the owner can remove another member.");
+        if (actor.id !== target.id && !canManage)
+            throw new ForbiddenError("Only the owner or an Admin can remove another member.");
         if (target.getString("user") === circle.getString("owner"))
             throw new BadRequestError("Transfer ownership before leaving the circle.");
         if (balances(app, circle.id).some((row) => row.member === target.id && row.net !== 0))
             throw new BadRequestError("Settle this member's balances in every currency first.");
         target.set("active", false);
+        target.set("version", target.getInt("version") + 1);
         app.save(target);
         return { removed: true };
+    });
+}
+
+function updateMemberPermissions(e) {
+    const data = body(e, ["is_admin", "can_add", "edit_scope", "delete_scope", "version"]);
+    if (typeof data.is_admin !== "boolean" || typeof data.can_add !== "boolean" || ["none", "own", "all"].indexOf(data.edit_scope) < 0 || ["none", "own", "all"].indexOf(data.delete_scope) < 0)
+        throw new BadRequestError("Provide Admin and Add access and an Edit and Delete scope of none, own or all.");
+    return write(e, (app) => {
+        const { circle } = access(app, e.request.pathValue("id"), e.auth.id, true);
+        const target = find(app, "circle_members", e.request.pathValue("member"));
+        if (target.getString("circle") !== circle.id || !target.getBool("active") || !target.getString("user"))
+            throw new NotFoundError("Active member not found.");
+        if (target.getString("user") === circle.getString("owner"))
+            throw new BadRequestError("The owner always has full access.");
+        checkVersion(target, data.version);
+        target.load({ is_admin: data.is_admin, can_add: data.can_add, edit_scope: data.edit_scope, delete_scope: data.delete_scope, version: target.getInt("version") + 1 });
+        app.save(target);
+        return memberDTO(app, target);
     });
 }
 
@@ -556,6 +596,7 @@ function createApiExpense(e) {
 
 function createApiRecord(app, identity, circleId, fields) {
     const { circle, member } = access(app, circleId, identity.user.id);
+    requireExpensePermission(circle, member, "add");
     if (app.countRecords("circle_expenses", $dbx.hashExp({ circle: circle.id })) >= 10000)
         throw new BadRequestError("This circle has reached its expense limit.");
     const total = fields.amount;
@@ -610,19 +651,19 @@ function saveExpense(e) {
     return write(
         e,
         (app) => {
-            const { circle, member, isOwner } = access(app, e.request.pathValue("id"), e.auth.id);
+            const { circle, member } = access(app, e.request.pathValue("id"), e.auth.id);
             let expense = null;
             if (editing) {
                 expense = find(app, "circle_expenses", editing);
                 if (expense.getString("circle") !== circle.id)
                     throw new NotFoundError("Expense not found.");
-                if (!isOwner && expense.getString("created_by") !== member.id)
-                    throw new ForbiddenError("Only the author or owner can edit this expense.");
+                requireExpensePermission(circle, member, "edit", expense);
                 checkVersion(expense, data.version);
-            } else if (
-                app.countRecords("circle_expenses", $dbx.hashExp({ circle: circle.id })) >= 10000
-            ) {
-                throw new BadRequestError("This circle has reached its expense limit.");
+            } else {
+                requireExpensePermission(circle, member, "add");
+                if (
+                    app.countRecords("circle_expenses", $dbx.hashExp({ circle: circle.id })) >= 10000
+                ) throw new BadRequestError("This circle has reached its expense limit.");
             }
 
             const members = memberRecords(app, circle.id),
@@ -697,12 +738,11 @@ function saveExpense(e) {
 function deleteExpense(e) {
     const data = body(e, ["version"]);
     return write(e, (app) => {
-        const { circle, member, isOwner } = access(app, e.request.pathValue("id"), e.auth.id);
+        const { circle, member } = access(app, e.request.pathValue("id"), e.auth.id);
         const expense = find(app, "circle_expenses", e.request.pathValue("expense"));
         if (expense.getString("circle") !== circle.id)
             throw new NotFoundError("Expense not found.");
-        if (!isOwner && expense.getString("created_by") !== member.id)
-            throw new ForbiddenError("Only the author or owner can delete this expense.");
+        requireExpensePermission(circle, member, "delete", expense);
         checkVersion(expense, data.version);
         const before = balances(app, circle.id),
             members = memberRecords(app, circle.id);
@@ -726,14 +766,14 @@ function settle(e) {
     return write(
         e,
         (app) => {
-            const { circle, member, isOwner } = access(app, e.request.pathValue("id"), e.auth.id);
+            const { circle, member, canManage } = access(app, e.request.pathValue("id"), e.auth.id);
             let settlement = null;
             if (editing) {
                 settlement = find(app, "circle_settlements", editing);
                 if (settlement.getString("circle") !== circle.id)
                     throw new NotFoundError("Settlement not found.");
-                if (!isOwner && settlement.getString("created_by") !== member.id)
-                    throw new ForbiddenError("Only the author or owner can edit this settlement.");
+                if (!canManage && settlement.getString("created_by") !== member.id)
+                    throw new ForbiddenError("Only the author, owner or an Admin can edit this settlement.");
                 checkVersion(settlement, data.version);
             }
 
@@ -760,9 +800,9 @@ function settle(e) {
             const unchangedMoney = settlement && settlement.getString("from_member") === from.id &&
                 settlement.getString("to_member") === to.id && settlement.getString("currency") === code &&
                 settlement.getInt("amount") === total;
-            if (!isOwner && member.id !== from.id && member.id !== to.id && !unchangedMoney)
+            if (!canManage && member.id !== from.id && member.id !== to.id && !unchangedMoney)
                 throw new ForbiddenError(
-                    "Only a participant or the owner can change this settlement's financial details.",
+                    "Only a participant, the owner or an Admin can change this settlement's financial details.",
                 );
             if (!unchangedMoney && total > Math.min(debt, credit))
                 throw new BadRequestError(
@@ -796,12 +836,12 @@ function settle(e) {
 function deleteSettlement(e) {
     const data = body(e, ["version"]);
     return write(e, (app) => {
-        const { circle, member, isOwner } = access(app, e.request.pathValue("id"), e.auth.id);
+        const { circle, member, canManage } = access(app, e.request.pathValue("id"), e.auth.id);
         const settlement = find(app, "circle_settlements", e.request.pathValue("settlement"));
         if (settlement.getString("circle") !== circle.id)
             throw new NotFoundError("Settlement not found.");
-        if (!isOwner && settlement.getString("created_by") !== member.id)
-            throw new ForbiddenError("Only the author or owner can undo this settlement.");
+        if (!canManage && settlement.getString("created_by") !== member.id)
+            throw new ForbiddenError("Only the author, owner or an Admin can undo this settlement.");
         checkVersion(settlement, data.version);
         const before = balances(app, circle.id),
             members = memberRecords(app, circle.id);
@@ -824,7 +864,8 @@ function deleteContents(app, circle) {
 }
 
 module.exports = {
-    access, memberRecords, memberInCircle, balances, preserveFormerBalances,
+    access, requireExpensePermission, memberRecords, memberInCircle, balances, preserveFormerBalances,
+    updateMemberPermissions,
     list,
     create,
     detail,

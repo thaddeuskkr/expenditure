@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "26.0.0",
+    "version": "27.0.0",
     "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring income and expenses run on the PocketBase server every minute, with custom intervals and monthly dates, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -19,7 +19,7 @@
     "/api/expenses/transactions": {
       "post": {
         "summary": "Add an expense",
-        "description": "Requires expenses:write. New expenses use preferences.default_api_circle: empty saves personally; a Circle ID saves directly in that Circle with merchant mapped internally to title. The request accepts merchant, never title; other fields retain their names. Omitted currency and category use the destination defaults. Supplied categories must be active in that destination, and supplied personal currencies must be enabled. No personal expense copy is created for Circle imports. Circle imports are self-paid and initially 100% self-allocated. Responses return the stored Expense (merchant) or CircleExpense (title, circle), plus destination, replay and idempotency_expires_at. The preference applies across all of the user's keys and affects creation only; existing retries retain their original destination, including after preference changes. Explicit Circle URLs ignore the preference. Unavailable defaults return 404 without falling back to personal. Idempotency-Key is optional and shared across both expense creation endpoints, scoped to the user across API keys. The fixed 24-hour window starts at the original server-created timestamp and survives transaction edits or deletion. Identical accepted data replays the current transaction; changed data or a different explicitly targeted Circle conflicts. Omitted defaults resolve against the immutable original request on replay. Retries never extend the window. After expiry the key can create a new expense. A deleted transaction returns 410 during the window; an unavailable Circle or inactive membership returns 404. Failed writes do not consume a key.",
+        "description": "Requires expenses:write. New expenses use preferences.default_api_circle: empty saves personally; a Circle ID saves directly in that Circle with merchant mapped internally to title. The request accepts merchant, never title; other fields retain their names. Omitted currency and category use the destination defaults. Supplied categories must be active in that destination, and supplied personal currencies must be enabled. No personal expense copy is created for Circle imports. Circle imports are self-paid and initially 100% self-allocated. Responses return the stored Expense (merchant) or CircleExpense (title, circle), plus destination, replay and idempotency_expires_at. The preference applies across all of the user's keys and affects creation only; existing retries retain their original destination, including after preference changes. Explicit Circle URLs ignore the preference. Unavailable defaults return 404 without falling back to personal. Idempotency-Key is optional and shared across both expense creation endpoints, scoped to the user across API keys. The fixed 24-hour window starts at the original server-created timestamp and survives transaction edits or deletion. Identical accepted data replays the current transaction; changed data or a different explicitly targeted Circle conflicts. Omitted defaults resolve against the immutable original request on replay. Retries never extend the window. After expiry the key can create a new expense. A deleted transaction returns 410 during the window; an unavailable Circle or inactive membership returns 404. Failed writes do not consume a key. New Circle entries require Add permission, checked inside the write transaction. Existing idempotent retries can replay after Add permission is revoked.",
         "parameters": [
           {
             "in": "header",
@@ -79,7 +79,7 @@
             "description": "Invalid, expired or revoked key"
           },
           "403": {
-            "description": "Missing expenses:write scope"
+            "description": "API scope or Circle Add permission denied"
           },
           "409": {
             "description": "Key already used with different accepted data or a different explicitly targeted destination within 24 hours"
@@ -187,7 +187,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -233,7 +233,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -282,7 +282,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -310,8 +310,8 @@
         ]
       },
       "patch": {
-        "summary": "Owner: change settings or transfer ownership",
-        "description": "",
+        "summary": "Owner or Admin: change settings; owner only: transfer ownership",
+        "description": "Owners and Admins can change name, icon and currency with the current Circle version. Only the actual owner can transfer ownership. Combined requests containing an unauthorized transfer are rejected atomically.",
         "tags": [
           "Circles"
         ],
@@ -348,7 +348,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -397,7 +397,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -421,7 +421,7 @@
         }
       ],
       "post": {
-        "summary": "Owner: create an email-bound seven-day invitation",
+        "summary": "Owner or Admin: create an email-bound seven-day invitation",
         "description": "The recipient needs a matching verified account. Reissuing revokes previous pending links. No email is sent.",
         "tags": [
           "Circles"
@@ -459,7 +459,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -508,7 +508,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -516,7 +516,7 @@
         }
       },
       "delete": {
-        "summary": "Owner revokes or recipient declines invitation",
+        "summary": "Owner or Admin revokes, or recipient declines invitation",
         "description": "",
         "tags": [
           "Circles"
@@ -544,7 +544,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -593,7 +593,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -623,8 +623,8 @@
         }
       ],
       "delete": {
-        "summary": "Owner removes member, or member leaves",
-        "description": "All currencies must be settled. The owner must transfer ownership before leaving. History is retained.",
+        "summary": "Owner or Admin removes a member, or member leaves",
+        "description": "Owners and Admins can remove other members, including Admins, after all currencies are settled. The owner cannot be removed. Only the owner can transfer ownership before leaving. Membership identities and saved permissions remain for history and rejoining.",
         "tags": [
           "Circles"
         ],
@@ -651,7 +651,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -672,8 +672,8 @@
         }
       ],
       "post": {
-        "summary": "Member: add shared expense",
-        "description": "",
+        "summary": "Add a Circle expense or income",
+        "description": "Requires Add permission for the active member; applies to expenses and income.",
         "tags": [
           "Circles"
         ],
@@ -710,7 +710,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Add permission required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -740,8 +740,8 @@
         }
       ],
       "patch": {
-        "summary": "Author or owner: replace shared expense",
-        "description": "",
+        "summary": "Edit a Circle expense or income",
+        "description": "Requires Edit permission: all entries, or own entries where created_by equals the active member. The owner and Admins retain full access.",
         "tags": [
           "Circles"
         ],
@@ -778,7 +778,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Edit permission required for this entry"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -789,8 +789,8 @@
         }
       },
       "delete": {
-        "summary": "Author or owner: delete shared expense",
-        "description": "",
+        "summary": "Delete a Circle expense or income",
+        "description": "Requires Delete permission: all entries, or own entries where created_by equals the active member. The owner and Admins retain full access.",
         "tags": [
           "Circles"
         ],
@@ -827,7 +827,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Delete permission required for this entry"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -851,7 +851,7 @@
         }
       ],
       "post": {
-        "summary": "Owner or participant: record full or partial repayment",
+        "summary": "Owner, Admin or participant: record full or partial repayment",
         "description": "This records an external repayment. It does not transfer money. Amount cannot exceed the current debtor or creditor balance in this currency.",
         "tags": [
           "Circles"
@@ -889,7 +889,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -919,7 +919,7 @@
         }
       ],
       "delete": {
-        "summary": "Author or owner: undo recorded repayment",
+        "summary": "Author, owner or Admin: undo recorded repayment",
         "description": "",
         "tags": [
           "Circles"
@@ -957,7 +957,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Owner, author, participant or matching verified email is required"
+            "description": "Required Circle role, transaction permission, participant or matching verified email is required"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -968,8 +968,8 @@
         }
       },
       "patch": {
-        "summary": "Author or owner: edit a recorded repayment",
-        "description": "Updates a recorded external repayment without transferring money. Requires its current version. The original author or Circle owner may edit. Financial changes by a non-owner require that author to remain a participant in the replacement; metadata-only edits retain author access. Financial changes are validated against current balances with the original repayment reversed, so they cannot overpay or mix currencies. Former members balances cannot change. The ID, original creator and creation timestamp are retained. Omitted notes and occurred_at retain their previous values. Notes/date-only edits remain allowed after later ledger changes. Balances and repayment suggestions are recalculated from the saved ledger.",
+        "summary": "Author, owner or Admin: edit a recorded repayment",
+        "description": "Updates a recorded external repayment without transferring money. Requires its current version. The original author, Circle owner or an Admin may edit. Financial changes by an ordinary member require that author to remain a participant in the replacement; metadata-only edits retain author access. Financial changes are validated against current balances with the original repayment reversed, so they cannot overpay or mix currencies. Former members balances cannot change. The ID, original creator and creation timestamp are retained. Omitted notes and occurred_at retain their previous values. Notes/date-only edits remain allowed after later ledger changes. Balances and repayment suggestions are recalculated from the saved ledger.",
         "tags": [
           "Circles"
         ],
@@ -1006,7 +1006,7 @@
             "description": "A PocketBase users session is required"
           },
           "403": {
-            "description": "Only the original author or Circle owner may edit; non-owners must remain a participant when changing financial details"
+            "description": "Only the original author, Circle owner or an Admin may edit; ordinary members must remain a participant when changing financial details"
           },
           "404": {
             "description": "Circle, invitation or record is not accessible"
@@ -1400,7 +1400,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Only the owner can manage categories"
+            "description": "Only the owner or an Admin can manage categories"
           },
           "404": {
             "description": "Circle or record not found"
@@ -1466,7 +1466,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Only the owner can manage categories"
+            "description": "Only the owner or an Admin can manage categories"
           },
           "404": {
             "description": "Circle or record not found"
@@ -1524,7 +1524,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Only the owner can manage categories"
+            "description": "Only the owner or an Admin can manage categories"
           },
           "404": {
             "description": "Circle or record not found"
@@ -1537,7 +1537,7 @@
     },
     "/api/expenditure/circles/{id}/categories/copy": {
       "post": {
-        "summary": "Replace Circle categories from the owner personal settings",
+        "summary": "Owner or Admin: replace Circle categories from their own personal settings",
         "description": "",
         "security": [
           {
@@ -1582,7 +1582,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Only the owner can manage categories"
+            "description": "Only the owner or an Admin can manage categories"
           },
           "404": {
             "description": "Circle or record not found"
@@ -1596,7 +1596,7 @@
     "/api/expenditure/circles/{id}/expenses/move": {
       "post": {
         "summary": "Move an owned personal expense to a Circle",
-        "description": "Every active member may transfer their own expense. Income cannot be moved. Atomically excludes the original from the personal ledger and creates a Circle expense with the same ID, amount, currency, occurrence, created/updated timestamps, notes, payment method and provenance. Payer and author are the moving membership ID. Initial percentage split is 10000 basis points to that member, adding no debt. Recurrence and its saved timezone, anchor, next cursor and pause state transfer intact; existing generated personal entries stay in place. Retries to the same Circle return the existing entry without duplicating or overwriting it. A retained owner-protected receipt preserves API idempotency for the original 24-hour window, even if the Circle entry is later deleted. Transfers do not return to the personal ledger when a Circle is deleted.",
+        "description": "Active members with Add permission may transfer their own expense. Income cannot be moved. Atomically excludes the original from the personal ledger and creates a Circle expense with the same ID, amount, currency, occurrence, created/updated timestamps, notes, payment method and provenance. Payer and author are the moving membership ID. Initial percentage split is 10000 basis points to that member, adding no debt. Recurrence and its saved timezone, anchor, next cursor and pause state transfer intact; existing generated personal entries stay in place. Retries to the same Circle return the existing entry without duplicating or overwriting it. A retained owner-protected receipt preserves API idempotency for the original 24-hour window, even if the Circle entry is later deleted. Transfers do not return to the personal ledger when a Circle is deleted. New Circle entries require Add permission, checked inside the write transaction. Existing idempotent retries can replay after Add permission is revoked.",
         "security": [
           {
             "UserSession": []
@@ -1640,7 +1640,7 @@
             "description": "Authentication required"
           },
           "403": {
-            "description": "Transfer requires an active Circle membership."
+            "description": "API scope or Circle Add permission denied"
           },
           "404": {
             "description": "Circle or record not found"
@@ -1665,7 +1665,7 @@
       ],
       "post": {
         "summary": "Add a self-paid Circle expense using an API key",
-        "description": "Requires expenses:write in X-API-Key and active Circle membership. The URL explicitly selects the Circle and ignores default_api_circle. Accepts title instead of merchant; the payer, creator and sole initial 100% share belong to the API key owner. Other Circle routes remain session-only. Idempotency-Key is optional and shared across both expense creation endpoints, scoped to the user across API keys. The fixed 24-hour window starts at the original server-created timestamp and survives transaction edits or deletion. Identical accepted data replays the current transaction; changed data or a different explicitly targeted Circle conflicts. Omitted defaults resolve against the immutable original request on replay. Retries never extend the window. After expiry the key can create a new expense. A deleted transaction returns 410 during the window; an unavailable Circle or inactive membership returns 404. Failed writes do not consume a key.",
+        "description": "Requires expenses:write in X-API-Key and active Circle membership. The URL explicitly selects the Circle and ignores default_api_circle. Accepts title instead of merchant; the payer, creator and sole initial 100% share belong to the API key owner. Other Circle routes remain session-only. Idempotency-Key is optional and shared across both expense creation endpoints, scoped to the user across API keys. The fixed 24-hour window starts at the original server-created timestamp and survives transaction edits or deletion. Identical accepted data replays the current transaction; changed data or a different explicitly targeted Circle conflicts. Omitted defaults resolve against the immutable original request on replay. Retries never extend the window. After expiry the key can create a new expense. A deleted transaction returns 410 during the window; an unavailable Circle or inactive membership returns 404. Failed writes do not consume a key. New Circle entries require Add permission, checked inside the write transaction. Existing idempotent retries can replay after Add permission is revoked.",
         "tags": [
           "Circles"
         ],
@@ -1709,7 +1709,7 @@
             "description": "Missing, invalid, expired or revoked API key"
           },
           "403": {
-            "description": "Missing expenses:write scope"
+            "description": "API scope or Circle Add permission denied"
           },
           "404": {
             "description": "The destination Circle was deleted or the key owner is no longer an active member; nothing is saved elsewhere"
@@ -1847,7 +1847,7 @@
     "/api/expenditure/circles/{id}/expenses/{expense}/move-to-personal": {
       "post": {
         "summary": "Move a Circle expense or income to the paid-by user\u2019s personal ledger",
-        "description": "Normal users session only. Requires active Circle membership and the authenticated user to own the paid_by membership; author or Circle owner status alone grants no permission. Atomically removes the Circle entry and creates a fresh personal entry with the full positive amount and original kind, currency (even when disabled personally), occurrence, created/updated timestamps, payment method, notes and provenance. A supplied category must be an active personal category ID owned by the user. Omission matches active personal categories by exact name, then a unique case/whitespace-insensitive name, then Other, then the first active category. Removes all Circle allocations and recalculates balances while preserving former-member balances and recorded repayments. Recurrence timezone, calendar controls, anchor, cursor and pause error move intact; earlier generated entries stay in the Circle. No move receipt or original split/receipt snapshot is retained. After a successful move, repeated requests return 404 because the Circle source no longer exists. If a response is lost, refresh both ledgers to confirm the result. Earlier personal-to-Circle receipts remain immutable. Circle API idempotency receipts keep their original destination and return 410 after this move rather than recreating the entry.",
+        "description": "Normal users session only. Requires active Circle membership, Edit permission for this entry, and the authenticated user to own the paid_by membership; author or Circle owner status alone grants no permission. Atomically removes the Circle entry and creates a fresh personal entry with the full positive amount and original kind, currency (even when disabled personally), occurrence, created/updated timestamps, payment method, notes and provenance. A supplied category must be an active personal category ID owned by the user. Omission matches active personal categories by exact name, then a unique case/whitespace-insensitive name, then Other, then the first active category. Removes all Circle allocations and recalculates balances while preserving former-member balances and recorded repayments. Recurrence timezone, calendar controls, anchor, cursor and pause error move intact; earlier generated entries stay in the Circle. No move receipt or original split/receipt snapshot is retained. After a successful move, repeated requests return 404 because the Circle source no longer exists. If a response is lost, refresh both ledgers to confirm the result. Earlier personal-to-Circle receipts remain immutable. Circle API idempotency receipts keep their original destination and return 410 after this move rather than recreating the entry.",
         "security": [
           {
             "UserSession": []
@@ -1901,13 +1901,84 @@
             "description": "User session required"
           },
           "403": {
-            "description": "Only the paid-by user can move this entry"
+            "description": "Edit permission and being the paid-by user are both required"
           },
           "404": {
             "description": "Transaction or active Circle membership not found, including a source already moved or deleted"
           },
           "409": {
             "description": "Stale transaction version"
+          }
+        }
+      }
+    },
+    "/api/expenditure/circles/{id}/members/{member}/permissions": {
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        },
+        {
+          "name": "member",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ],
+      "patch": {
+        "summary": "Owner or Admin: set permissions for an active member",
+        "description": "Set Admin access and independent Add, Edit and Delete permissions for expenses and income. Own entries are identified by created_by, not paid_by. The current owner or an Admin may change active members, including granting and revoking Admin access. The owner cannot be restricted. Admin grants full access to transactions, settings, categories, invitations, other member management and repayments. Removing the owner, transferring ownership and deleting the Circle are prohibited for Admins. Version checks prevent overwriting concurrent permission changes. Permissions are enforced inside every transaction. Existing and new members default to Admin disabled, Add allowed, Edit own and Delete own. Rejoining retains saved permissions. Permission changes do not alter ledger records, balances or repayment records. Admins have the same repayment management permissions as the owner, while ordinary members retain their existing repayment permissions. Revoked Add access pauses future recurring generation with a visible error; restore access and edit the schedule to resume. API idempotency replays and confirmed personal-to-Circle move retries still replay existing entries after Add is revoked. Moving to personal requires Edit access AND the authenticated user to be the payer.",
+        "tags": [
+          "Circles"
+        ],
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CircleMemberPermissionsInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated membership, including public profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleMember"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid fields/scopes/Admin flag or attempt to restrict the owner"
+          },
+          "401": {
+            "description": "User session required"
+          },
+          "403": {
+            "description": "Only the current owner or an Admin can change permissions"
+          },
+          "404": {
+            "description": "Circle or active target member not accessible"
+          },
+          "409": {
+            "description": "Stale membership version; refresh before saving"
           }
         }
       }
@@ -2851,6 +2922,13 @@
           },
           "member_count": {
             "type": "integer"
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/CirclePermissions"
+          },
+          "can_manage": {
+            "type": "boolean",
+            "description": "True when the current active member is the owner or has is_admin enabled. Ownership itself remains identified by owner and is_owner."
           }
         },
         "required": [
@@ -2861,7 +2939,9 @@
           "owner",
           "version",
           "is_owner",
-          "member_count"
+          "member_count",
+          "permissions",
+          "can_manage"
         ]
       },
       "CircleUpdate": {
@@ -3140,6 +3220,37 @@
           "circle": {
             "type": "string",
             "pattern": "^[a-z0-9]{15}$"
+          },
+          "can_add": {
+            "type": "boolean",
+            "description": "Allows new expenses and income, including API imports, personal-to-Circle moves and recurring generation. Defaults to true."
+          },
+          "edit_scope": {
+            "type": "string",
+            "enum": [
+              "none",
+              "own",
+              "all"
+            ],
+            "description": "Own means created_by equals the member ID. Defaults to own."
+          },
+          "delete_scope": {
+            "type": "string",
+            "enum": [
+              "none",
+              "own",
+              "all"
+            ],
+            "description": "Independent of Edit permission. Defaults to own."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Version for concurrent permission changes. Required on permission updates."
+          },
+          "is_admin": {
+            "type": "boolean",
+            "description": "Stored Admin permission, default false. Grants full transaction and Circle management access, including managing other members and Admin permissions. The owner cannot be removed or restricted; Circle deletion and ownership transfer remain owner-only. Admin does not bypass the payer requirement for moves to personal."
           }
         },
         "required": [
@@ -3148,7 +3259,12 @@
           "active",
           "user",
           "expand",
-          "circle"
+          "circle",
+          "can_add",
+          "edit_scope",
+          "delete_scope",
+          "version",
+          "is_admin"
         ]
       },
       "CircleInvitation": {
@@ -6356,7 +6472,7 @@
             }
           }
         },
-        "description": "Owner-only replacement from the authenticated owner personal settings. Copies names, colours, active status and order. Reuses matching Circle category IDs, removes unused unmatched categories, and archives unmatched categories used in history. Historical entries, monetary amounts and balances are preserved. The combined list is limited to 100 categories."
+        "description": "Owner/Admin replacement from the authenticated manager’s own personal settings. Copies names, colours, active status and order. Reuses matching Circle category IDs, removes unused unmatched categories, and archives unmatched categories used in history. Historical entries, monetary amounts and balances are preserved. The combined list is limited to 100 categories."
       },
       "CircleCategoryList": {
         "type": "object",
@@ -6938,6 +7054,83 @@
             }
           }
         }
+      },
+      "CirclePermissions": {
+        "type": "object",
+        "properties": {
+          "can_add": {
+            "type": "boolean",
+            "description": "Allows new expenses and income, including API imports, personal-to-Circle moves and recurring generation. Defaults to true."
+          },
+          "edit_scope": {
+            "type": "string",
+            "enum": [
+              "none",
+              "own",
+              "all"
+            ],
+            "description": "Own means created_by equals the member ID. Defaults to own."
+          },
+          "delete_scope": {
+            "type": "string",
+            "enum": [
+              "none",
+              "own",
+              "all"
+            ],
+            "description": "Independent of Edit permission. Defaults to own."
+          }
+        },
+        "required": [
+          "can_add",
+          "edit_scope",
+          "delete_scope"
+        ],
+        "additionalProperties": false,
+        "description": "Effective transaction permissions for the current active member. The owner and Admins always have can_add=true and all scopes, regardless of stored member permissions."
+      },
+      "CircleMemberPermissionsInput": {
+        "type": "object",
+        "properties": {
+          "can_add": {
+            "type": "boolean",
+            "description": "Allows new expenses and income, including API imports, personal-to-Circle moves and recurring generation. Defaults to true."
+          },
+          "edit_scope": {
+            "type": "string",
+            "enum": [
+              "none",
+              "own",
+              "all"
+            ],
+            "description": "Own means created_by equals the member ID. Defaults to own."
+          },
+          "delete_scope": {
+            "type": "string",
+            "enum": [
+              "none",
+              "own",
+              "all"
+            ],
+            "description": "Independent of Edit permission. Defaults to own."
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "is_admin": {
+            "type": "boolean",
+            "description": "Stored Admin permission, default false. Grants full transaction and Circle management access, including managing other members and Admin permissions. The owner cannot be removed or restricted; Circle deletion and ownership transfer remain owner-only. Admin does not bypass the payer requirement for moves to personal."
+          }
+        },
+        "required": [
+          "can_add",
+          "edit_scope",
+          "delete_scope",
+          "version",
+          "is_admin"
+        ],
+        "additionalProperties": false
       }
     }
   }

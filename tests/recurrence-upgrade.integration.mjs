@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 
-for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_recurrence_calendar_choices.js", "1793296800_circle_budget_preference.js"]) test(`schedule upgrade from ${cutoff} preserves active and paused cursors, records, identities and Circle balances`, { timeout: 30000 }, async (t) => {
+for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_recurrence_calendar_choices.js", "1793296800_circle_budget_preference.js", "1793300400_immutable_api_retries.js"]) test(`schedule upgrade from ${cutoff} preserves active and paused cursors, records, identities and Circle balances`, { timeout: 30000 }, async (t) => {
     const binary = process.env.POCKETBASE_BINARY;
     assert.ok(binary, "Set POCKETBASE_BINARY to a PocketBase 0.40.6 executable.");
     const directory = await mkdtemp(join(tmpdir(), "expenditure-schedule-upgrade-"));
@@ -98,10 +98,10 @@ for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_re
     const upgrade = spawnSync(binary, ["migrate", "up", ...newFlags], { encoding: "utf8" });
     assert.equal(upgrade.status, 0, upgrade.stdout + upgrade.stderr);
     await start(newFlags);
-    assert.equal((await api("/api/expenditure/status")).version, 18);
+    assert.equal((await api("/api/expenditure/status")).version, 19);
     const upgradedPreferences = await api(`/api/collections/preferences/records/${prefs.id}`, admin);
     for (const key of Object.keys(prefs)) assert.deepEqual(upgradedPreferences[key], prefs[key], `preferences.${key}`);
-    assert.equal(upgradedPreferences.include_circle_in_budgets, true);
+    assert.equal(upgradedPreferences.include_circle_in_budgets, prefs.include_circle_in_budgets ?? true);
     assert.deepEqual((await api("/api/collections/users", admin)).oauth2, identity.oauth2);
     for (const [collection, records] of [["expenses", [active, paused, income, weekly, yearly]], ["circle_expenses", [shared]]]) {
         for (const original of records) {

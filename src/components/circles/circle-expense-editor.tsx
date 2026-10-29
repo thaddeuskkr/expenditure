@@ -169,6 +169,7 @@ export function CircleExpenseEditor({
                     occurred_at: fromZonedInput(
                         String(form.get("occurred_at")),
                         preferences.timezone,
+                        expense?.occurred_at,
                     ),
                     ...(expense ? { version: expense.version } : {}),
                 },

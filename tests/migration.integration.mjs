@@ -289,6 +289,10 @@ test(
             admin,
         );
         assert.equal(stored.totalItems, 1);
+        assert.deepEqual(stored.items[0].idempotency_data, {
+            merchant: "Existing coffee", amount: 850, currency: "SGD", category: "Food & drinks",
+            payment_method: "Stored Visa", notes: "", occurred_at: stored.items[0].occurred_at,
+        });
         const auth = await request(
             "/api/collections/users/auth-with-password",
             null,
@@ -321,6 +325,9 @@ test(
         assert.equal(replayResponse.status, 200, JSON.stringify(replay));
         assert.equal(replay.id, expense.id);
         assert.equal(replay.replay, true);
+        assert.equal(replay.idempotency_data, undefined);
+        const expenseSchema = await request("/api/collections/expenses", admin);
+        assert.equal(expenseSchema.fields.find((field) => field.name === "idempotency_data").hidden, true);
         const detail = await request(`/api/expenditure/circles/${circle.id}`, auth.token);
         assert.equal(detail.categories.length, 8);
         assert.deepEqual(detail.categories.map((row) => row.sort_order), [0, 1, 2, 3, 4, 5, 6, 7]);

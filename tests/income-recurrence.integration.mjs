@@ -7,6 +7,7 @@ import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { randomBytes } from "node:crypto";
 import timezoneCatalog from "../pocketbase/pb_hooks/timezones.json" with { type: "json" };
+import { fromZonedInput, zonedInput } from "../src/lib/domain.ts";
 
 test(
     "Income, recurring transactions and custom schedules",
@@ -263,6 +264,27 @@ test(
             assert.equal(await next("2091-01-20T04:00:00Z", "monthly", "2091-01-20T12:00:00", "Asia/Singapore", 2, 15, before), "2091-03-15T04:00:00.000Z");
             assert.equal(await next("2000-01-01T04:00:00Z", "monthly", "2000-01-01T12:00:00", "Asia/Singapore", 3, -1, Date.parse("2026-10-31T04:00:00Z")), "2027-01-31T04:00:00.000Z");
             assert.equal(await next("2000-01-01T04:00:00Z", "daily", "2000-01-01T12:00:00", "Asia/Singapore", 3, 0, Date.parse("2000-01-04T04:00:00Z")), "2000-01-07T04:00:00.000Z");
+        });
+        await t.test("unchanged picker dates preserve personal and Circle schedule cursors after a timezone change", async () => {
+            const account = await user("TimestampPreservation");
+            const config = await api("/api/expenditure/config", account.token);
+            const originalTime = "2091-01-01T04:00:45.123Z";
+            const seed = await api(personal, account.token, { ...input, user: account.id, merchant: "Precise schedule", recurrence: "monthly", recurrence_interval: 1, occurred_at: originalTime });
+            const group = await api(root, account.token, { name: "Precise Circle", currency: "SGD" }, "POST", 201);
+            const path = `${root}/${group.id}`;
+            const member = (await api(path, account.token)).me;
+            const fields = { ...shared, paid_by: member, shares: [{ member }], recurrence: "monthly", recurrence_interval: 1, occurred_at: originalTime };
+            const circleSeed = await api(`${path}/expenses`, account.token, fields, "POST", 201);
+            await api(`/api/collections/preferences/records/${config.preferences.id}`, account.token, { timezone: "UTC", time_format: "12h" }, "PATCH");
+            const originalSchedule = (row) => Object.fromEntries(["occurred_at", "recurrence_anchor", "recurrence_next", "recurrence_timezone"].map((key) => [key, row[key]]));
+            const preserved = (row) => fromZonedInput(zonedInput(row.occurred_at, "UTC"), "UTC", row.occurred_at);
+            const edited = await api(`${personal}/${seed.id}`, account.token, { notes: "Updated note", occurred_at: preserved(seed) }, "PATCH");
+            const sharedEdit = await api(`${path}/expenses/${circleSeed.id}`, account.token, { ...fields, notes: "Updated shared note", occurred_at: preserved(circleSeed), version: circleSeed.version }, "PATCH");
+            assert.deepEqual(originalSchedule(edited), originalSchedule(seed));
+            assert.deepEqual(originalSchedule(sharedEdit), originalSchedule(circleSeed));
+            assert.deepEqual(originalSchedule(await api(`${personal}/${seed.id}`, account.token)), originalSchedule(seed));
+            const detail = await api(path, account.token);
+            assert.deepEqual(originalSchedule(detail.expenses.items.find((row) => row.id === circleSeed.id)), originalSchedule(circleSeed));
         });
         await t.test("personal recurring income catches up fortnightly without duplicate income or budget spending", async () => {
             const account = await user("Schedules");

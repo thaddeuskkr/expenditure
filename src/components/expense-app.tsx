@@ -175,8 +175,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 18)
-                    throw new Error("This app requires backend version 18. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 19)
+                    throw new Error("This app requires backend version 19. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -1171,8 +1171,8 @@ function Workspace({
                                             />
                                         )}
                                 <p className="mt-8 text-[10px] leading-6 text-muted-foreground">
-                                    Budgets apply to {monthTitle(month)} in {mainCurrency} and include your allocated Circle expense shares.
-                                    Circle categories without a matching personal category count as Other.
+                                    Budgets apply to {monthTitle(month)} in {mainCurrency}.
+                                    {preferences.include_circle_in_budgets && " Your allocated Circle expense shares are included. Circle categories without a matching personal category count as Other."}{" "}
                                     Category limits are independent of the overall budget and do
                                     not roll over.
                                 </p>

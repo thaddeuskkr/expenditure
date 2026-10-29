@@ -168,12 +168,15 @@ test(
                         user: alice.id,
                         source: "api",
                         idempotency_key: "spoof",
+                        idempotency_data: { merchant: "Spoof" },
                     },
                 });
                 assert.equal(created.status, 200, JSON.stringify(created.data));
                 first = created.data;
                 assert.equal(first.source, "manual");
                 assert.equal(first.idempotency_key, undefined);
+                assert.equal(first.idempotency_data, undefined);
+                assert.equal((await request(`/api/collections/expenses/records/${first.id}`, { token: admin })).data.idempotency_data, null);
                 assert.equal(
                     (
                         await request("/api/collections/expenses/records", {
@@ -1124,6 +1127,72 @@ test(
                 assert.equal(saved.notes, body.notes);
             },
         );
+        await t.test("API retries compare an immutable request after edits, category changes and preference changes", async () => {
+            const account = await user("retry@example.com");
+            const config = (await request("/api/expenditure/config", { token: account.token })).data;
+            const credentials = await request("/api/expenditure/keys", {
+                token: account.token, method: "POST", body: { name: "Retry audit", scopes: ["expenses:write"], expires_at: "" },
+            });
+            assert.equal(credentials.status, 201, JSON.stringify(credentials.data));
+            const category = await request("/api/expenditure/categories", {
+                token: account.token, method: "POST", body: { name: "Retry category", color: "#123456" },
+            });
+            const input = { ...expense, merchant: "Immutable purchase", category: "  retry CATEGORY  ", occurred_at: "2090-01-01T04:00:45.123Z" };
+            const send = (body, marker = "immutable-retry") => request("/api/expenses/transactions", {
+                key: credentials.data.key, method: "POST", headers: { "Idempotency-Key": marker }, body,
+            });
+            const original = await send(input);
+            assert.equal(original.status, 201, JSON.stringify(original.data));
+            assert.equal(original.data.idempotency_data, undefined);
+            const storedPath = `/api/collections/expenses/records/${original.data.id}`;
+            const snapshot = (await request(storedPath, { token: admin })).data.idempotency_data;
+            const changes = { amount: 700, notes: "Corrected note", occurred_at: "2090-02-01T04:00:00Z" };
+            const edited = await request(storedPath, {
+                token: account.token, method: "PATCH", body: { ...changes, idempotency_data: { ...snapshot, ...changes }, idempotency_key: "overwrite" },
+            });
+            assert.equal(edited.status, 200, JSON.stringify(edited.data));
+            assert.equal(edited.data.idempotency_data, undefined);
+            assert.deepEqual((await request(storedPath, { token: admin })).data.idempotency_data, snapshot);
+            const replay = await send(input);
+            assert.equal(replay.status, 200, JSON.stringify(replay.data));
+            assert.equal(replay.data.id, original.data.id);
+            assert.equal(replay.data.amount, changes.amount);
+            assert.equal(replay.data.notes, changes.notes);
+            assert.equal(replay.data.replay, true);
+            assert.equal(replay.data.idempotency_expires_at, original.data.idempotency_expires_at);
+            assert.equal((await send({ ...input, ...changes })).status, 409);
+            assert.equal((await send({ ...input, idempotency_data: snapshot })).status, 400);
+            await request(`/api/expenditure/categories/${category.data.id}`, {
+                token: account.token, method: "PATCH", body: { active: false },
+            });
+            assert.equal((await send(input)).status, 200);
+            const renamed = await request(`/api/expenditure/categories/${category.data.id}`, {
+                token: account.token, method: "PATCH", body: { name: "Renamed category" },
+            });
+            assert.equal(renamed.status, 200, JSON.stringify(renamed.data));
+            assert.equal((await send(input)).status, 200);
+            assert.equal((await send({ ...input, category: "Renamed category" })).status, 409);
+
+            const defaults = { merchant: "Original defaults", amount: 123 };
+            const defaultExpense = await send(defaults, "default-retry");
+            assert.equal(defaultExpense.status, 201, JSON.stringify(defaultExpense.data));
+            const other = config.categories.find((row) => row.name === "Other");
+            await request(`/api/expenditure/categories/${other.id}`, { token: account.token, method: "PATCH", body: { name: "Old default", active: false } });
+            const preferences = await request(`/api/collections/preferences/records/${config.preferences.id}`, {
+                token: account.token, method: "PATCH", body: { currency: "USD", currencies: ["USD"] },
+            });
+            assert.equal(preferences.status, 200, JSON.stringify(preferences.data));
+            assert.equal((await send(input)).status, 200);
+            const defaultReplay = await send(defaults, "default-retry");
+            assert.equal(defaultReplay.status, 200, JSON.stringify(defaultReplay.data));
+            assert.equal(defaultReplay.data.id, defaultExpense.data.id);
+            assert.equal(defaultReplay.data.currency, "SGD");
+            const fresh = await send(defaults, "new-defaults");
+            assert.equal(fresh.status, 201, JSON.stringify(fresh.data));
+            assert.equal(fresh.data.currency, "USD");
+            assert.notEqual(fresh.data.category, "Old default");
+            assert.equal((await request("/api/collections/expenses/records", { token: account.token })).data.totalItems, 3);
+        });
         await t.test("idempotency expires after 24 hours without deleting expenses or extending on retries", async () => {
             const day = 24 * 60 * 60 * 1000;
             // PocketBase's native API ignores autodate edits, even for superusers.

@@ -101,6 +101,7 @@ export function ExpenseEditor({
                     occurred_at: fromZonedInput(
                         String(form.get("occurred_at")),
                         timezone,
+                        expense?.occurred_at,
                     ),
                     payment_method: String(form.get("payment_method") || "").trim(),
                     notes: String(form.get("notes") || "").trim(),

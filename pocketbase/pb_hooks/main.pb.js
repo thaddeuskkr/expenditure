@@ -1,5 +1,5 @@
 /// <reference path="../pb_data/types.d.ts" />
-routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 18 }));
+routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 19 }));
 
 routerAdd(
     "GET",
@@ -133,13 +133,13 @@ routerAdd(
         const lib = require(`${__hooks}/expenditure.js`);
         const identity = lib.authenticate(e, "expenses:write");
         const data = e.requestInfo().body;
-        const fields = lib.validateExpense(data, e.app, identity.user.id);
         const idempotency = e.request.header.get("Idempotency-Key");
         if (idempotency && !/^[A-Za-z0-9_.:-]{1,128}$/.test(idempotency))
             throw new BadRequestError("Invalid Idempotency-Key.");
         let record,
             replay = false;
         e.app.runInTransaction((app) => {
+            lib.authenticate(e, "expenses:write", app);
             if (idempotency) {
                 // Free only the expired retry marker, preserving the expense and
                 // its timestamps. Do this in the same transaction as insertion.
@@ -160,6 +160,8 @@ routerAdd(
                 );
                 if (existing.length) {
                     record = existing[0];
+                    const original = JSON.parse(record.getString("idempotency_data"));
+                    const fields = lib.validateExpense(data, app, identity.user.id, original);
                     const equal = [
                         "merchant",
                         "amount",
@@ -168,12 +170,12 @@ routerAdd(
                         "notes",
                         "payment_method",
                     ].every(
-                        (field) => String(record.get(field)) === String(fields[field]),
+                        (field) => String(original[field]) === String(fields[field]),
                     );
                     if (
                         !equal ||
                         (data.occurred_at !== undefined &&
-                            new Date(record.getString("occurred_at")).getTime() !==
+                            new Date(original.occurred_at).getTime() !==
                                 new Date(fields.occurred_at).getTime())
                     )
                         throw new ApiError(
@@ -185,12 +187,14 @@ routerAdd(
                 }
             }
 
+            const fields = lib.validateExpense(data, app, identity.user.id);
             record = new Record(app.findCollectionByNameOrId("expenses"));
             record.load(fields);
             record.load({
                 user: identity.user.id,
                 source: "api",
                 idempotency_key: idempotency || "",
+                idempotency_data: idempotency ? fields : null,
             });
             app.save(record);
         });
@@ -263,6 +267,7 @@ onRecordCreateRequest((e) => {
         for (const field of ["moved_to", "moved_circle"]) e.record.set(field, e.record.isNew() ? "" : e.record.original().getString(field));
         e.record.set("source", "manual");
         e.record.set("idempotency_key", "");
+        e.record.set("idempotency_data", null);
     }
 
     return e.next();
@@ -277,6 +282,7 @@ onRecordUpdateRequest((e) => {
             "idempotency_key",
             e.record.original().getString("idempotency_key"),
         );
+        e.record.set("idempotency_data", e.record.original().get("idempotency_data"));
         // Editing an API expense must not extend or shorten its retry window.
         if (e.record.getString("source") === "api")
             e.record.set("created", e.record.original().get("created"));

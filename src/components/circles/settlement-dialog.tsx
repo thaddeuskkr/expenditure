@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { DialogFooter } from "../ui/dialog";
 import { useWorkspace } from "../workspace-context";
 import {
-    asDate,
     errorMessage,
     formatAmountInput,
     fromZonedInput,
@@ -63,9 +62,7 @@ export function SettlementDialog({
                 currency,
                 amount: parseMinorUnits(amount, currency),
                 notes: String(form.get("notes") || ""),
-                occurred_at: settlement && selectedDate === zonedInput(settlement.occurred_at, preferences.timezone) ?
-                        asDate(settlement.occurred_at).toISOString() :
-                        fromZonedInput(selectedDate, preferences.timezone),
+                occurred_at: fromZonedInput(selectedDate, preferences.timezone, settlement?.occurred_at),
             }, settlement);
             onSaved();
             onClose();

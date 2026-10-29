@@ -94,6 +94,38 @@ test("transaction dates and times use the account timezone across midnight and d
     assert.equal(timeLabel("2026-03-08T07:00:00Z", "America/New_York"), "03:00");
 });
 
+test("unchanged picker values preserve exact instants, including both daylight-saving occurrences", () => {
+    for (const original of ["2026-11-01T05:30:45.123Z", "2026-11-01T06:30:45.123Z"]) {
+        const value = zonedInput(original, "America/New_York");
+        assert.equal(value, "2026-11-01T01:30");
+        assert.equal(fromZonedInput(value, "America/New_York", original), original);
+    }
+
+    const original = "2090-01-01 04:00:45.123Z";
+    for (const timezone of ["Asia/Singapore", "UTC", "Asia/Katmandu"]) {
+        assert.equal(fromZonedInput(zonedInput(original, timezone), timezone, original), "2090-01-01T04:00:45.123Z");
+    }
+
+    assert.equal(fromZonedInput("2090-01-01T04:01", "UTC", original), "2090-01-01T04:01:00.000Z");
+    assert.throws(() => fromZonedInput("2026-03-08T02:30", "America/New_York", original));
+});
+
+test("report boundaries use the first valid local instant when month-start midnight is skipped or repeated", () => {
+    for (const [month, timezone, expected] of [
+        ["2023-10", "America/Asuncion", "2023-10-01T04:00:00.000Z"],
+        ["2014-08", "Africa/Cairo", "2014-07-31T22:00:00.000Z"],
+        ["2026-11", "America/Havana", "2026-11-01T04:00:00.000Z"],
+        ["2026-10", "Pacific/Kiritimati", "2026-09-30T10:00:00.000Z"],
+    ]) {
+        const range = monthBounds(month, timezone);
+        assert.equal(range.from, expected, `${month} in ${timezone}`);
+        assert.equal(zonedInput(expected, timezone).slice(0, 10), `${month}-01`);
+        assert.notEqual(zonedInput(new Date(Date.parse(expected) - 1), timezone).slice(0, 7), month);
+        assert.equal(monthBounds(shiftMonth(month, -1), timezone).to, range.from);
+        assert.equal(monthBounds(shiftMonth(month, 1), timezone).previous, range.from);
+    }
+});
+
 test("12-hour and 24-hour formats distinguish midnight and noon without changing wall-clock inputs", () => {
     for (const [instant, twelveHour, twentyFourHour] of [
         ["2026-10-27T16:05:00Z", "12:05 AM", "00:05"],

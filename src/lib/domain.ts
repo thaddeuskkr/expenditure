@@ -318,7 +318,11 @@ export function zonedInput(date: Date | string, timezone: string) {
     return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
 }
 
-export function fromZonedInput(value: string, timezone: string) {
+export function fromZonedInput(value: string, timezone: string, original?: string) {
+    // An unchanged minute-only picker must preserve seconds and the selected
+    // occurrence of an overlapping daylight-saving time.
+    if (original && value === zonedInput(original, timezone))
+        return asDate(original).toISOString();
     if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value))
         throw new Error("Choose a valid date and time.");
     const target = Date.parse(`${value}:00Z`);
@@ -350,10 +354,32 @@ export function shiftMonth(month: string, shift: number) {
 }
 
 export function monthBounds(month: string, timezone: string) {
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: timezone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    });
+    function start(selected: string) {
+        const day = `${selected}-01`;
+        const midnight = Date.parse(`${day}T00:00:00Z`);
+        let before = midnight - 36 * 60 * 60 * 1000;
+        let after = midnight + 36 * 60 * 60 * 1000;
+        // Find the first instant in the local month. Midnight can be skipped
+        // or repeated by a timezone transition; entry-time validation stays strict.
+        while (after - before > 1) {
+            const middle = Math.floor((before + after) / 2);
+            if (formatter.format(new Date(middle)) < day) before = middle;
+            else after = middle;
+        }
+
+        return new Date(after).toISOString();
+    }
+
     return {
-        from: fromZonedInput(`${month}-01T00:00`, timezone),
-        to: fromZonedInput(`${shiftMonth(month, 1)}-01T00:00`, timezone),
-        previous: fromZonedInput(`${shiftMonth(month, -1)}-01T00:00`, timezone),
+        from: start(month),
+        to: start(shiftMonth(month, 1)),
+        previous: start(shiftMonth(month, -1)),
     };
 }
 

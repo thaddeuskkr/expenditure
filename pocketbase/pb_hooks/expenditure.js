@@ -78,7 +78,7 @@ function optionalText(value, label, maxLength) {
     return value;
 }
 
-function validateExpense(data, app, user) {
+function validateExpense(data, app, user, original) {
     if (!data || typeof data !== "object" || Array.isArray(data))
         throw new BadRequestError("The request body must be a JSON object.");
     if (data.user !== undefined)
@@ -89,7 +89,9 @@ function validateExpense(data, app, user) {
     if (Object.keys(data).some((field) => allowed.indexOf(field) < 0))
         throw new BadRequestError("Only merchant, amount, currency, category, occurred_at, payment_method and notes are accepted.");
     const config = require(`${__hooks}/configuration.js`);
-    const preferences = config.preferences(app, user);
+    // Replays resolve omitted defaults against the original request, independent
+    // of later edits, archived categories, and changed currency preferences.
+    const preferences = original || config.preferences(app, user);
     const code = data.currency === undefined ? preferences.currency : data.currency;
     if (typeof code !== "string")
         throw new BadRequestError("Currency must be a supported uppercase currency code.");
@@ -112,15 +114,18 @@ function validateExpense(data, app, user) {
             "amount must be a positive integer, up to 99999999999.",
         );
     if (!definition) throw new BadRequestError("Unsupported currency.");
-    if (preferences.currencies.indexOf(code) < 0)
+    if (!original && preferences.currencies.indexOf(code) < 0)
         throw new BadRequestError("Enable this currency in Settings first.");
     let categoryName = data.category;
     if (categoryName === undefined) {
-        const available = config.categories(app, user).filter((c) => c.active);
-        const fallback = available.find((c) => c.name === "Other") || available[0];
-        if (!fallback)
-            throw new BadRequestError("Add an active category in Settings first.");
-        categoryName = fallback.name;
+        if (original) categoryName = original.category;
+        else {
+            const available = config.categories(app, user).filter((c) => c.active);
+            const fallback = available.find((c) => c.name === "Other") || available[0];
+            if (!fallback)
+                throw new BadRequestError("Add an active category in Settings first.");
+            categoryName = fallback.name;
+        }
     } else if (
         typeof categoryName !== "string" ||
         !categoryName.trim() ||
@@ -129,7 +134,9 @@ function validateExpense(data, app, user) {
         throw new BadRequestError("Category must be a non-empty string of at most 60 characters.");
     }
 
-    const category = config.category(app, user, categoryName.trim(), false);
+    const category = original ?
+        categoryName.trim().toLowerCase() === original.category.toLowerCase() ? original.category : categoryName.trim() :
+            config.category(app, user, categoryName.trim(), false);
     const paymentMethod = optionalText(data.payment_method, "Payment method", 80);
     const notes = optionalText(data.notes, "Notes", 2000);
     const occurred = data.occurred_at === undefined ?

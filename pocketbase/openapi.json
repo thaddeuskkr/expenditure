@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "18.0.0",
+    "version": "19.0.0",
     "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring income and expenses run on the PocketBase server every minute, with custom intervals and monthly dates, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -19,7 +19,7 @@
     "/api/expenses/transactions": {
       "post": {
         "summary": "Add an expense",
-        "description": "Requires expenses:write. Idempotency-Key is optional and scoped to the user. For 24 hours from the original server-created timestamp, identical data replays the existing expense and different data conflicts. After expiry, even identical data creates a new expense; old expenses are retained. Retries and edits do not extend the window. Use a timestamp plus a random number per purchase, retained for retries. Omit user.",
+        "description": "Requires expenses:write. Idempotency-Key is optional and scoped to the user. For 24 hours from the original server-created timestamp, requests are compared with an immutable snapshot of the original accepted data and defaults. Identical data replays the existing expense, including its current edits, and different data conflicts. Edits, category renames or archiving, and changed currency preferences do not invalidate an identical retry. After expiry, even identical data creates a new expense; old expenses are retained. Retries and edits do not extend the window. Use a timestamp plus a random number per purchase, retained for retries. Omit user.",
         "parameters": [
           {
             "in": "header",

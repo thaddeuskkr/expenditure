@@ -26,6 +26,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - `src/components/auth-provider.tsx`, `sign-in.tsx`, `user-avatar.tsx`: PocketBase session/provider flow and avatar loading. Protected avatars use file tokens, not session tokens in image URLs.
 - `src/components/circles/`, `src/lib/circles.ts`: Circle screens, dialogs, API calls, and types.
 - `src/components/workspace-settings.tsx`, `workspace-context.tsx`: categories, currencies, timezone, and shared account settings.
+- Settings groups General, Transactions, Currencies, Categories and API into keyboard-accessible tabs. Preference drafts span tabs and use the persistent Save/Discard bar; dirty indicators, navigation/reload warnings, and failed-save drafts must remain intact. Category actions and recurring-transaction edits save through their own flows.
 - `src/lib/domain.ts`: personal record types, currency precision, amount parsing, date/time boundaries, and display conversions.
 - `src/lib/export.ts`: CSV/Excel exports. Export every matching record, not just the visible page; retain original currency/UTC timestamp and typed Excel values.
 - `pocketbase/pb_hooks/main.pb.js`, `expenditure.js`: API-key management, automation expenses, provenance, and retry handling.

@@ -244,6 +244,9 @@ function Workspace({
     onSignOut: () => void;
 }) {
     const [section, setSection] = useState<Section>(initialConfiguration.preferences.default_tab);
+    const [settingsDirty, setSettingsDirty] = useState(false);
+    const [settingsSaving, setSettingsSaving] = useState(false);
+    const [leavingSettings, setLeavingSettings] = useState<Section | null>(null);
     const [focusedCircle, setFocusedCircle] = useState<string>();
     const [configuration, setConfiguration] = useState(initialConfiguration);
     const preferences = configuration.preferences;
@@ -439,7 +442,13 @@ function Workspace({
         reloadConfiguration,
     ]);
 
-    function navigate(next: Section) {
+    function navigate(next: Section, discardSettings = false) {
+        if (section === "Settings" && settingsDirty && next !== "Settings" && !discardSettings) {
+            setLeavingSettings(next);
+            setMobileNav(false);
+            return;
+        }
+
         setSection(next);
         setMobileNav(false);
         setSearch("");
@@ -1187,20 +1196,26 @@ function Workspace({
                         {section === "Settings" && (
                             <WorkspaceSettings
                                 onEditRecurring={setEditor}
+                                onDirtyChange={setSettingsDirty}
                                 key={preferences.id || "defaults"}
                                 recurringRevision={revision}
                                 onSave={async (data) => {
-                                    if (preferences.id)
-                                        await pb
-                                            .collection<Preferences>("preferences")
-                                            .update(preferences.id, data);
-                                    else
-                                        await pb
-                                            .collection<Preferences>("preferences")
-                                            .create({ ...data, user: user.id });
-                                    await reloadConfiguration();
-                                    refresh();
-                                    toast.success("Preferences saved");
+                                    setSettingsSaving(true);
+                                    try {
+                                        if (preferences.id)
+                                            await pb
+                                                .collection<Preferences>("preferences")
+                                                .update(preferences.id, data);
+                                        else
+                                            await pb
+                                                .collection<Preferences>("preferences")
+                                                .create({ ...data, user: user.id });
+                                        await reloadConfiguration();
+                                        refresh();
+                                        toast.success("Preferences saved");
+                                    } finally {
+                                        setSettingsSaving(false);
+                                    }
                                 }}
                                 onCategoriesChanged={async () => {
                                     await reloadConfiguration();
@@ -1278,6 +1293,24 @@ function Workspace({
                         onDelete={removeBudget}
                     />
                 )}
+                <AlertDialog open={leavingSettings !== null} onOpenChange={(open) => { if (!open) setLeavingSettings(null); }}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Discard unsaved changes?</AlertDialogTitle>
+                            <AlertDialogDescription>Your preference changes haven’t been saved. Discard them to open {leavingSettings}.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Keep editing</AlertDialogCancel>
+                            <AlertDialogAction
+                                disabled={settingsSaving}
+                                onClick={() => {
+                                    if (leavingSettings) navigate(leavingSettings, true);
+                                    setLeavingSettings(null);
+                                }}>Discard and leave
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
                 <AlertDialog
                     open={!!deleting}
                     onOpenChange={(open) => {

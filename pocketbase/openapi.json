@@ -93,7 +93,7 @@
         }
       },
       "get": {
-        "summary": "List the key owner’s expenses",
+        "summary": "List the key owner\u2019s expenses",
         "description": "Requires expenses:read. Ordered by occurred_at, then created, newest first.",
         "parameters": [
           {
@@ -5748,10 +5748,10 @@
               "Categories",
               "Budgets",
               "Circles",
-              "API keys",
               "Settings"
             ],
-            "default": "Overview"
+            "default": "Overview",
+            "description": "Page opened after sign-in. API keys are managed under Settings \u2192 API; upgrades replace the former API keys landing-page choice with Settings."
           },
           "time_format": {
             "type": "string",
@@ -5778,6 +5778,25 @@
             "maxLength": 15,
             "pattern": "^([a-z0-9]{15})?$",
             "description": "Default destination for new expenses submitted to POST /api/expenses/transactions across all user API keys. Empty means personal workspace; otherwise an active Circle ID. Retained after Circle deletion or membership loss so new API writes fail clearly until changed. Explicit Circle URLs and existing idempotency retries retain their destinations."
+          },
+          "default_entry_currency": {
+            "type": "string",
+            "default": "",
+            "description": "Preferred currency for new personal expense and income forms. Empty follows the main currency; a selected currency must be enabled. Disabling that currency resets this preference to empty. Does not change existing transactions, budgets, recurring generation, Circle entries or API import defaults."
+          },
+          "default_expense_category": {
+            "type": "string",
+            "default": "",
+            "maxLength": 15,
+            "pattern": "^([a-z0-9]{15})?$",
+            "description": "Optional single relation ID of an active personal category owned by this user, used to prefill new personal expense forms. Empty selects Other, then the first active category. Renames preserve the selection; archiving clears matching defaults atomically. Existing transactions, Circle entries and API import defaults are unchanged."
+          },
+          "default_income_category": {
+            "type": "string",
+            "default": "",
+            "maxLength": 15,
+            "pattern": "^([a-z0-9]{15})?$",
+            "description": "Optional single relation ID of an active personal category owned by this user, used to prefill new personal income forms. Empty selects Other, then the first active category. Renames preserve the selection; archiving clears matching defaults atomically. Existing transactions, Circle entries and API import defaults are unchanged."
           }
         },
         "description": "Persisted per-account preferences, editable through the owner-protected PocketBase preferences collection."

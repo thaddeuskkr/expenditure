@@ -156,6 +156,7 @@ test(
             await api(path, alice.token, { default_tab: "Circles" }, "PATCH");
             assert.equal((await api("/api/expenditure/config", alice.token)).preferences.default_tab, "Circles");
             await api(path, alice.token, { default_tab: "unknown" }, "PATCH", 400);
+            await api(path, alice.token, { default_tab: "API keys" }, "PATCH", 400);
             await api(path, outside.token, { default_tab: "Overview" }, "PATCH", 404);
         });
         const root = "/api/expenditure/circles";

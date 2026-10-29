@@ -18,7 +18,6 @@ import {
     ChevronRight,
     Download,
     FolderOpen,
-    KeyRound,
     LayoutDashboard,
     Loader2,
     LogOut,
@@ -71,7 +70,6 @@ import { CategoryBreakdown } from "./category-breakdown";
 import { EmptyState } from "./empty-state";
 import { BudgetEditor } from "./budget-editor";
 import { SpendingChart } from "./spending-chart";
-import { ApiKeys } from "./api-keys";
 import { WorkspaceContext } from "./workspace-context";
 import { WorkspaceSettings } from "./workspace-settings";
 import { CirclesView } from "./circles/circles-view";
@@ -111,7 +109,6 @@ type Section =
     "Categories" |
     "Budgets" |
     "Circles" |
-    "API keys" |
     "Settings";
 const navigation = [
     { name: "Overview", icon: LayoutDashboard },
@@ -176,8 +173,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 21)
-                    throw new Error("This app requires backend version 21. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 23)
+                    throw new Error("This app requires backend version 23. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -616,15 +613,6 @@ function Workspace({
                             </button>
                         ))}
                     </nav>
-                    <p className="eyebrow mt-9 mb-4 px-3 text-[9px]">Connections</p>
-                    <button
-                        aria-current={section === "API keys" ? "page" : undefined}
-                        onClick={() => navigate("API keys")}
-                        className={`flex h-11 items-center gap-3 rounded-lg px-3 text-[12px] transition-colors ${section === "API keys" ? "bg-primary/9 text-primary" : "text-muted-foreground hover:bg-white/3 hover:text-foreground"}`}>
-                        <KeyRound className="size-4" strokeWidth={1.5} />
-                        API keys
-                        <ArrowUpRight className="ml-auto size-3 opacity-50" />
-                    </button>
                     <div className="mt-auto pt-12">
                         <button
                             onClick={() => navigate("Settings")}
@@ -1191,7 +1179,6 @@ function Workspace({
                                 </p>
                             </section>
                         )}
-                        {section === "API keys" && <ApiKeys timezone={timezone} />}
                         {section === "Circles" && <CirclesView key={focusedCircle || "circles"} initialCircle={focusedCircle} />}
                         {section === "Settings" && (
                             <WorkspaceSettings

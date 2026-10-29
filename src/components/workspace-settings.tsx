@@ -7,11 +7,13 @@ import { CurrencyPicker, EnabledCurrenciesPicker } from "./currency-picker";
 import { SearchableSelect } from "./ui/searchable-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { CategorySettings } from "./category-settings";
+import { ApiKeys } from "./api-keys";
 import { RecurringTransactions } from "./recurring-transactions";
 import { useWorkspace } from "./workspace-context";
 import { circlesApi, type Circle } from "@/lib/circles";
 import {
     DEFAULT_TABS,
+    CURRENCY_CATALOG,
     type Expense,
     TIMEZONES,
     errorMessage,
@@ -31,7 +33,7 @@ export function WorkspaceSettings({
     recurringRevision: number;
     onDirtyChange: (dirty: boolean) => void;
     onSave: (
-        data: Pick<Preferences, "currency" | "timezone" | "currencies" | "default_tab" | "time_format" | "show_circle_transactions" | "include_circle_in_budgets" | "default_api_circle">,
+        data: Pick<Preferences, "currency" | "timezone" | "currencies" | "default_tab" | "time_format" | "show_circle_transactions" | "include_circle_in_budgets" | "default_api_circle" | "default_entry_currency" | "default_expense_category" | "default_income_category">,
     ) => Promise<void>;
     onCategoriesChanged: () => Promise<void>;
 }) {
@@ -44,6 +46,7 @@ export function WorkspaceSettings({
     const [circlesLoaded, setCirclesLoaded] = useState(false);
     const [circlesRevision, setCirclesRevision] = useState(0);
     useEffect(() => {
+        if (tab !== "API") return;
         let active = true;
         circlesApi.list().then((index) => {
             if (active) {
@@ -55,7 +58,7 @@ export function WorkspaceSettings({
         return () => {
             active = false;
         };
-    }, [circlesRevision]);
+    }, [tab, circlesRevision]);
     const apiWorkspaceOptions = [
         { value: "personal", label: "Personal workspace" },
         ...circles.map((circle) => ({ value: circle.id, label: circle.name, description: "Circle" })),
@@ -67,6 +70,21 @@ export function WorkspaceSettings({
     const [showCircleTransactions, setShowCircleTransactions] = useState(preferences.show_circle_transactions);
     const [includeCircleInBudgets, setIncludeCircleInBudgets] = useState(preferences.include_circle_in_budgets);
     const [enabled, setEnabled] = useState(preferences.currencies);
+    const [entryCurrency, setEntryCurrency] = useState(preferences.default_entry_currency);
+    const [categoryDefaults, setCategoryDefaults] = useState({ expense: preferences.default_expense_category, income: preferences.default_income_category, categories });
+    // Category actions save independently. Drop archived selections without losing other drafts.
+    if (categoryDefaults.categories !== categories) {
+        setCategoryDefaults({
+            expense: categories.some((category) => category.active && category.id === categoryDefaults.expense) ? categoryDefaults.expense : "",
+            income: categories.some((category) => category.active && category.id === categoryDefaults.income) ? categoryDefaults.income : "",
+            categories,
+        });
+    }
+
+    const categoryOptions = [
+        { value: "automatic", label: "Automatic" },
+        ...categories.filter((category) => category.active).map((category) => ({ value: category.id, label: category.name })),
+    ];
     const [timezoneDate, setTimezoneDate] = useState(() => new Date());
     const timezoneOptions = useMemo(() => {
         return TIMEZONES.map((zone) => ({ value: zone, label: timezoneLabel(zone, timezoneDate) }));
@@ -79,7 +97,7 @@ export function WorkspaceSettings({
         setBusy(true);
         setError("");
         try {
-            await onSave({ currency: main, timezone, currencies: enabled, default_tab: defaultTab, time_format: timeFormat, show_circle_transactions: showCircleTransactions, include_circle_in_budgets: includeCircleInBudgets, default_api_circle: defaultApiCircle });
+            await onSave({ currency: main, timezone, currencies: enabled, default_tab: defaultTab, time_format: timeFormat, show_circle_transactions: showCircleTransactions, include_circle_in_budgets: includeCircleInBudgets, default_api_circle: defaultApiCircle, default_entry_currency: entryCurrency, default_expense_category: categoryDefaults.expense, default_income_category: categoryDefaults.income });
         } catch (e) {
             setError(errorMessage(e));
         } finally {
@@ -89,9 +107,10 @@ export function WorkspaceSettings({
 
     const changedTabs: Record<string, boolean> = {
         General: defaultTab !== preferences.default_tab || timezone !== preferences.timezone || timeFormat !== preferences.time_format,
-        Transactions: showCircleTransactions !== preferences.show_circle_transactions || includeCircleInBudgets !== preferences.include_circle_in_budgets,
-        Currencies: main !== preferences.currency || JSON.stringify(enabled) !== JSON.stringify(preferences.currencies),
+        Transactions: showCircleTransactions !== preferences.show_circle_transactions || includeCircleInBudgets !== preferences.include_circle_in_budgets || entryCurrency !== preferences.default_entry_currency || categoryDefaults.expense !== preferences.default_expense_category || categoryDefaults.income !== preferences.default_income_category,
         Categories: false,
+        Currencies: main !== preferences.currency || JSON.stringify(enabled) !== JSON.stringify(preferences.currencies),
+        Recurring: false,
         API: defaultApiCircle !== preferences.default_api_circle,
     };
     const dirty = Object.values(changedTabs).some(Boolean);
@@ -117,6 +136,8 @@ export function WorkspaceSettings({
         setIncludeCircleInBudgets(preferences.include_circle_in_budgets);
         setMain(preferences.currency);
         setEnabled(preferences.currencies);
+        setEntryCurrency(preferences.default_entry_currency);
+        setCategoryDefaults({ expense: preferences.default_expense_category, income: preferences.default_income_category, categories });
         setDefaultApiCircle(preferences.default_api_circle);
         setError("");
     }
@@ -172,31 +193,63 @@ export function WorkspaceSettings({
                 </Tabs.Content>
                 <Tabs.Content value="Transactions" className="space-y-8 outline-none data-[state=inactive]:hidden motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
                     <section className="space-y-5">
-                        <h2 className="text-sm font-medium">Transaction preferences</h2>
+                        <div>
+                            <h2 className="text-sm font-medium">New transaction defaults</h2>
+                            <p className="mt-2 text-[11px] leading-5 text-muted-foreground">Prefill new personal expenses and income.</p>
+                        </div>
+                        <fieldset disabled={busy} className="grid gap-5 sm:grid-cols-2">
+                            <div className="sm:col-span-2">
+                                <label className="field-label" htmlFor="default-entry-currency">Entry currency</label>
+                                <SearchableSelect
+                                    id="default-entry-currency"
+                                    value={entryCurrency || "main"}
+                                    onValueChange={(value) => setEntryCurrency(value === "main" ? "" : value)}
+                                    options={[
+                                        { value: "main", label: `Use main currency (${main})` },
+                                        ...CURRENCY_CATALOG.filter((currency) => enabled.includes(currency.code)).map((currency) => ({ value: currency.code, label: `${currency.code} · ${currency.name}` })),
+                                    ]}
+                                    searchPlaceholder="Search currencies…"
+                                />
+                            </div>
+                            <div>
+                                <label className="field-label" htmlFor="default-expense-category">Expense category</label>
+                                <SearchableSelect id="default-expense-category" value={categoryDefaults.expense || "automatic"} onValueChange={(value) => setCategoryDefaults({ ...categoryDefaults, expense: value === "automatic" ? "" : value })} options={categoryOptions} searchPlaceholder="Find a category…" />
+                            </div>
+                            <div>
+                                <label className="field-label" htmlFor="default-income-category">Income category</label>
+                                <SearchableSelect id="default-income-category" value={categoryDefaults.income || "automatic"} onValueChange={(value) => setCategoryDefaults({ ...categoryDefaults, income: value === "automatic" ? "" : value })} options={categoryOptions} searchPlaceholder="Find a category…" />
+                            </div>
+                        </fieldset>
+                    </section>
+                    <section className="space-y-5">
+                        <h2 className="text-sm font-medium">Circle transactions</h2>
                         <fieldset disabled={busy}>
                             <div className="divide-y border-y">
                                 <div className="flex items-center justify-between gap-5 py-5">
                                     <div>
-                                        <label htmlFor="include-circle-in-budgets" className="text-sm">Include Circle spending in budgets</label>
-                                        <p id="circle-budgets-description" className="mt-2 text-[11px] leading-5 text-muted-foreground">Count your allocated Circle expense shares in personal budgets and spending summaries.</p>
+                                        <label htmlFor="show-circle-transactions" className="text-sm">Show Circle transactions</label>
+                                        <p id="circle-transactions-description" className="mt-2 text-[11px] leading-5 text-muted-foreground">Include your allocated shares in Overview, Transactions, and exports.</p>
                                     </div>
-                                    <Switch.Root id="include-circle-in-budgets" checked={includeCircleInBudgets} onCheckedChange={setIncludeCircleInBudgets} aria-describedby="circle-budgets-description" className="flex h-6 w-11 shrink-0 items-center rounded-full bg-muted p-0.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-primary">
+                                    <Switch.Root id="show-circle-transactions" checked={showCircleTransactions} onCheckedChange={setShowCircleTransactions} aria-describedby="circle-transactions-description" className="flex h-6 w-11 shrink-0 items-center rounded-full bg-muted p-0.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-primary">
                                         <Switch.Thumb className="block size-5 rounded-full bg-background shadow transition-transform data-[state=checked]:translate-x-5" />
                                     </Switch.Root>
                                 </div>
                                 <div className="flex items-center justify-between gap-5 py-5">
                                     <div>
-                                        <label htmlFor="show-circle-transactions" className="text-sm">Show Circle transactions</label>
-                                        <p id="circle-transactions-description" className="mt-2 text-[11px] leading-5 text-muted-foreground">Include your allocated Circle shares alongside personal transactions. Budget totals are unchanged.</p>
+                                        <label htmlFor="include-circle-in-budgets" className="text-sm">Include Circle spending in budgets</label>
+                                        <p id="circle-budgets-description" className="mt-2 text-[11px] leading-5 text-muted-foreground">Count your allocated expense shares in personal budgets and spending summaries.</p>
                                     </div>
-                                    <Switch.Root id="show-circle-transactions" checked={showCircleTransactions} onCheckedChange={setShowCircleTransactions} aria-describedby="circle-transactions-description" className="flex h-6 w-11 shrink-0 items-center rounded-full bg-muted p-0.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-primary">
+                                    <Switch.Root id="include-circle-in-budgets" checked={includeCircleInBudgets} onCheckedChange={setIncludeCircleInBudgets} aria-describedby="circle-budgets-description" className="flex h-6 w-11 shrink-0 items-center rounded-full bg-muted p-0.5 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-primary">
                                         <Switch.Thumb className="block size-5 rounded-full bg-background shadow transition-transform data-[state=checked]:translate-x-5" />
                                     </Switch.Root>
                                 </div>
                             </div>
                         </fieldset>
                     </section>
-                    <RecurringTransactions key={recurringRevision} onEdit={onEditRecurring} />
+                </Tabs.Content>
+                <Tabs.Content value="Categories" className="space-y-5 outline-none data-[state=inactive]:hidden motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
+                    <CategorySettings categories={categories} onCategoriesChanged={onCategoriesChanged} />
+                    <p className="text-[11px] text-muted-foreground">Category changes are saved immediately.</p>
                 </Tabs.Content>
                 <Tabs.Content value="Currencies" className="space-y-8 outline-none data-[state=inactive]:hidden motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
                     <h2 className="text-sm font-medium">Currencies</h2>
@@ -212,7 +265,14 @@ export function WorkspaceSettings({
                         </div>
                         <div>
                             <label className="field-label" htmlFor="enabled-currencies">Enabled currencies</label>
-                            <EnabledCurrenciesPicker value={enabled} main={main} onChange={setEnabled} />
+                            <EnabledCurrenciesPicker
+                                value={enabled}
+                                main={main}
+                                onChange={(currencies) => {
+                                    setEnabled(currencies);
+                                    if (entryCurrency && !currencies.includes(entryCurrency)) setEntryCurrency("");
+                                }}
+                            />
                         </div>
                         <p className="text-[11px] leading-5 text-muted-foreground">
                             Disabling a currency hides it from new expense forms. Existing
@@ -241,20 +301,23 @@ export function WorkspaceSettings({
                         </p>
                     </section>
                 </Tabs.Content>
-                <Tabs.Content value="Categories" className="space-y-5 outline-none data-[state=inactive]:hidden motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
-                    <CategorySettings categories={categories} onCategoriesChanged={onCategoriesChanged} />
-                    <p className="text-[11px] text-muted-foreground">Category changes are saved immediately.</p>
+                <Tabs.Content value="Recurring" className="space-y-6 outline-none data-[state=inactive]:hidden motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
+                    <RecurringTransactions key={recurringRevision} onEdit={onEditRecurring} />
                 </Tabs.Content>
                 <Tabs.Content value="API" className="space-y-6 outline-none data-[state=inactive]:hidden motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
-                    <h2 className="text-sm font-medium">API defaults</h2>
-                    <fieldset disabled={busy}>
-                        <div>
-                            <label className="field-label" htmlFor="default-api-workspace">Default API workspace</label>
-                            <SearchableSelect id="default-api-workspace" value={defaultApiCircle || "personal"} onValueChange={(value) => setDefaultApiCircle(value === "personal" ? "" : value)} onOpenChange={(open) => { if (open) setCirclesRevision((value) => value + 1); }} options={apiWorkspaceOptions} searchPlaceholder="Find a workspace…" />
-                            <p className="mt-2 text-[11px] leading-5 text-muted-foreground">New expenses sent to the general API endpoint use this workspace across all your API keys. Explicit Circle requests keep their destination.</p>
-                            {circlesError && <p role="alert" className="mt-2 text-xs text-destructive">{circlesError} <button type="button" className="underline" onClick={() => setCirclesRevision((value) => value + 1)}>Retry</button></p>}
-                        </div>
-                    </fieldset>
+                    <ApiKeys timezone={preferences.timezone}>
+                        <section className="mt-8 space-y-5 border-t pt-6">
+                            <h2 className="text-sm font-medium">Import defaults</h2>
+                            <fieldset disabled={busy}>
+                                <div>
+                                    <label className="field-label" htmlFor="default-api-workspace">Default API workspace</label>
+                                    <SearchableSelect id="default-api-workspace" value={defaultApiCircle || "personal"} onValueChange={(value) => setDefaultApiCircle(value === "personal" ? "" : value)} onOpenChange={(open) => { if (open) setCirclesRevision((value) => value + 1); }} options={apiWorkspaceOptions} searchPlaceholder="Find a workspace…" />
+                                    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">New expenses sent to the general API endpoint use this workspace across all your API keys. Explicit Circle requests keep their destination.</p>
+                                    {circlesError && <p role="alert" className="mt-2 text-xs text-destructive">{circlesError} <button type="button" className="underline" onClick={() => setCirclesRevision((value) => value + 1)}>Retry</button></p>}
+                                </div>
+                            </fieldset>
+                        </section>
+                    </ApiKeys>
                 </Tabs.Content>
             </div>
             {(dirty || busy) && (

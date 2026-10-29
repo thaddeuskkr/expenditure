@@ -193,6 +193,16 @@ routerAdd(
             record.set("active", active);
             if (data.color !== undefined) record.set("color", data.color);
             app.save(record);
+            if (!active) {
+                const preferences = app.findRecordsByFilter("preferences", "user = {:user} && (default_expense_category = {:category} || default_income_category = {:category})", "", 0, 0, { user: e.auth.id, category: record.id });
+                preferences.forEach((preference) => {
+                    ["default_expense_category", "default_income_category"].forEach((field) => {
+                        if (preference.getString(field) === record.id) preference.set(field, "");
+                    });
+                    app.save(preference);
+                });
+            }
+
             // Rename atomically without changing ownership, amounts, or API provenance.
             if (previous !== name)
                 ["expenses", "budgets"].forEach((table) =>
@@ -237,6 +247,9 @@ onRecordCreateRequest((e) => {
         e.record.set("include_circle_in_budgets", true);
     return e.next();
 }, "preferences");
+
+onRecordCreate((e) => require(`${__hooks}/configuration.js`).savePreferences(e), "preferences");
+onRecordUpdate((e) => require(`${__hooks}/configuration.js`).savePreferences(e), "preferences");
 
 onRecordValidate(
     (e) => {

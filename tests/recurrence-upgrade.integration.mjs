@@ -4,10 +4,10 @@ import { spawn, spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, copyFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { randomBytes } from "node:crypto";
+import { randomBytes, createHash } from "node:crypto";
 import { createServer } from "node:net";
 
-for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_recurrence_calendar_choices.js", "1793296800_circle_budget_preference.js", "1793300400_immutable_api_retries.js", "1793383200_api_transaction_retries.js", "1793386800_default_api_workspace.js"]) test(`schedule upgrade from ${cutoff} preserves active and paused cursors, records, identities and Circle balances`, { timeout: 30000 }, async (t) => {
+for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_recurrence_calendar_choices.js", "1793296800_circle_budget_preference.js", "1793300400_immutable_api_retries.js", "1793383200_api_transaction_retries.js", "1793386800_default_api_workspace.js", "1793394000_api_settings_navigation.js"]) test(`schedule upgrade from ${cutoff} preserves active and paused cursors, records, identities and Circle balances`, { timeout: 30000 }, async (t) => {
     const binary = process.env.POCKETBASE_BINARY;
     assert.ok(binary, "Set POCKETBASE_BINARY to a PocketBase 0.40.6 executable.");
     const directory = await mkdtemp(join(tmpdir(), "expenditure-schedule-upgrade-"));
@@ -81,8 +81,14 @@ for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_re
     await api("/api/collections/users", admin, { oauth2: { enabled: true, providers: [{ name: "oidc", displayName: "Existing provider", clientId: "upgrade-test", clientSecret: "disposable-test-secret", authURL: "https://identity.example.com/authorize", tokenURL: "https://identity.example.com/token", userInfoURL: "https://identity.example.com/userinfo" }] } }, "PATCH");
     const identity = await api("/api/collections/users", admin);
     const user = await api("/api/collections/users/records", admin, { email: "schedule@example.com", name: "Schedule owner", password, passwordConfirm: password, verified: true });
-    const prefs = await api("/api/collections/preferences/records", admin, { user: user.id, currency: "SGD", currencies: ["SGD"], timezone: "America/New_York", default_tab: "Transactions", time_format: "12h", show_circle_transactions: true });
+    const prefs = await api("/api/collections/preferences/records", admin, { user: user.id, currency: "SGD", currencies: ["SGD"], timezone: "America/New_York", default_tab: cutoff === "1793394000_api_settings_navigation.js" ? "API keys" : "Transactions", time_format: "12h", show_circle_transactions: true });
     await api("/api/collections/categories/records", admin, { user: user.id, name: "Other", active: true, color: "#123456", sort_order: 0 });
+    const savedSecret = "exp_" + randomBytes(24).toString("hex");
+    const savedKey = cutoff === "1793394000_api_settings_navigation.js" ?
+            await api("/api/collections/api_keys/records", admin, {
+                user: user.id, name: "Existing integration", key_hash: createHash("sha256").update(savedSecret).digest("hex"), key_prefix: savedSecret.slice(0, 12), scopes: ["expenses:read"], expires_at: "2099-01-01T00:00:00Z",
+            }) :
+        null;
     const fields = { user: user.id, merchant: "Existing schedule", kind: "expense", amount: 650, currency: "SGD", category: "Other", payment_method: "Saved card", source: "manual", notes: "Keep this", occurred_at: "2091-01-31T14:00:00Z", recurrence: "monthly", recurrence_interval: 2, recurrence_day: 0, recurrence_weekdays: [], recurrence_month: 0, recurrence_anchor: "2091-01-31T09:00:00", recurrence_timezone: "America/New_York", recurrence_next: "2091-02-28T14:00:00.000Z" };
     const active = await api("/api/collections/expenses/records", admin, fields);
     const paused = await api("/api/collections/expenses/records", admin, { ...fields, merchant: "Paused schedule", recurrence_error: "Resolve this first" });
@@ -102,11 +108,19 @@ for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_re
     const upgrade = spawnSync(binary, ["migrate", "up", ...newFlags], { encoding: "utf8" });
     assert.equal(upgrade.status, 0, upgrade.stdout + upgrade.stderr);
     await start(newFlags);
-    assert.equal((await api("/api/expenditure/status")).version, 21);
+    assert.equal((await api("/api/expenditure/status")).version, 23);
     const upgradedPreferences = await api(`/api/collections/preferences/records/${prefs.id}`, admin);
-    for (const key of Object.keys(prefs)) assert.deepEqual(upgradedPreferences[key], prefs[key], `preferences.${key}`);
+    for (const key of Object.keys(prefs)) assert.deepEqual(upgradedPreferences[key], key === "default_tab" && prefs[key] === "API keys" ? "Settings" : prefs[key], `preferences.${key}`);
     assert.equal(upgradedPreferences.include_circle_in_budgets, prefs.include_circle_in_budgets ?? true);
     assert.equal(upgradedPreferences.default_api_circle, "");
+    const schema = await api("/api/collections/preferences", admin);
+    assert.ok(!schema.fields.find((field) => field.name === "default_tab").values.includes("API keys"));
+    if (savedKey) {
+        assert.deepEqual(await api(`/api/collections/api_keys/records/${savedKey.id}`, admin), savedKey);
+        const response = await fetch(base + "/api/expenses/transactions", { headers: { "X-API-Key": savedSecret } });
+        assert.equal(response.status, 200, await response.text());
+    }
+
     assert.deepEqual((await api("/api/collections/users", admin)).oauth2, identity.oauth2);
     for (const [collection, records] of [["expenses", [active, paused, income, weekly, yearly, apiExpense]], ["circle_expenses", [shared]]]) {
         for (const original of records) {

@@ -66,7 +66,7 @@ function initialize(app, user) {
     app.runInTransaction((tx) => {
         if (tx.countRecords("preferences", $dbx.hashExp({ user })) === 0) {
             const record = new Record(tx.findCollectionByNameOrId("preferences"));
-            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview", time_format: "24h", show_circle_transactions: false, include_circle_in_budgets: true, default_api_circle: "" });
+            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview", time_format: "24h", show_circle_transactions: false, include_circle_in_budgets: true, default_api_circle: "", default_entry_currency: "", default_expense_category: "", default_income_category: "" });
             tx.save(record);
         }
 
@@ -134,6 +134,28 @@ function validate(record, app) {
         if (!selected.length) throw new BadRequestError("Enable at least one currency.");
         if (selected.indexOf(code) < 0)
             throw new BadRequestError("The main currency must be enabled.");
+        const entryCurrency = record.getString("default_entry_currency");
+        if (entryCurrency && selected.indexOf(entryCurrency) < 0) {
+            const original = record.original();
+            if (!record.isNew() && entryCurrency === original.getString("default_entry_currency") && original.getStringSlice("currencies").indexOf(entryCurrency) >= 0)
+                record.set("default_entry_currency", "");
+            else
+                throw new BadRequestError("Choose an enabled currency for new transactions.");
+        }
+
+        ["default_expense_category", "default_income_category"].forEach((field) => {
+            const id = record.getString(field);
+            if (!id) return;
+            let category;
+            try {
+                category = app.findRecordById("categories", id);
+            } catch {
+                throw new BadRequestError("Choose an active category from your account for new transactions.");
+            }
+
+            if (category.getString("user") !== user || !category.getBool("active"))
+                throw new BadRequestError("Choose an active category from your account for new transactions.");
+        });
     } else {
         const original = record.original();
         const sameCurrency =
@@ -148,6 +170,20 @@ function validate(record, app) {
     }
 }
 
+function savePreferences(event) {
+    const app = event.app;
+    try {
+        // Keep category/currency validation and the preference write under the
+        // same writer lock as category archiving, including nested saves.
+        return app.runInTransaction((tx) => {
+            event.app = tx;
+            return event.next();
+        });
+    } finally {
+        event.app = app;
+    }
+}
+
 module.exports = {
     defaultNames,
     colors,
@@ -159,4 +195,5 @@ module.exports = {
     category,
     personalCategoryMapper,
     validate,
+    savePreferences,
 };

@@ -61,9 +61,10 @@ export function ExpenseEditor({
     const categoryNames = categories
         .filter((c) => c.active || c.name === expense?.category)
         .map((c) => c.name);
-    const defaultCategory = categoryNames.includes("Other") ?
+    const preferredCategory = categories.find((category) => category.active && category.id === (entryKind === "income" ? preferences.default_income_category : preferences.default_expense_category));
+    const defaultCategory = preferredCategory?.name || (categoryNames.includes("Other") ?
         "Other" :
-        categoryNames[0];
+        categoryNames[0]);
     const currencies = Array.from(
         new Set([
             ...preferences.currencies,
@@ -77,7 +78,7 @@ export function ExpenseEditor({
         expense?.category || defaultCategory,
     );
     const [selectedCurrency, setCurrency] = useState(
-        expense?.currency || currency,
+        expense?.currency || preferences.default_entry_currency || currency,
     );
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");

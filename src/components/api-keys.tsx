@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import {
     Check,
     Copy,
@@ -40,7 +40,7 @@ import {
 import { pb, pocketbaseUrl } from "@/lib/pocketbase";
 import { asDate, dayLabel, errorMessage, type ApiKey } from "@/lib/domain";
 
-export function ApiKeys({ timezone }: { timezone: string }) {
+export function ApiKeys({ timezone, children }: { timezone: string; children: ReactNode }) {
     const [keys, setKeys] = useState<ApiKey[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -158,15 +158,15 @@ export function ApiKeys({ timezone }: { timezone: string }) {
   }'`;
     return (
         <div className="animate-enter">
-            <div className="flex items-center justify-between border-b pb-6">
+            <div className="flex flex-col items-start justify-between gap-4 border-b pb-5 sm:flex-row">
                 <div>
-                    <h2 className="text-base font-medium">API keys</h2>
+                    <h2 className="text-sm font-medium">API keys</h2>
                     <p className="mt-2 text-xs leading-6 text-muted-foreground">
                         Add personal or Circle expenses, or read personal expenses from other apps.
                     </p>
                 </div>
                 <Button
-                    className="h-10 px-4"
+                    className="h-10 shrink-0 px-4"
                     onClick={() => {
                         setError("");
                         setCreating(true);
@@ -246,13 +246,15 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                                 </p>
                             </div>
                         )}
-            <div className="mt-10 space-y-10">
-                <section className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
+            {children}
+            <section className="mt-8 space-y-8 border-t pt-6">
+                <h2 className="text-sm font-medium">Usage examples</h2>
+                <section className="space-y-4">
                     <div className="min-w-0">
                         <h3 className="text-sm font-medium">Default workspace transactions</h3>
                         <p className="mt-4 text-xs leading-6 text-muted-foreground">
                             Create a key with write access and send it in the X-API-Key header.
-                            Choose your Default API workspace in Settings. This request uses that workspace across all your keys.
+                            This request uses the default workspace selected above across all your keys.
                             Keep merchant in the body for either destination. Currency and category default to that workspace when omitted.
                         </p>
                         <p className="mt-4 flex gap-2 text-[10px] leading-5 text-muted-foreground">
@@ -267,7 +269,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                         note="Use a unique Idempotency-Key per purchase and retain it for retries within 24 hours. Retries keep the original destination and do not extend the window. Read access still lists personal expenses only."
                     />
                 </section>
-                <section className="grid gap-6 border-t pt-8 lg:grid-cols-[1fr_1.2fr]">
+                <section className="space-y-4 border-t pt-8">
                     <div className="min-w-0">
                         <h3 className="text-sm font-medium">Circle transactions</h3>
                         <p className="mt-4 text-xs leading-6 text-muted-foreground">
@@ -303,7 +305,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                         note="Idempotency-Key provides the same 24-hour retry protection as the general endpoint. Keys are shared across destinations: use a new key for each purchase. Explicit Circle requests ignore your default workspace."
                     />
                 </section>
-            </div>
+            </section>
             <Dialog
                 open={creating}
                 onOpenChange={(open) => {

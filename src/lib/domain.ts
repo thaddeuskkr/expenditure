@@ -25,7 +25,7 @@ export const CATEGORY_COLORS = [
     "#c3a4af",
     "#999d94",
 ];
-export const DEFAULT_TABS = ["Overview", "Transactions", "Categories", "Budgets", "Circles", "API keys", "Settings"] as const;
+export const DEFAULT_TABS = ["Overview", "Transactions", "Categories", "Budgets", "Circles", "Settings"] as const;
 export type DefaultTab = typeof DEFAULT_TABS[number];
 export type TimeFormat = "24h" | "12h";
 export type Recurrence = "" | "daily" | "weekly" | "monthly" | "yearly";
@@ -95,6 +95,9 @@ export interface Budget extends RecordModel {
     amount: number;
 }
 export interface Preferences extends RecordModel {
+    default_entry_currency: string;
+    default_expense_category: string;
+    default_income_category: string;
     default_api_circle: string;
     include_circle_in_budgets: boolean;
     show_circle_transactions: boolean;

@@ -258,9 +258,9 @@ export function WorkspaceSettings({
                 </Tabs.Content>
             </div>
             {(dirty || busy) && (
-                <form onSubmit={save} aria-label="Save preferences" data-settings-save-bar className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm lg:left-60">
+                <form onSubmit={save} aria-label="Save preferences" data-settings-save-bar className="pointer-events-none fixed inset-x-0 bottom-[max(1rem,env(safe-area-inset-bottom))] z-20 lg:left-60">
                     <div className="mx-auto max-w-355 px-5 sm:px-9 xl:px-12">
-                        <div className="max-w-3xl">
+                        <div data-settings-save-panel className="pointer-events-auto max-w-3xl rounded-xl border bg-popover/95 p-3 shadow-lg shadow-black/20 backdrop-blur-sm sm:p-4">
                             {error && <p role="alert" className="mb-3 text-xs leading-5 text-destructive wrap-anywhere">{error}</p>}
                             <div className="flex min-h-10 items-center justify-between gap-3">
                                 <p role="status" className="flex min-w-0 items-center gap-2 text-xs">

@@ -12,11 +12,11 @@ import {
     DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useWorkspace } from "../workspace-context";
-import { useAuth } from "../auth-provider";
 import { dateTimeLabel, dayLabel, errorMessage, money, recurrenceLabel } from "@/lib/domain";
 import {
     circlesApi,
     canModifyCircleExpense,
+    canMoveCircleExpense,
     type CircleSettlement,
     type CircleMember,
     type CircleInvitation,
@@ -55,7 +55,6 @@ type Confirmation = {
 
 export function CirclesView({ initialCircle, onTransactionMoved }: { initialCircle?: string; onTransactionMoved: () => void }) {
     const { preferences } = useWorkspace();
-    const { user } = useAuth();
     const [index, setIndex] = useState<CircleIndex | null>(null),
         [data, setData] = useState<CircleDetail | null>(null);
     const [selected, setSelected] = useState<string | null>(initialCircle || null);
@@ -646,7 +645,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                     expense={viewing}
                     detail={detail}
                     onClose={() => setViewing(null)}
-                    onMove={canModifyCircleExpense(detail, viewing, "edit") && user && detail.members.find((member) => member.id === viewing.paid_by)?.user === user.id ?
+                    onMove={canMoveCircleExpense(detail, viewing) ?
                             () => {
                                 setMoving(viewing);
                                 setViewing(null);

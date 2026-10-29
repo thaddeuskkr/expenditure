@@ -48,7 +48,7 @@ export function CircleMembers({
                             </p>
                             {member.active && member.user && member.user !== detail.circle.owner && !member.is_admin && (
                                 <p className="mt-1 text-[10px] leading-5 text-muted-foreground">
-                                    {member.can_add ? "Can add" : "No adding"} · Edit {member.edit_scope} · Delete {member.delete_scope}
+                                    {member.can_add ? "Can add" : "No adding"} · Edit {member.edit_scope} · Delete {member.delete_scope} · Move {member.move_scope === "payer" ? "when payer" : member.move_scope}
                                 </p>
                             )}
                             <p className="mt-1 text-[10px] text-muted-foreground">

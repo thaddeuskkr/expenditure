@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { randomBytes, createHash } from "node:crypto";
 import { createServer } from "node:net";
 
-for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_recurrence_calendar_choices.js", "1793296800_circle_budget_preference.js", "1793300400_immutable_api_retries.js", "1793383200_api_transaction_retries.js", "1793386800_default_api_workspace.js", "1793394000_api_settings_navigation.js", "1793397600_circle_personal_moves.js", "1793401200_category_relations_and_indexes.js", "1793404800_remove_circle_personal_moves.js", "1793408400_circle_member_permissions.js"]) test(`schedule upgrade from ${cutoff} preserves active and paused cursors, records, identities and Circle balances`, { timeout: 30000 }, async (t) => {
+for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_recurrence_calendar_choices.js", "1793296800_circle_budget_preference.js", "1793300400_immutable_api_retries.js", "1793383200_api_transaction_retries.js", "1793386800_default_api_workspace.js", "1793394000_api_settings_navigation.js", "1793397600_circle_personal_moves.js", "1793401200_category_relations_and_indexes.js", "1793404800_remove_circle_personal_moves.js", "1793408400_circle_member_permissions.js", "1793412000_circle_move_permissions.js"]) test(`schedule upgrade from ${cutoff} preserves active and paused cursors, records, identities and Circle balances`, { timeout: 30000 }, async (t) => {
     const binary = process.env.POCKETBASE_BINARY;
     assert.ok(binary, "Set POCKETBASE_BINARY to a PocketBase 0.40.6 executable.");
     const directory = await mkdtemp(join(tmpdir(), "expenditure-schedule-upgrade-"));
@@ -102,8 +102,10 @@ for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_re
     if (cutoff > "1793383200_api_transaction_retries.js")
         await api("/api/collections/api_transaction_retries/records", admin, { user: user.id, key: "upgrade-retry", circle: "", transaction: apiExpense.id, request: retryInput, created: apiExpense.created });
     const circle = await api("/api/collections/circles/records", admin, { owner: user.id, name: "Existing circle", icon: "users", currency: "SGD", version: 2 });
-    const payer = await api("/api/collections/circle_members/records", admin, { circle: circle.id, user: user.id, name: user.name, active: true });
-    const former = await api("/api/collections/circle_members/records", admin, { circle: circle.id, name: "Former member", active: false });
+    const memberPermissions = cutoff > "1793408400_circle_member_permissions.js" ? { is_admin: false, can_add: true, edit_scope: "own", delete_scope: "own", version: 1 } : {};
+    const payer = await api("/api/collections/circle_members/records", admin, { ...memberPermissions, circle: circle.id, user: user.id, name: user.name, active: true });
+    const former = await api("/api/collections/circle_members/records", admin, { ...memberPermissions, circle: circle.id, name: "Former member", active: false });
+    const restricted = cutoff > "1793408400_circle_member_permissions.js" ? await api("/api/collections/circle_members/records", admin, { ...memberPermissions, circle: circle.id, name: "Restricted historical member", active: false, edit_scope: "none" }) : null;
     const circleCategory = await api("/api/collections/circle_categories/records", admin, { circle: circle.id, name: "Other", color: "#654321", active: true, sort_order: 0 });
     const shared = await api("/api/collections/circle_expenses/records", admin, { ...fields, category: relations ? circleCategory.id : "Other", user: undefined, title: "Existing Circle schedule", circle: circle.id, paid_by: payer.id, created_by: payer.id, version: 4, split_mode: "exact", shares: [{ member: payer.id, amount: 250 }, { member: former.id, amount: 400 }] });
     const backfill = cutoff === "1793401200_category_relations_and_indexes.js";
@@ -116,7 +118,7 @@ for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_re
     const upgrade = spawnSync(binary, ["migrate", "up", ...newFlags], { encoding: "utf8" });
     assert.equal(upgrade.status, 0, upgrade.stdout + upgrade.stderr);
     await start(newFlags);
-    assert.equal((await api("/api/expenditure/status")).version, 27);
+    assert.equal((await api("/api/expenditure/status")).version, 28);
     assert.equal((await fetch(base + "/api/collections/circle_personal_moves", { headers: { Authorization: admin } })).status, 404);
     const upgradedPreferences = await api(`/api/collections/preferences/records/${prefs.id}`, admin);
     for (const key of Object.keys(prefs)) assert.deepEqual(upgradedPreferences[key], key === "default_tab" && prefs[key] === "API keys" ? "Settings" : prefs[key], `preferences.${key}`);
@@ -172,9 +174,16 @@ for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_re
         for (const key of Object.keys(original)) assert.deepEqual(upgraded[key], original[key], `membership.${key}`);
         assert.equal(upgraded.can_add, true);
         assert.equal(upgraded.is_admin, false);
+        assert.equal(upgraded.move_scope, "payer");
         assert.equal(upgraded.edit_scope, "own");
         assert.equal(upgraded.delete_scope, "own");
         assert.equal(upgraded.version, 1);
+    }
+
+    if (restricted) {
+        const upgraded = await api(`/api/collections/circle_members/records/${restricted.id}`, admin);
+        for (const key of Object.keys(restricted)) assert.deepEqual(upgraded[key], restricted[key], `restricted.${key}`);
+        assert.equal(upgraded.move_scope, "none");
     }
 
     const detail = await api(`/api/expenditure/circles/${circle.id}`, auth.token);

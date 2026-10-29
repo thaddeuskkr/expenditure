@@ -13,10 +13,12 @@ export type CircleShare = core.Share;
 export type CircleBalance = core.Balance;
 export type SettlementSuggestion = core.SettlementSuggestion;
 export type CirclePermissionScope = "none" | "own" | "all";
+export type CircleMoveScope = "none" | "payer" | "all";
 export interface CirclePermissions {
     can_add: boolean;
     edit_scope: CirclePermissionScope;
     delete_scope: CirclePermissionScope;
+    move_scope: CircleMoveScope;
 }
 export interface Circle {
     id: string;
@@ -188,6 +190,11 @@ export const circlesApi = {
 export function canModifyCircleExpense(detail: CircleDetail, expense: CircleExpense, action: "edit" | "delete") {
     const scope = detail.circle.permissions[`${action}_scope`];
     return scope === "all" || (scope === "own" && expense.created_by === detail.me);
+}
+
+export function canMoveCircleExpense(detail: CircleDetail, expense: CircleExpense) {
+    const scope = detail.circle.permissions.move_scope;
+    return scope === "all" || (scope === "payer" && expense.paid_by === detail.me);
 }
 
 export function invitationLink(id: string) {

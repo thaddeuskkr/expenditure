@@ -106,12 +106,17 @@ function displayName(user) {
 
 function permissions(circle, member) {
     if (circle.getString("owner") === member.getString("user") || member.getBool("is_admin"))
-        return { can_add: true, edit_scope: "all", delete_scope: "all" };
-    return { can_add: member.getBool("can_add"), edit_scope: member.getString("edit_scope"), delete_scope: member.getString("delete_scope") };
+        return { can_add: true, edit_scope: "all", delete_scope: "all", move_scope: "all" };
+    return { can_add: member.getBool("can_add"), edit_scope: member.getString("edit_scope"), delete_scope: member.getString("delete_scope"), move_scope: member.getString("move_scope") };
 }
 
 function requireExpensePermission(circle, member, action, expense) {
     const allowed = permissions(circle, member);
+    if (action === "move") {
+        if (allowed.move_scope === "all" || (allowed.move_scope === "payer" && expense.getString("paid_by") === member.id)) return;
+        throw new ForbiddenError("You do not have permission to move this Circle transaction to personal.");
+    }
+
     if (action === "add" ? allowed.can_add : allowed[action + "_scope"] === "all" || (allowed[action + "_scope"] === "own" && expense.getString("created_by") === member.id)) return;
     throw new ForbiddenError(`You do not have permission to ${action} this Circle transaction.`);
 }
@@ -338,7 +343,7 @@ function create(e) {
                 user: e.auth.id,
                 name: displayName(e.auth),
                 active: true,
-                is_admin: false, can_add: true, edit_scope: "own", delete_scope: "own", version: 1,
+                is_admin: false, can_add: true, edit_scope: "own", delete_scope: "own", move_scope: "payer", version: 1,
             });
             require(`${__hooks}/circle-categories.js`).initialize(app, circle.id);
             return circleDTO(app, circle, e.auth.id);
@@ -531,7 +536,7 @@ function acceptInvitation(e) {
                 user: e.auth.id,
                 name: displayName(e.auth),
                 active: true,
-                is_admin: false, can_add: true, edit_scope: "own", delete_scope: "own", version: 1,
+                is_admin: false, can_add: true, edit_scope: "own", delete_scope: "own", move_scope: "payer", version: 1,
             });
         }
 
@@ -573,9 +578,9 @@ function removeMember(e) {
 }
 
 function updateMemberPermissions(e) {
-    const data = body(e, ["is_admin", "can_add", "edit_scope", "delete_scope", "version"]);
-    if (typeof data.is_admin !== "boolean" || typeof data.can_add !== "boolean" || ["none", "own", "all"].indexOf(data.edit_scope) < 0 || ["none", "own", "all"].indexOf(data.delete_scope) < 0)
-        throw new BadRequestError("Provide Admin and Add access and an Edit and Delete scope of none, own or all.");
+    const data = body(e, ["is_admin", "can_add", "edit_scope", "delete_scope", "move_scope", "version"]);
+    if (typeof data.is_admin !== "boolean" || typeof data.can_add !== "boolean" || ["none", "own", "all"].indexOf(data.edit_scope) < 0 || ["none", "own", "all"].indexOf(data.delete_scope) < 0 || ["none", "payer", "all"].indexOf(data.move_scope) < 0)
+        throw new BadRequestError("Provide Admin and Add access, Edit and Delete scopes of none, own or all, and a Move scope of none, payer or all.");
     return write(e, (app) => {
         const { circle } = access(app, e.request.pathValue("id"), e.auth.id, true);
         const target = find(app, "circle_members", e.request.pathValue("member"));
@@ -584,7 +589,7 @@ function updateMemberPermissions(e) {
         if (target.getString("user") === circle.getString("owner"))
             throw new BadRequestError("The owner always has full access.");
         checkVersion(target, data.version);
-        target.load({ is_admin: data.is_admin, can_add: data.can_add, edit_scope: data.edit_scope, delete_scope: data.delete_scope, version: target.getInt("version") + 1 });
+        target.load({ is_admin: data.is_admin, can_add: data.can_add, edit_scope: data.edit_scope, delete_scope: data.delete_scope, move_scope: data.move_scope, version: target.getInt("version") + 1 });
         app.save(target);
         return memberDTO(app, target);
     });

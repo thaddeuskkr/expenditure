@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "27.0.0",
+    "version": "28.0.0",
     "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring income and expenses run on the PocketBase server every minute, with custom intervals and monthly dates, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -1846,8 +1846,8 @@
     },
     "/api/expenditure/circles/{id}/expenses/{expense}/move-to-personal": {
       "post": {
-        "summary": "Move a Circle expense or income to the paid-by user\u2019s personal ledger",
-        "description": "Normal users session only. Requires active Circle membership, Edit permission for this entry, and the authenticated user to own the paid_by membership; author or Circle owner status alone grants no permission. Atomically removes the Circle entry and creates a fresh personal entry with the full positive amount and original kind, currency (even when disabled personally), occurrence, created/updated timestamps, payment method, notes and provenance. A supplied category must be an active personal category ID owned by the user. Omission matches active personal categories by exact name, then a unique case/whitespace-insensitive name, then Other, then the first active category. Removes all Circle allocations and recalculates balances while preserving former-member balances and recorded repayments. Recurrence timezone, calendar controls, anchor, cursor and pause error move intact; earlier generated entries stay in the Circle. No move receipt or original split/receipt snapshot is retained. After a successful move, repeated requests return 404 because the Circle source no longer exists. If a response is lost, refresh both ledgers to confirm the result. Earlier personal-to-Circle receipts remain immutable. Circle API idempotency receipts keep their original destination and return 410 after this move rather than recreating the entry.",
+        "summary": "Move a Circle expense or income to your personal ledger",
+        "description": "Normal users session only. Requires active Circle membership and independent move_scope permission: none denies moves, payer requires paid_by to equal the actor\u2019s membership ID, and all allows any entry. Edit permission neither grants nor restricts moves. Owners and Admins have all Move access. The new personal entry always belongs to the authenticated actor, even when someone else paid. Atomically removes the Circle entry and creates a fresh personal entry with the full positive amount and original kind, currency (even when disabled personally), occurrence, created/updated timestamps, payment method, notes and provenance. A supplied category must be an active personal category ID owned by the user. Omission matches active personal categories by exact name, then a unique case/whitespace-insensitive name, then Other, then the first active category. Removes all Circle allocations and recalculates balances while preserving former-member balances and recorded repayments. Recurrence timezone, calendar controls, anchor, cursor and pause error move intact; earlier generated entries stay in the Circle. No move receipt or original split/receipt snapshot is retained. After a successful move, repeated requests return 404 because the Circle source no longer exists. If a response is lost, refresh both ledgers to confirm the result. Earlier personal-to-Circle receipts remain immutable. Circle API idempotency receipts keep their original destination and return 410 after this move rather than recreating the entry.",
         "security": [
           {
             "UserSession": []
@@ -1901,7 +1901,7 @@
             "description": "User session required"
           },
           "403": {
-            "description": "Edit permission and being the paid-by user are both required"
+            "description": "Move permission denied, or payer scope does not match paid_by"
           },
           "404": {
             "description": "Transaction or active Circle membership not found, including a source already moved or deleted"
@@ -1935,7 +1935,7 @@
       ],
       "patch": {
         "summary": "Owner or Admin: set permissions for an active member",
-        "description": "Set Admin access and independent Add, Edit and Delete permissions for expenses and income. Own entries are identified by created_by, not paid_by. The current owner or an Admin may change active members, including granting and revoking Admin access. The owner cannot be restricted. Admin grants full access to transactions, settings, categories, invitations, other member management and repayments. Removing the owner, transferring ownership and deleting the Circle are prohibited for Admins. Version checks prevent overwriting concurrent permission changes. Permissions are enforced inside every transaction. Existing and new members default to Admin disabled, Add allowed, Edit own and Delete own. Rejoining retains saved permissions. Permission changes do not alter ledger records, balances or repayment records. Admins have the same repayment management permissions as the owner, while ordinary members retain their existing repayment permissions. Revoked Add access pauses future recurring generation with a visible error; restore access and edit the schedule to resume. API idempotency replays and confirmed personal-to-Circle move retries still replay existing entries after Add is revoked. Moving to personal requires Edit access AND the authenticated user to be the payer.",
+        "description": "Set Admin access and independent Add, Edit, Delete and Move to personal permissions for expenses and income. Own entries are identified by created_by, not paid_by. The current owner or an Admin may change active members, including granting and revoking Admin access. The owner cannot be restricted. Admin grants full access to transactions, settings, categories, invitations, other member management and repayments. Removing the owner, transferring ownership and deleting the Circle are prohibited for Admins. Version checks prevent overwriting concurrent permission changes. Permissions are enforced inside every transaction. Existing and new members default to Admin disabled, Add allowed, Edit own and Delete own. Rejoining retains saved permissions. Permission changes do not alter ledger records, balances or repayment records. Admins have the same repayment management permissions as the owner, while ordinary members retain their existing repayment permissions. Revoked Add access pauses future recurring generation with a visible error; restore access and edit the schedule to resume. API idempotency replays and confirmed personal-to-Circle move retries still replay existing entries after Add is revoked. Move scope is independent of Edit: none denies moves, payer requires paid_by to match the actor\u2019s membership, and all allows any entry to move to the actor\u2019s personal ledger. New members default to payer; upgrades use none when stored Edit was none, otherwise payer. Owners and Admins have all Move access.",
         "tags": [
           "Circles"
         ],
@@ -3250,7 +3250,16 @@
           },
           "is_admin": {
             "type": "boolean",
-            "description": "Stored Admin permission, default false. Grants full transaction and Circle management access, including managing other members and Admin permissions. The owner cannot be removed or restricted; Circle deletion and ownership transfer remain owner-only. Admin does not bypass the payer requirement for moves to personal."
+            "description": "Stored Admin permission, default false. Grants full transaction and Circle management access, including managing other members and Admin permissions. The owner cannot be removed or restricted; Circle deletion and ownership transfer remain owner-only. Admin includes full Move access to any Circle entry, even when another member paid."
+          },
+          "move_scope": {
+            "type": "string",
+            "enum": [
+              "none",
+              "payer",
+              "all"
+            ],
+            "description": "Independent Move to personal permission. none denies moves; payer requires paid_by to equal the acting membership ID; all allows any Circle expense or income to move in full into the acting user\u2019s personal ledger. Does not depend on Add, Edit or Delete. New members default to payer. Owners and Admins have effective all access."
           }
         },
         "required": [
@@ -3264,7 +3273,8 @@
           "edit_scope",
           "delete_scope",
           "version",
-          "is_admin"
+          "is_admin",
+          "move_scope"
         ]
       },
       "CircleInvitation": {
@@ -6472,7 +6482,7 @@
             }
           }
         },
-        "description": "Owner/Admin replacement from the authenticated manager’s own personal settings. Copies names, colours, active status and order. Reuses matching Circle category IDs, removes unused unmatched categories, and archives unmatched categories used in history. Historical entries, monetary amounts and balances are preserved. The combined list is limited to 100 categories."
+        "description": "Owner/Admin replacement from the authenticated manager\u2019s own personal settings. Copies names, colours, active status and order. Reuses matching Circle category IDs, removes unused unmatched categories, and archives unmatched categories used in history. Historical entries, monetary amounts and balances are preserved. The combined list is limited to 100 categories."
       },
       "CircleCategoryList": {
         "type": "object",
@@ -7079,15 +7089,25 @@
               "all"
             ],
             "description": "Independent of Edit permission. Defaults to own."
+          },
+          "move_scope": {
+            "type": "string",
+            "enum": [
+              "none",
+              "payer",
+              "all"
+            ],
+            "description": "Independent Move to personal permission. none denies moves; payer requires paid_by to equal the acting membership ID; all allows any Circle expense or income to move in full into the acting user\u2019s personal ledger. Does not depend on Add, Edit or Delete. New members default to payer. Owners and Admins have effective all access."
           }
         },
         "required": [
           "can_add",
           "edit_scope",
-          "delete_scope"
+          "delete_scope",
+          "move_scope"
         ],
         "additionalProperties": false,
-        "description": "Effective transaction permissions for the current active member. The owner and Admins always have can_add=true and all scopes, regardless of stored member permissions."
+        "description": "Effective transaction permissions for the current active member. The owner and Admins always have can_add=true and all scopes (including Move), regardless of stored member permissions."
       },
       "CircleMemberPermissionsInput": {
         "type": "object",
@@ -7120,7 +7140,16 @@
           },
           "is_admin": {
             "type": "boolean",
-            "description": "Stored Admin permission, default false. Grants full transaction and Circle management access, including managing other members and Admin permissions. The owner cannot be removed or restricted; Circle deletion and ownership transfer remain owner-only. Admin does not bypass the payer requirement for moves to personal."
+            "description": "Stored Admin permission, default false. Grants full transaction and Circle management access, including managing other members and Admin permissions. The owner cannot be removed or restricted; Circle deletion and ownership transfer remain owner-only. Admin includes full Move access to any Circle entry, even when another member paid."
+          },
+          "move_scope": {
+            "type": "string",
+            "enum": [
+              "none",
+              "payer",
+              "all"
+            ],
+            "description": "Independent Move to personal permission. none denies moves; payer requires paid_by to equal the acting membership ID; all allows any Circle expense or income to move in full into the acting user\u2019s personal ledger. Does not depend on Add, Edit or Delete. New members default to payer. Owners and Admins have effective all access."
           }
         },
         "required": [
@@ -7128,7 +7157,8 @@
           "edit_scope",
           "delete_scope",
           "version",
-          "is_admin"
+          "is_admin",
+          "move_scope"
         ],
         "additionalProperties": false
       }

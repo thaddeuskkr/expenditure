@@ -84,9 +84,7 @@ function moveToPersonal(e) {
         }
 
         if (shared.getString("circle") !== circle.id) throw new NotFoundError("Transaction not found.");
-        const payer = app.findRecordById("circle_members", shared.getString("paid_by"));
-        if (payer.getString("user") !== e.auth.id) throw new ForbiddenError("Only the paid-by user can move this transaction.");
-        service.requireExpensePermission(circle, member, "edit", shared);
+        service.requireExpensePermission(circle, member, "move", shared);
         if (shared.getInt("version") !== data.version) throw new ApiError(409, "This transaction changed. Refresh it before moving.");
         if (["expense", "income"].indexOf(shared.getString("kind")) < 0 || !configuration.currency(shared.getString("currency")) || shared.getInt("amount") < 1 || shared.getInt("amount") > require(`${__hooks}/circles-core.cjs`).MAX_AMOUNT)
             throw new BadRequestError("This transaction has invalid financial data.");

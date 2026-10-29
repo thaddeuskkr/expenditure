@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Switch, Tabs } from "radix-ui";
 import { Button } from "./ui/button";
 import { CurrencyPicker, EnabledCurrenciesPicker } from "./currency-picker";
@@ -122,9 +122,9 @@ export function WorkspaceSettings({
     }
 
     return (
-        <Tabs.Root value={tab} onValueChange={setTab} className="flex min-h-[calc(100svh-14rem)] max-w-3xl flex-col">
+        <Tabs.Root value={tab} onValueChange={setTab} className={`max-w-3xl ${dirty || busy ? "pb-36" : ""}`}>
             <div className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur-sm">
-                <div className="overflow-x-auto">
+                <div className="settings-tabs-scroll overflow-x-auto">
                     <Tabs.List aria-label="Settings sections" className="flex w-max min-w-full gap-1">
                         {Object.keys(changedTabs).map((name) => (
                             <Tabs.Trigger key={name} value={name} aria-label={name} className="relative flex h-12 min-w-11 shrink-0 items-center justify-center border-b-2 border-transparent px-2 text-[11px] whitespace-nowrap text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:bg-secondary data-[state=active]:border-primary data-[state=active]:text-foreground sm:px-4 sm:text-xs">
@@ -135,7 +135,7 @@ export function WorkspaceSettings({
                     </Tabs.List>
                 </div>
             </div>
-            <div className="flex-1 pt-7 pb-8">
+            <div className="pt-7">
                 <Tabs.Content value="General" className="space-y-6 outline-none data-[state=inactive]:hidden motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
                     <h2 className="text-sm font-medium">General preferences</h2>
                     <fieldset disabled={busy} className="space-y-6">
@@ -257,22 +257,26 @@ export function WorkspaceSettings({
                     </fieldset>
                 </Tabs.Content>
             </div>
-            <form onSubmit={save} aria-label="Save preferences" data-settings-save-bar className="sticky bottom-[max(1rem,env(safe-area-inset-bottom))] z-20 border-t bg-background/95 py-3 backdrop-blur-sm">
-                {error && <p role="alert" className="mb-3 text-xs leading-5 text-destructive">{error}</p>}
-                <div className="flex min-h-10 items-center justify-between gap-3">
-                    <p role="status" className={`flex min-w-0 items-center gap-2 text-xs ${dirty ? "text-foreground" : "text-muted-foreground"}`}>
-                        {busy ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin text-muted-foreground" /> : dirty ? <span aria-hidden="true" className="size-1.5 rounded-full bg-primary" /> : <Check aria-hidden="true" className="size-3.5 text-primary" />}
-                        <span className="sm:hidden">{busy ? "Saving…" : dirty ? "Unsaved" : "Saved"}</span>
-                        <span className="hidden sm:inline">{busy ? "Saving changes…" : dirty ? "Unsaved changes" : "All changes saved"}</span>
-                    </p>
-                    {(dirty || busy) && (
-                        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-                            <Button type="button" variant="ghost" disabled={busy} onClick={discard} className="h-10 px-3 text-xs sm:px-4 sm:text-sm">Discard</Button>
-                            <Button type="submit" disabled={busy} className="h-10 px-4 text-xs sm:px-5 sm:text-sm">Save changes</Button>
+            {(dirty || busy) && (
+                <form onSubmit={save} aria-label="Save preferences" data-settings-save-bar className="fixed inset-x-0 bottom-0 z-20 border-t bg-background/95 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm lg:left-60">
+                    <div className="mx-auto max-w-355 px-5 sm:px-9 xl:px-12">
+                        <div className="max-w-3xl">
+                            {error && <p role="alert" className="mb-3 text-xs leading-5 text-destructive wrap-anywhere">{error}</p>}
+                            <div className="flex min-h-10 items-center justify-between gap-3">
+                                <p role="status" className="flex min-w-0 items-center gap-2 text-xs">
+                                    {busy ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin text-muted-foreground" /> : <span aria-hidden="true" className="size-1.5 rounded-full bg-primary" />}
+                                    <span className="sm:hidden">{busy ? "Saving…" : "Unsaved"}</span>
+                                    <span className="hidden sm:inline">{busy ? "Saving changes…" : "Unsaved changes"}</span>
+                                </p>
+                                <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                                    <Button type="button" variant="ghost" disabled={busy} onClick={discard} className="h-10 px-3 text-xs sm:px-4 sm:text-sm">Discard</Button>
+                                    <Button type="submit" disabled={busy} className="h-10 px-4 text-xs sm:px-5 sm:text-sm">Save changes</Button>
+                                </div>
+                            </div>
                         </div>
-                    )}
-                </div>
-            </form>
+                    </div>
+                </form>
+            )}
         </Tabs.Root>
     );
 }

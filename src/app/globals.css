@@ -87,7 +87,13 @@
     transform: translateY(0);
   }
 }
-/* Keep feedback above the persistent Settings actions. */
+.settings-tabs-scroll {
+  scrollbar-width: none;
+}
+.settings-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+/* Keep feedback above the fixed Settings actions. */
 body:has([data-settings-save-bar]) [data-sonner-toaster][data-y-position="bottom"] {
   bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
 }

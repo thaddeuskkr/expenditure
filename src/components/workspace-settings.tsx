@@ -257,17 +257,20 @@ export function WorkspaceSettings({
                     </fieldset>
                 </Tabs.Content>
             </div>
-            <form onSubmit={save} aria-label="Save preferences" data-settings-save-bar className="sticky bottom-[max(1rem,env(safe-area-inset-bottom))] z-20 rounded-xl border bg-popover/95 p-3 shadow-lg shadow-black/15 backdrop-blur-sm sm:p-4">
+            <form onSubmit={save} aria-label="Save preferences" data-settings-save-bar className="sticky bottom-[max(1rem,env(safe-area-inset-bottom))] z-20 border-t bg-background/95 py-3 backdrop-blur-sm">
                 {error && <p role="alert" className="mb-3 text-xs leading-5 text-destructive">{error}</p>}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <p role="status" className="flex items-center gap-2 text-xs">
+                <div className="flex min-h-10 items-center justify-between gap-3">
+                    <p role="status" className={`flex min-w-0 items-center gap-2 text-xs ${dirty ? "text-foreground" : "text-muted-foreground"}`}>
                         {busy ? <Loader2 aria-hidden="true" className="size-3.5 animate-spin text-muted-foreground" /> : dirty ? <span aria-hidden="true" className="size-1.5 rounded-full bg-primary" /> : <Check aria-hidden="true" className="size-3.5 text-primary" />}
-                        {busy ? "Saving changes…" : dirty ? "Unsaved changes" : "All changes saved"}
+                        <span className="sm:hidden">{busy ? "Saving…" : dirty ? "Unsaved" : "Saved"}</span>
+                        <span className="hidden sm:inline">{busy ? "Saving changes…" : dirty ? "Unsaved changes" : "All changes saved"}</span>
                     </p>
-                    <div className="flex items-center gap-2">
-                        <Button type="button" variant="ghost" disabled={!dirty || busy} onClick={discard} className="h-10 flex-1 px-4 sm:flex-none">Discard</Button>
-                        <Button type="submit" disabled={!dirty || busy} className="h-10 flex-1 px-5 sm:flex-none">Save changes</Button>
-                    </div>
+                    {(dirty || busy) && (
+                        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+                            <Button type="button" variant="ghost" disabled={busy} onClick={discard} className="h-10 px-3 text-xs sm:px-4 sm:text-sm">Discard</Button>
+                            <Button type="submit" disabled={busy} className="h-10 px-4 text-xs sm:px-5 sm:text-sm">Save changes</Button>
+                        </div>
+                    )}
                 </div>
             </form>
         </Tabs.Root>

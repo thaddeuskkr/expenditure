@@ -6,7 +6,7 @@ import { DialogFooter } from "../ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { CircleModal, FormError } from "./circle-dialogs";
 import { circlesApi, type Circle, type CircleDetail } from "@/lib/circles";
-import { errorMessage, money, type Expense } from "@/lib/domain";
+import { categoryLabel, errorMessage, money, type Expense } from "@/lib/domain";
 
 export function MoveExpenseDialog({ expense, onClose, onMoved }: {
     expense: Expense;
@@ -41,14 +41,14 @@ export function MoveExpenseDialog({ expense, onClose, onMoved }: {
         circlesApi.detail(circle).then((result) => {
             if (!active) return;
             const activeCategories = result.categories.filter((item) => item.active);
-            const match = activeCategories.find((item) => item.name.toLowerCase() === expense.category.toLowerCase());
-            setCategory(match?.name || activeCategories.find((item) => item.name === "Other")?.name || activeCategories[0]?.name || "");
+            const match = activeCategories.find((item) => item.name.toLowerCase() === categoryLabel(expense).toLowerCase());
+            setCategory(match?.id || activeCategories.find((item) => item.name === "Other")?.id || activeCategories[0]?.id || "");
             setDetail(result);
         }).catch((failure) => { if (active) setError(errorMessage(failure)); });
         return () => {
             active = false;
         };
-    }, [circle, expense.category]);
+    }, [circle, expense]);
     async function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (!detail || !category || busy) return;
@@ -95,7 +95,7 @@ export function MoveExpenseDialog({ expense, onClose, onMoved }: {
                                                         <label htmlFor="move-category" className="field-label">Circle category</label>
                                                         <Select value={category} onValueChange={setCategory} disabled={busy}>
                                                             <SelectTrigger id="move-category" className="h-11! w-full"><SelectValue /></SelectTrigger>
-                                                            <SelectContent>{detail.categories.filter((item) => item.active).map((item) => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}</SelectContent>
+                                                            <SelectContent>{detail.categories.filter((item) => item.active).map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
                                                         </Select>
                                                     </div>
                                                 ) :

@@ -1,3 +1,4 @@
+import { resolveCategoryFixture } from "./helpers/category-fixtures.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
@@ -77,6 +78,7 @@ test(
             method = body === undefined ? "GET" : "POST",
             expected = 200,
         ) {
+            ({ path, body } = await resolveCategoryFixture(base, path, body, token));
             const response = await fetch(base + path, {
                 method,
                 headers: {
@@ -152,9 +154,9 @@ test(
             historical = renamed;
             let current = await detail();
             const entry = current.expenses.items.find((row) => row.id === shared.id);
-            assert.equal(entry.category, renamed.name);
+            assert.equal(entry.expand.category.name, renamed.name);
             assert.equal(entry.amount, shared.amount);
-            assert.equal(entry.version, shared.version + 1);
+            assert.equal(entry.version, shared.version);
             await api(`${categoryPath}/${historical.id}`, alice.token, { active: false }, "PATCH");
             await api(`${root}/${circle.id}/expenses`, bob.token, { title: "Archived", amount: 10, currency: "SGD", category: historical.name, paid_by: bobMember, split_mode: "even", shares: [{ member: bobMember }] }, "POST", 400);
             // A historical entry can still be edited without reactivating its category.
@@ -186,7 +188,7 @@ test(
             assert.equal(copied.at(-1).active, false);
             assert.ok(!copied.some((row) => row.name === "Other"));
             const after = await detail();
-            assert.equal(after.expenses.items.find((row) => row.id === shared.id).category, historical.name);
+            assert.equal(after.expenses.items.find((row) => row.id === shared.id).expand.category.name, historical.name);
             assert.deepEqual(after.balances, before.balances);
             // Repeating a replacement is safe and does not grow archived history.
             const repeated = (await api(`${categoryPath}/copy`, alice.token, { previous_ids: copied.map((row) => row.id) })).items;
@@ -216,7 +218,7 @@ test(
             assert.equal(results[1].id, own.id);
             assert.equal(moved.paid_by, bobMember);
             assert.equal(moved.created_by, bobMember);
-            assert.equal(moved.category, category);
+            assert.equal(moved.expand.category.name, category);
             assert.equal(moved.source, own.source);
             assert.equal(moved.origin_expense, own.id);
             for (const field of ["amount", "currency", "notes", "payment_method", "occurred_at", "created", "updated"]) assert.equal(moved[field], own[field], field);

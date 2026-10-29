@@ -83,6 +83,7 @@ test(
 
         await start(oldFlags);
         async function request(path, token, body, method = body ? "POST" : "GET") {
+            if (method === "GET" && /^\/api\/collections\/(expenses|budgets|circle_expenses)\/records/.test(path)) path += (path.includes("?") ? "&" : "?") + "expand=category";
             const response = await fetch(base + path, {
                 method,
                 headers: {
@@ -263,14 +264,14 @@ test(
         assert.equal(after.payment_method, "Stored Visa");
         assert.equal(after.amount_cents, undefined);
         assert.equal(after.card, undefined);
-        assert.equal(after.category, "Food & drinks");
+        assert.equal(after.expand.category.name, "Food & drinks");
         assert.equal(after.currency, "SGD");
         assert.equal(after.source, "api");
         const preserved = await request(
             `/api/collections/budgets/records/${budget.id}`,
             admin,
         );
-        assert.equal(preserved.category, "Food & drinks");
+        assert.equal(preserved.expand.category.name, "Food & drinks");
         assert.equal(preserved.amount, 20000);
         assert.equal(preserved.amount_cents, undefined);
         assert.equal(
@@ -287,14 +288,12 @@ test(
                 .key_prefix,
             "exp_existing",
         );
-        const stored = await request(
-            `/api/collections/expenses/records?filter=${encodeURIComponent("idempotency_key = 'preserved-idempotency'")}`,
-            admin,
-        );
+        const stored = await request(`/api/collections/api_transaction_retries/records?filter=${encodeURIComponent("key = 'preserved-idempotency'")}`, admin);
         assert.equal(stored.totalItems, 1);
-        assert.deepEqual(stored.items[0].idempotency_data, {
+        assert.equal(stored.items[0].transaction, expense.id);
+        assert.deepEqual(stored.items[0].request, {
             merchant: "Existing coffee", amount: 850, currency: "SGD", category: "Food & drinks",
-            payment_method: "Stored Visa", notes: "", occurred_at: stored.items[0].occurred_at,
+            payment_method: "Stored Visa", notes: "", occurred_at: after.occurred_at,
         });
         const auth = await request(
             "/api/collections/users/auth-with-password",
@@ -330,14 +329,14 @@ test(
         assert.equal(replay.replay, true);
         assert.equal(replay.idempotency_data, undefined);
         const expenseSchema = await request("/api/collections/expenses", admin);
-        assert.equal(expenseSchema.fields.find((field) => field.name === "idempotency_data").hidden, true);
+        assert.ok(!expenseSchema.fields.some((field) => ["idempotency_key", "idempotency_data"].includes(field.name)));
         const detail = await request(`/api/expenditure/circles/${circle.id}`, auth.token);
         assert.equal(detail.categories.length, 8);
         assert.deepEqual(detail.categories.map((row) => row.sort_order), [0, 1, 2, 3, 4, 5, 6, 7]);
         for (const original of shared) {
             const migrated = detail.expenses.items.find((item) => item.id === original.id);
             assert.equal(migrated.amount, original.amount_minor);
-            assert.equal(migrated.category, "Other");
+            assert.equal(migrated.expand.category.name, "Other");
             assert.equal(migrated.source, "manual");
             assert.equal(migrated.amount_minor, undefined);
             assert.equal(migrated.receipt, null);
@@ -399,8 +398,8 @@ test(
         const summary = await request(`/api/expenditure/overview?${summaryRange}`, auth.token);
         assert.equal(summary.total, 850 + 325 + 501);
         assert.equal(summary.count, 3);
-        assert.equal(summary.categories.find((row) => row.category === "Food & drinks").total, 850);
-        assert.equal(summary.categories.find((row) => row.category === "Other").total, 325 + 501);
+        assert.equal(summary.categories.find((row) => row.category_name === "Food & drinks").total, 850);
+        assert.equal(summary.categories.find((row) => row.category_name === "Other").total, 325 + 501);
         const memberSchema = await request("/api/collections/circle_members", admin);
         assert.ok(memberSchema.indexes.some((index) => index.includes("idx_circle_members_user_circle")));
 

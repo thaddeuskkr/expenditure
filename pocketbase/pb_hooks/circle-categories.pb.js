@@ -1,7 +1,7 @@
 onRecordValidate((e) => {
     if (e.record.isNew()) {
         if (!e.record.getString("source")) e.record.set("source", "manual");
-        if (!e.record.getString("category")) e.record.set("category", "Other");
+        if (!e.record.getString("category")) e.record.set("category", require(`${__hooks}/circle-categories.js`).select(e.app, e.record.getString("circle"), undefined, null));
     }
 
     return e.next();

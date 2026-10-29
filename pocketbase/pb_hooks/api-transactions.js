@@ -29,8 +29,6 @@ function create(e, explicitCircle) {
             const cutoff = new Date(Date.now() - api.IDEMPOTENCY_TTL_MS).toISOString().replace("T", " ");
             // Expire receipts independently of mutable or deleted ledger records.
             app.db().newQuery("DELETE FROM api_transaction_retries WHERE created <= {:cutoff}").bind({ cutoff }).execute();
-            app.db().newQuery("UPDATE expenses SET idempotency_key = '' WHERE user = {:user} AND idempotency_key = {:key} AND created <= {:cutoff}")
-                .bind({ user: identity.user.id, key, cutoff }).execute();
             receipt = app.findRecordsByFilter("api_transaction_retries", "user = {:user} && key = {:key}", "", 1, 0, { user: identity.user.id, key })[0];
         }
 
@@ -51,7 +49,7 @@ function create(e, explicitCircle) {
             }
 
             replay = true;
-            result = response(record, receipt, circleId);
+            result = response(app, record, receipt, circleId);
             return;
         }
 
@@ -62,8 +60,8 @@ function create(e, explicitCircle) {
         if (circle) record = circles.createApiRecord(app, identity, circleId, fields);
         else {
             record = new Record(app.findCollectionByNameOrId("expenses"));
-            record.load(fields);
-            record.load({ user: identity.user.id, source: "api", idempotency_key: key || "", idempotency_data: key ? fields : null });
+            record.load({ ...fields, category: require(`${__hooks}/configuration.js`).categoryByName(app, identity.user.id, fields.category).id });
+            record.load({ user: identity.user.id, source: "api" });
             app.save(record);
         }
 
@@ -73,7 +71,7 @@ function create(e, explicitCircle) {
             app.save(receipt);
         }
 
-        result = response(record, receipt, circleId);
+        result = response(app, record, receipt, circleId);
     });
     api.touch(e.app, identity.key);
     return e.json(replay ? 200 : 201, Object.assign(result, { replay }));
@@ -88,8 +86,8 @@ function checkCircle(app, circles, id, user, defaultDestination) {
     }
 }
 
-function response(record, receipt, circle) {
-    return Object.assign(record.publicExport(), {
+function response(app, record, receipt, circle) {
+    return Object.assign(require(`${__hooks}/configuration.js`).projectCategory(app, record), {
         destination: circle ? "circle" : "personal",
         idempotency_expires_at: receipt ? new Date(Date.parse(receipt.getString("created").replace(" ", "T")) + api.IDEMPOTENCY_TTL_MS).toISOString() : null,
     });

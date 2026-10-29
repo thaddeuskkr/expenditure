@@ -1,3 +1,4 @@
+import { resolveCategoryFixture } from "./helpers/category-fixtures.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
@@ -84,6 +85,7 @@ test(
             method = body === undefined ? "GET" : "POST",
             expected = 200,
         ) {
+            ({ path, body } = await resolveCategoryFixture(base, path, body, token));
             const response = await fetch(base + path, {
                 method,
                 headers: {

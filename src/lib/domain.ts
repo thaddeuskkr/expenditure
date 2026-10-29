@@ -82,6 +82,7 @@ export interface Expense extends RecordModel, RecurringFields {
     amount: number;
     currency: string;
     category: Category;
+    expand?: { category?: CategoryDefinition };
     occurred_at: string;
     notes: string;
     payment_method: string;
@@ -89,7 +90,9 @@ export interface Expense extends RecordModel, RecurringFields {
 }
 export interface Budget extends RecordModel {
     month: string;
-    category: Category | "Overall";
+    /** Empty means an overall monthly budget; otherwise a personal category ID. */
+    category: Category;
+    expand?: { category?: CategoryDefinition };
     currency: string;
     /** Integer currency minor units (cents for SGD). */
     amount: number;
@@ -116,13 +119,14 @@ export interface CircleTransaction extends RecordModel, RecurringFields {
     currency: string;
     category: string;
     budget_category: string;
+    budget_category_name: string;
     occurred_at: string;
     notes: string;
     payment_method: string;
     source: "manual" | "api";
     circle: string;
     membership_active: boolean;
-    expand: { circle: { id: string; name: string; icon: string } };
+    expand: { circle: { id: string; name: string; icon: string }; category?: CategoryDefinition };
 }
 export type Transaction = Expense | CircleTransaction;
 export interface TransactionPage {
@@ -142,6 +146,10 @@ export function transactionName(row: Transaction) {
 
 export function transactionAmount(row: Transaction) {
     return isCircleTransaction(row) ? row.allocated_amount : row.amount;
+}
+
+export function categoryLabel(row: { expand?: { category?: { name: string } } }) {
+    return row.expand?.category?.name || "Uncategorized";
 }
 
 export interface CategoryDefinition {
@@ -191,7 +199,7 @@ export interface Overview {
     total: number;
     count: number;
     previous: number;
-    categories: { category: Category; total: number; count: number }[];
+    categories: { category: Category; category_name: string; total: number; count: number }[];
     activity: { occurred_at: string; total: number }[];
     missing_count: number;
     previous_missing_count: number;

@@ -119,11 +119,19 @@ onRecordDelete((e) => {
 }, "circles");
 
 onRecordDelete((e) => {
-    // Preserve membership IDs for the ledger, with their real stored status.
-    const members = e.app.findRecordsByFilter("circle_members", "user = {:user}", "", 0, 0, { user: e.record.id });
-    members.forEach((member) => {
-        member.set("active", false);
-        e.app.save(member);
-    });
-    return e.next();
+    const app = e.app;
+    try {
+        return app.runInTransaction((tx) => {
+            e.app = tx;
+            // Preserve membership IDs for the ledger, with their real stored status.
+            tx.findRecordsByFilter("circle_members", "user = {:user}", "", 0, 0, { user: e.record.id }).forEach((member) => {
+                member.set("active", false);
+                tx.save(member);
+            });
+            require(`${__hooks}/configuration.js`).deletePersonalContents(tx, e.record.id);
+            return e.next();
+        });
+    } finally {
+        e.app = app;
+    }
 }, "users");

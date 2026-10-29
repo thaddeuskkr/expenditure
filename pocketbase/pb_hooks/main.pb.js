@@ -1,5 +1,5 @@
 /// <reference path="../pb_data/types.d.ts" />
-routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 24 }));
+routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 25 }));
 
 routerAdd(
     "GET",
@@ -160,7 +160,7 @@ routerAdd("GET", "/api/expenses/transactions", (e) => {
     );
     lib.touch(e.app, identity.key);
     return e.json(200, {
-        items: records.map((record) => record.publicExport()),
+        items: records.map((record) => require(`${__hooks}/configuration.js`).projectCategory(e.app, record)),
         page,
         perPage,
         totalItems: total,
@@ -191,8 +191,6 @@ onRecordCreateRequest((e) => {
         require(`${__hooks}/recurrence.js`).protect(e.record, e.requestInfo().body);
         for (const field of ["moved_to", "moved_circle"]) e.record.set(field, e.record.isNew() ? "" : e.record.original().getString(field));
         e.record.set("source", "manual");
-        e.record.set("idempotency_key", "");
-        e.record.set("idempotency_data", null);
     }
 
     return e.next();
@@ -203,11 +201,6 @@ onRecordUpdateRequest((e) => {
         require(`${__hooks}/recurrence.js`).protect(e.record, e.requestInfo().body);
         for (const field of ["moved_to", "moved_circle"]) e.record.set(field, e.record.isNew() ? "" : e.record.original().getString(field));
         e.record.set("source", e.record.original().getString("source"));
-        e.record.set(
-            "idempotency_key",
-            e.record.original().getString("idempotency_key"),
-        );
-        e.record.set("idempotency_data", e.record.original().get("idempotency_data"));
         // Editing an API expense must not extend or shorten its retry window.
         if (e.record.getString("source") === "api")
             e.record.set("created", e.record.original().get("created"));

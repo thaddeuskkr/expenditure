@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { CategoryIcon } from "../category-icon";
 import { UserAvatar } from "../user-avatar";
 import { useWorkspace } from "../workspace-context";
-import { dateTimeLabel, money, recurrenceLabel } from "@/lib/domain";
+import { categoryLabel, dateTimeLabel, money, recurrenceLabel } from "@/lib/domain";
 import { ReceiptSummary } from "./receipt-editor";
 import { receiptCore, SPLIT_LABELS, type CircleDetail, type CircleExpense, type CircleMember } from "@/lib/circles";
 
@@ -33,7 +33,7 @@ export function CircleExpenseDetails({ expense, detail, onClose, onEdit, onDelet
             <DialogContent className="gap-5 p-5 sm:max-w-lg sm:p-6">
                 <DialogHeader className="gap-4">
                     <div className="flex items-start gap-3 pr-6">
-                        <CategoryIcon category={expense.category} color={detail.categories.find((category) => category.name === expense.category)?.color} />
+                        <CategoryIcon category={categoryLabel(expense)} color={detail.categories.find((category) => category.id === expense.category)?.color} />
                         <div className="min-w-0">
                             <DialogTitle className="font-display text-3xl leading-tight font-normal wrap-anywhere">{expense.title}</DialogTitle>
                             <DialogDescription className="mt-1 text-[11px] wrap-anywhere">{detail.circle.name}</DialogDescription>
@@ -56,7 +56,7 @@ export function CircleExpenseDetails({ expense, detail, onClose, onEdit, onDelet
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                        <span className="rounded-md border px-2 py-1 wrap-anywhere">{expense.category}</span>
+                        <span className="rounded-md border px-2 py-1 wrap-anywhere">{categoryLabel(expense)}</span>
                         <span className="rounded-md bg-white/4 px-2 py-1">{splitLabel}</span>
                         {expense.recurrence && <span className="rounded-md bg-white/4 px-2 py-1 wrap-anywhere">{recurrenceLabel(expense)}</span>}
                         {expense.source === "api" && <span className="flex items-center gap-1.5 px-1 py-1"><Code2 aria-hidden="true" className="size-3" />Via API</span>}

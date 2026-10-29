@@ -47,11 +47,9 @@ export function BudgetEditor({
     onDelete: (budget: Budget) => Promise<void>;
 }) {
     const { categories } = useWorkspace();
-    const categoryNames = categories
-        .filter((c) => c.active || c.name === budget?.category)
-        .map((c) => c.name);
+    const availableCategories = categories.filter((item) => item.active || item.id === budget?.category);
     const [category, setCategory] = useState<string>(
-        budget?.category || "Overall",
+        budget?.category || "",
     );
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
@@ -96,17 +94,17 @@ export function BudgetEditor({
                         <label className="field-label" htmlFor="budget-category">
                             Category
                         </label>
-                        <Select value={category} onValueChange={setCategory}>
+                        <Select value={category || "overall"} onValueChange={(value) => setCategory(value === "overall" ? "" : value)}>
                             <SelectTrigger id="budget-category" className="h-11! w-full">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="Overall">
+                                <SelectItem value="overall">
                                     Overall monthly spending
                                 </SelectItem>
-                                {categoryNames.map((c) => (
-                                    <SelectItem key={c} value={c}>
-                                        {c}
+                                {availableCategories.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                        {c.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

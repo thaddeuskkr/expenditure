@@ -113,12 +113,11 @@ function validateExpense(data, app, user, original, circle) {
     let categoryName = data.category;
     if (categoryName === undefined) {
         if (original) categoryName = original.category;
-        else if (circle) categoryName = require(`${__hooks}/circle-categories.js`).select(app, circle.id, undefined, null);
         else {
-            const available = config.categories(app, user).filter((c) => c.active);
+            const available = (circle ? require(`${__hooks}/circle-categories.js`).list(app, circle.id) : config.categories(app, user)).filter((item) => item.active);
             const fallback = available.find((c) => c.name === "Other") || available[0];
             if (!fallback)
-                throw new BadRequestError("Add an active category in Settings first.");
+                throw new BadRequestError("Add an active category in this workspace first.");
             categoryName = fallback.name;
         }
     } else if (
@@ -131,7 +130,7 @@ function validateExpense(data, app, user, original, circle) {
 
     const category = original ?
         categoryName.trim().toLowerCase() === original.category.toLowerCase() ? original.category : categoryName.trim() :
-        circle ? require(`${__hooks}/circle-categories.js`).select(app, circle.id, categoryName.trim(), null) : config.category(app, user, categoryName.trim(), false);
+        circle ? require(`${__hooks}/circle-categories.js`).byName(app, circle.id, categoryName.trim()).name : config.categoryByName(app, user, categoryName.trim()).name;
     const paymentMethod = optionalText(data.payment_method, "Payment method", 80);
     const notes = optionalText(data.notes, "Notes", 2000);
     const occurred = data.occurred_at === undefined ?

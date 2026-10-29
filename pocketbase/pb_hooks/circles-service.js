@@ -213,7 +213,7 @@ function page(app, collection, circle, requested, mapper) {
                 (pageNumber - 1) * 25,
                 { circle },
             )
-            .map(mapper || ((r) => r.publicExport())),
+            .map(mapper || ((r) => collection === "circle_expenses" ? configuration.projectCategory(app, r) : r.publicExport())),
         page: pageNumber,
         totalItems: total,
         totalPages: Math.max(1, Math.ceil(total / 25)),
@@ -369,7 +369,7 @@ function detail(e) {
         })),
         invitations,
         categories: require(`${__hooks}/circle-categories.js`).list(e.app, circle.id),
-        recurring: e.app.findRecordsByFilter("circle_expenses", "circle = {:circle} && recurrence != ''", "recurrence_next,id", 0, 0, { circle: circle.id }).map((r) => r.publicExport()),
+        recurring: e.app.findRecordsByFilter("circle_expenses", "circle = {:circle} && recurrence != ''", "recurrence_next,id", 0, 0, { circle: circle.id }).map((r) => configuration.projectCategory(e.app, r)),
         expenses: page(e.app, "circle_expenses", circle.id, query.get("expense_page")),
         settlements: page(e.app, "circle_settlements", circle.id, query.get("settlement_page")),
     });
@@ -568,7 +568,7 @@ function createApiRecord(app, identity, circleId, fields) {
         recurrence_weekdays: [],
         amount: total,
         currency: fields.currency,
-        category: fields.category,
+        category: require(`${__hooks}/circle-categories.js`).byName(app, circle.id, fields.category).id,
         paid_by: member.id,
         created_by: member.id,
         split_mode: "percentage",
@@ -688,7 +688,7 @@ function saveExpense(e) {
             require(`${__hooks}/recurrence.js`).configure(expense, app, e.auth.id);
             app.save(expense);
             preserveFormerBalances(app, circle.id, members, before);
-            return expense.publicExport();
+            return configuration.projectCategory(app, expense);
         },
         editing ? 200 : 201,
     );

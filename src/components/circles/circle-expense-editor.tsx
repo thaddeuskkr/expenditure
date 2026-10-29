@@ -49,8 +49,8 @@ export function CircleExpenseEditor({
 }) {
     const { preferences } = useWorkspace();
     const entryKind = expense?.kind || kind;
-    const categories = data.categories.filter((item) => item.active || item.name === expense?.category);
-    const [category, setCategory] = useState(expense?.category || categories.find((item) => item.name === "Other")?.name || categories[0]?.name || "");
+    const categories = data.categories.filter((item) => item.active || item.id === expense?.category);
+    const [category, setCategory] = useState(expense?.category || categories.find((item) => item.name === "Other")?.id || categories[0]?.id || "");
     const [recurrence, setRecurrence] = useState<RecurrenceSchedule>({ recurrence: expense?.recurrence || "", recurrence_interval: expense?.recurrence_interval || 0, recurrence_day: expense?.recurrence_day || 0, recurrence_weekdays: expense?.recurrence_weekdays || [], recurrence_month: expense?.recurrence_month || 0 });
     const [occurredAt, setOccurredAt] = useState(() => zonedInput(expense?.occurred_at || new Date(), preferences.timezone));
     const eligible = data.members.filter(
@@ -266,7 +266,7 @@ export function CircleExpenseEditor({
                     <label htmlFor="shared-category" className="field-label">Category</label>
                     <Select value={category} onValueChange={setCategory}>
                         <SelectTrigger id="shared-category" className="h-10! w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>{categories.map((item) => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}</SelectContent>
+                        <SelectContent>{categories.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
                     </Select>
                 </div>
                 <section aria-labelledby="shared-split-heading" className="min-w-0 border-t pt-5">

@@ -156,7 +156,7 @@ export function CategorySettings({ categories, onCategoriesChanged, basePath = "
                     ))}
                 </div>
                 <p className="mt-3 text-[11px] leading-5 text-muted-foreground">
-                    {readOnly ? "The Circle owner manages categories." : reordering ? "Changes save automatically and apply to category selectors." : "Renaming updates existing entries. Archived categories remain in reports."}
+                    {readOnly ? "The Circle owner manages categories." : reordering ? "Changes save automatically and apply to category selectors." : "Renaming updates labels across your ledger. Archived categories remain in reports."}
                 </p>
                 <p role="status" className="sr-only">{orderStatus}</p>
             </section>

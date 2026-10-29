@@ -8,7 +8,8 @@ const expense = {
     merchant: "=HYPERLINK(\"bad\")",
     amount: 850,
     currency: "SGD",
-    category: "Other",
+    category: "category0000001",
+    expand: { category: { id: "category0000001", name: "Other", active: true, color: "#999d94", sort_order: 0 } },
     occurred_at: "2026-09-30 16:05:30.000Z",
     notes: "line1\nline2",
     payment_method: "Visa",
@@ -111,7 +112,7 @@ test("export time formats change local display while retaining typed Excel dates
 test("combined exports preserve allocated amounts, full Circle totals and provenance in CSV and Excel", async () => {
     const shared = {
         ...expense, id: "shared123456789", collectionName: "circle_expenses", title: "Shared dinner", amount: 1000, allocated_amount: 350,
-        category: "Circle dining", budget_category: "Other", circle: "circle123456789", expand: { circle: { id: "circle123456789", name: "Friends", icon: "users" } },
+        category: "circlecategory1", budget_category: "category0000001", budget_category_name: "Other", circle: "circle123456789", expand: { category: { id: "circlecategory1", name: "Circle dining", active: true, color: "#999d94", sort_order: 0 }, circle: { id: "circle123456789", name: "Friends", icon: "users" } },
     } as unknown as CircleTransaction;
     const rows = [expense, shared];
     const csv = csvExport(rows, "Asia/Singapore");

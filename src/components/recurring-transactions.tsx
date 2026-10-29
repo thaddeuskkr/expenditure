@@ -11,7 +11,7 @@ export function RecurringTransactions({ onEdit }: { onEdit: (expense: Expense) =
     const [error, setError] = useState("");
     useEffect(() => {
         let active = true;
-        pb.collection<Expense>("expenses").getFullList({ filter: "recurrence != ''", sort: "recurrence_next,id" }).then((items) => {
+        pb.collection<Expense>("expenses").getFullList({ expand: "category", filter: "recurrence != ''", sort: "recurrence_next,id" }).then((items) => {
             if (active) setRows(items);
         }).catch((failure) => { if (active) setError(errorMessage(failure)); });
         return () => {

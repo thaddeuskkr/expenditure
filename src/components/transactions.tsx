@@ -11,7 +11,7 @@ import {
 import { CategoryIcon } from "./category-icon";
 import { EmptyState } from "./empty-state";
 import { useWorkspace } from "./workspace-context";
-import {
+import { categoryLabel,
     convertAmount,
     dayLabel,
     money,
@@ -89,7 +89,7 @@ export function Transactions({
                                     <button
                                         onClick={open}
                                         className="flex max-w-full items-center gap-3 text-left">
-                                        <CategoryIcon category={expense.category} />
+                                        <CategoryIcon category={categoryLabel(expense)} />
                                         <span className="min-w-0">
                                             <span className="block max-w-32 truncate text-xs sm:max-w-52" title={label}>
                                                 {label}
@@ -111,7 +111,7 @@ export function Transactions({
                                 </td>
                                 <td className="hidden pr-4 text-[10px] text-muted-foreground md:table-cell">
                                     <span className="rounded-md border border-white/5 bg-white/2 px-2 py-1">
-                                        {circle?.budget_category || expense.category}
+                                        {circle?.budget_category_name || categoryLabel(expense)}
                                     </span>
                                 </td>
                                 <td className="hidden pr-4 text-[10px] text-muted-foreground sm:table-cell">

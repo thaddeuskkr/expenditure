@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { useWorkspace } from "../workspace-context";
 import { CircleModal, FormError } from "./circle-dialogs";
 import { circlesApi, type CircleExpense } from "@/lib/circles";
-import { errorMessage, money } from "@/lib/domain";
+import { categoryLabel, errorMessage, money } from "@/lib/domain";
 
 export function MoveToPersonalDialog({ circle, expense, onClose, onMoved }: {
     circle: string;
@@ -19,10 +19,10 @@ export function MoveToPersonalDialog({ circle, expense, onClose, onMoved }: {
     const { categories } = useWorkspace();
     const activeCategories = categories.filter((item) => item.active);
     const normalize = (name: string) => name.trim().replace(/\s+/g, " ").toLowerCase();
-    const exact = activeCategories.find((item) => item.name === expense.category);
-    const matches = activeCategories.filter((item) => normalize(item.name) === normalize(expense.category));
+    const exact = activeCategories.find((item) => item.name === categoryLabel(expense));
+    const matches = activeCategories.filter((item) => normalize(item.name) === normalize(categoryLabel(expense)));
     const matched = exact || (matches.length === 1 ? matches[0] : null) || activeCategories.find((item) => normalize(item.name) === "other") || activeCategories[0];
-    const [category, setCategory] = useState(matched?.name || "");
+    const [category, setCategory] = useState(matched?.id || "");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
     async function submit(event: FormEvent<HTMLFormElement>) {
@@ -48,7 +48,7 @@ export function MoveToPersonalDialog({ circle, expense, onClose, onMoved }: {
                     <label htmlFor="personal-move-category" className="field-label">Personal category</label>
                     <Select value={category} onValueChange={setCategory} disabled={busy}>
                         <SelectTrigger id="personal-move-category" className="h-11! w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>{activeCategories.map((item) => <SelectItem key={item.id} value={item.name}>{item.name}</SelectItem>)}</SelectContent>
+                        <SelectContent>{activeCategories.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}</SelectContent>
                     </Select>
                 </div>
                 <p className="text-xs leading-6 text-muted-foreground">The full {expense.kind} amount moves to your personal ledger. The Circle split is removed and member balances are recalculated. Recorded repayments stay in place.</p>

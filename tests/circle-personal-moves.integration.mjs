@@ -1,3 +1,4 @@
+import { resolveCategoryFixture } from "./helpers/category-fixtures.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
@@ -48,6 +49,7 @@ test("Circle transactions move atomically to the paid-by personal ledger", { tim
     });
     const base = `http://127.0.0.1:${port}`;
     async function api(path, { token, key, body, method = body === undefined ? "GET" : "POST", expected = 200 } = {}) {
+        ({ path, body } = await resolveCategoryFixture(base, path, body, token));
         const response = await fetch(base + path, {
             method,
             headers: { ...(token ? { Authorization: token } : {}), ...(key ? { "X-API-Key": key } : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
@@ -140,20 +142,20 @@ test("Circle transactions move atomically to the paid-by personal ledger", { tim
         const custom = await api("/api/expenditure/categories", { token: payer.token, body: { name: "Travel costs", color: "#123456" }, expected: 201 });
         const circleCategory = await api(`${g.path}/categories`, { token: owner.token, body: { name: "  TRAVEL   costs  ", color: "#234567" }, expected: 201 });
         const normalized = await move(g, await create(g, { category: circleCategory.name }));
-        assert.equal(normalized.category, custom.name);
+        assert.equal(normalized.expand.category.name, custom.name);
         const exact = await move(g, await create(g, { category: "Food & drinks" }));
-        assert.equal(exact.category, "Food & drinks");
+        assert.equal(exact.expand.category.name, "Food & drinks");
         await api(`/api/expenditure/categories/${custom.id}`, { token: payer.token, method: "PATCH", body: { active: false } });
-        assert.equal((await move(g, await create(g, { category: circleCategory.name }))).category, "Other");
+        assert.equal((await move(g, await create(g, { category: circleCategory.name }))).expand.category.name, "Other");
         const expense = await create(g);
         const foreign = (await config(member)).categories[0];
         await move(g, expense, { body: { version: expense.version, category: foreign.id }, expected: 400 });
         await move(g, expense, { body: { version: expense.version, category: custom.name }, expected: 400 });
-        assert.equal((await move(g, expense, { body: { version: expense.version, category: "Transport" } })).category, "Transport");
+        assert.equal((await move(g, expense, { body: { version: expense.version, category: "Transport" } })).expand.category.name, "Transport");
         const other = (await config()).categories.find((item) => item.name === "Other");
         await api(`/api/expenditure/categories/${other.id}`, { token: payer.token, method: "PATCH", body: { active: false } });
         const first = (await config()).categories.find((item) => item.active);
-        assert.equal((await move(g, await create(g))).category, first.name);
+        assert.equal((await move(g, await create(g))).expand.category.name, first.name);
         await api(`/api/expenditure/categories/${other.id}`, { token: payer.token, method: "PATCH", body: { active: true } });
     });
     await t.test("disabled zero- and three-decimal currencies preserve their integer values", async () => {

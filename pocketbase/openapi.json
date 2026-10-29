@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "21.0.0",
+    "version": "25.0.0",
     "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring income and expenses run on the PocketBase server every minute, with custom intervals and monthly dates, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -1792,7 +1792,7 @@
               "type": "string",
               "default": "all"
             },
-            "description": "Personal category name or all. Circle categories use the budget category mapping, including Other for unmatched names."
+            "description": "Personal category ID, all, or unmapped for Circle allocations without a matching personal category."
           },
           {
             "in": "query",
@@ -1847,7 +1847,7 @@
     "/api/expenditure/circles/{id}/expenses/{expense}/move-to-personal": {
       "post": {
         "summary": "Move a Circle expense or income to the paid-by user\u2019s personal ledger",
-        "description": "Normal users session only. Requires active Circle membership and the authenticated user to own the paid_by membership; author or Circle owner status alone grants no permission. Atomically removes the Circle entry and creates a fresh personal entry with the full positive amount and original kind, currency (even when disabled personally), occurrence, created/updated timestamps, payment method, notes and provenance. A supplied category must be active and owned by the user. Omission matches active personal categories by exact name, then a unique case/whitespace-insensitive name, then Other, then the first active category. Removes all Circle allocations and recalculates balances while preserving former-member balances and recorded repayments. Recurrence timezone, calendar controls, anchor, cursor and pause error move intact; earlier generated entries stay in the Circle. Locked move receipts retain the original snapshot, including receipt breakdown and shares. Identical version/category retries return the current personal entry without duplicates or overwriting edits. Changed retries conflict; a deleted personal target returns 410; a target moved onwards conflicts. Earlier personal-to-Circle receipts remain immutable. Circle API idempotency receipts keep their original destination and return 410 after this move rather than recreating the entry.",
+        "description": "Normal users session only. Requires active Circle membership and the authenticated user to own the paid_by membership; author or Circle owner status alone grants no permission. Atomically removes the Circle entry and creates a fresh personal entry with the full positive amount and original kind, currency (even when disabled personally), occurrence, created/updated timestamps, payment method, notes and provenance. A supplied category must be an active personal category ID owned by the user. Omission matches active personal categories by exact name, then a unique case/whitespace-insensitive name, then Other, then the first active category. Removes all Circle allocations and recalculates balances while preserving former-member balances and recorded repayments. Recurrence timezone, calendar controls, anchor, cursor and pause error move intact; earlier generated entries stay in the Circle. Locked move receipts retain the original snapshot, including receipt breakdown and shares. Identical version/category-ID retries return the current personal entry without duplicates or overwriting edits. Changed retries conflict; a deleted personal target returns 410; a target moved onwards conflicts. Earlier personal-to-Circle receipts remain immutable. Circle API idempotency receipts keep their original destination and return 410 after this move rather than recreating the entry.",
         "security": [
           {
             "UserSession": []
@@ -2108,7 +2108,7 @@
             "type": "string",
             "minLength": 1,
             "maxLength": 60,
-            "description": "Active category in the destination selected by default_api_circle. Omit to use that workspace default. Categories are not translated between workspaces."
+            "description": "Active category NAME in the destination selected by default_api_circle. Existing iPhone Shortcuts can keep sending names such as Food & drinks. The server resolves the name to a stored category relation ID. Omit to use the destination default."
           },
           "occurred_at": {
             "type": "string",
@@ -2305,9 +2305,8 @@
           },
           "category": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 60,
-            "description": "A non-empty string naming an active category belonging to the user; surrounding whitespace is trimmed and matching is case-insensitive. Defaults to active Other, otherwise the first active category, only when omitted."
+            "pattern": "^[a-z0-9]{15}$",
+            "description": "Personal category ID. Website/session writes require an active category owned by the user; an unchanged archived category remains valid on edits."
           },
           "occurred_at": {
             "type": "string",
@@ -2439,6 +2438,14 @@
             "maximum": 12,
             "default": 0,
             "description": "Yearly only: month 1 to 12, or 0 to use the original entry month. The year interval stays anchored to the entry year. Other frequencies require 0."
+          },
+          "expand": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "$ref": "#/components/schemas/CategoryDefinition"
+              }
+            }
           }
         },
         "required": [
@@ -4075,8 +4082,8 @@
           },
           "category": {
             "type": "string",
-            "maxLength": 60,
-            "description": "An active category name from the target Circle. Omission on creation selects Other or the first active category; unchanged archived categories remain valid on edit."
+            "pattern": "^[a-z0-9]{15}$",
+            "description": "Active Circle category ID."
           },
           "receipt": {
             "allOf": [
@@ -4421,7 +4428,9 @@
             "description": "Non-empty means generation is paused. Resolve the issue and save the schedule to retry."
           },
           "category": {
-            "type": "string"
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$",
+            "description": "Active Circle category ID."
           },
           "source": {
             "type": "string",
@@ -4457,6 +4466,14 @@
             "maximum": 12,
             "default": 0,
             "description": "Yearly only: month 1 to 12, or 0 to use the original entry month. The year interval stays anchored to the entry year. Other frequencies require 0."
+          },
+          "expand": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "$ref": "#/components/schemas/CircleCategory"
+              }
+            }
           }
         },
         "required": [
@@ -6043,9 +6060,8 @@
           },
           "category": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 60,
-            "description": "A non-empty string naming an active category belonging to the user; surrounding whitespace is trimmed and matching is case-insensitive. Defaults to active Other, otherwise the first active category, only when omitted."
+            "pattern": "^[a-z0-9]{15}$",
+            "description": "Personal category ID. Website/session writes require an active category owned by the user; an unchanged archived category remains valid on edits."
           },
           "occurred_at": {
             "type": "string",
@@ -6124,7 +6140,10 @@
             "description": "Yearly only: month 1 to 12, or 0 to use the original entry month. The year interval stays anchored to the entry year. Other frequencies require 0."
           }
         },
-        "description": "Native owner-protected expenses collection input. Recurrence metadata is managed by the server. The API-key automation endpoint accepts ExpenseInput only."
+        "description": "Native owner-protected expenses collection input. Recurrence metadata is managed by the server. The API-key automation endpoint accepts ExpenseInput only.",
+        "required": [
+          "category"
+        ]
       },
       "Overview": {
         "type": "object",
@@ -6166,13 +6185,18 @@
               "type": "object",
               "properties": {
                 "category": {
-                  "type": "string"
+                  "type": "string",
+                  "description": "Personal category ID; empty for the unmatched Other report bucket."
                 },
                 "total": {
                   "type": "integer"
                 },
                 "count": {
                   "type": "integer"
+                },
+                "category_name": {
+                  "type": "string",
+                  "description": "Current display name for this report bucket."
                 }
               }
             }
@@ -6245,7 +6269,8 @@
           },
           "category": {
             "type": "string",
-            "description": "Active category name in the destination Circle."
+            "pattern": "^[a-z0-9]{15}$",
+            "description": "Active Circle category ID."
           }
         }
       },
@@ -6531,7 +6556,7 @@
           "category": {
             "type": "string",
             "maxLength": 60,
-            "description": "An active category name from the target Circle. Omission selects Other, or the first active Circle category."
+            "description": "Active category NAME from the target Circle. The server resolves it to a stored relation ID. Omission selects Other or the first active Circle category."
           },
           "payment_method": {
             "type": "string",
@@ -6584,7 +6609,7 @@
               },
               "budget_category": {
                 "type": "string",
-                "description": "Matching personal category name or Other, using the same mapping as budgets."
+                "description": "Matching personal category ID, or empty for an unmatched Other bucket."
               },
               "membership_active": {
                 "type": "boolean",
@@ -6613,6 +6638,10 @@
                     ]
                   }
                 }
+              },
+              "budget_category_name": {
+                "type": "string",
+                "description": "Current display label for the matched personal category or Other bucket."
               }
             },
             "required": [
@@ -6870,9 +6899,46 @@
           },
           "category": {
             "type": "string",
-            "minLength": 1,
-            "maxLength": 60,
-            "description": "Active personal category name. Omit for automatic name matching."
+            "pattern": "^[a-z0-9]{15}$",
+            "description": "Active personal category relation ID. Omit to match the Circle category name against active personal categories, falling back to Other or the first active category."
+          }
+        }
+      },
+      "Budget": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "user": {
+            "type": "string"
+          },
+          "month": {
+            "type": "string",
+            "pattern": "^\\d{4}-(0[1-9]|1[0-2])$"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 99999999999
+          },
+          "category": {
+            "type": "string",
+            "default": "",
+            "pattern": "^([a-z0-9]{15})?$",
+            "description": "Personal category relation ID, or empty for the overall monthly budget."
+          },
+          "expand": {
+            "type": "object",
+            "properties": {
+              "category": {
+                "$ref": "#/components/schemas/CategoryDefinition"
+              }
+            }
           }
         }
       }

@@ -1,3 +1,4 @@
+import { resolveCategoryFixture } from "./helpers/category-fixtures.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
@@ -92,6 +93,7 @@ test(
             path,
             { token, key, method = "GET", body, headers = {} } = {},
         ) {
+            ({ path, body } = await resolveCategoryFixture(base, path, body, token));
             const response = await fetch(base + path, {
                 method,
                 headers: {
@@ -176,7 +178,7 @@ test(
                 assert.equal(first.source, "manual");
                 assert.equal(first.idempotency_key, undefined);
                 assert.equal(first.idempotency_data, undefined);
-                assert.equal((await request(`/api/collections/expenses/records/${first.id}`, { token: admin })).data.idempotency_data, null);
+                assert.equal((await request(`/api/collections/expenses/records/${first.id}`, { token: admin })).data.idempotency_data, undefined);
                 assert.equal(
                     (
                         await request("/api/collections/expenses/records", {
@@ -627,7 +629,7 @@ test(
             },
         );
         await t.test(
-            "custom categories and currencies stay private and rename existing records",
+            "custom categories and currencies stay private and renamed labels resolve through IDs",
             async () => {
                 const result = await request("/api/expenditure/config", {
                     token: alice.token,
@@ -785,7 +787,7 @@ test(
                         await request(`/api/collections/expenses/records/${yen.data.id}`, {
                             token: alice.token,
                         })
-                    ).data.category,
+                    ).data.expand.category.name,
                     "Trips",
                 );
                 assert.equal(
@@ -794,7 +796,7 @@ test(
                             `/api/collections/budgets/records/${budget.data.id}`,
                             { token: alice.token },
                         )
-                    ).data.category,
+                    ).data.expand.category.name,
                     "Trips",
                 );
                 assert.equal(
@@ -826,7 +828,7 @@ test(
                     },
                 );
                 assert.equal(edited.status, 200, JSON.stringify(edited.data));
-                assert.equal(edited.data.category, "Trips");
+                assert.equal(edited.data.expand.category.name, "Trips");
                 assert.equal(edited.data.source, "api");
             },
         );
@@ -940,7 +942,7 @@ test(
                     16442,
                 );
                 assert.equal(
-                    result.data.categories.find((c) => c.category === "Trips").total,
+                    result.data.categories.find((c) => c.category_name === "Trips").total,
                     1617,
                 );
                 assert.equal(
@@ -1035,10 +1037,10 @@ test(
             const query = new URLSearchParams({ from: "2026-09-30T16:00:00Z", to: "2026-10-31T16:00:00Z", previous: "2026-08-31T16:00:00Z", currency: "all" });
             const summary = await request(`/api/expenditure/overview?${query}`, { token: alice.token });
             assert.equal(summary.status, 200, JSON.stringify(summary.data));
-            assert.equal(summary.data.categories.find((c) => c.category === "__proto__").total, 100);
+            assert.equal(summary.data.categories.find((c) => c.category_name === "__proto__").total, 100);
         });
         await t.test(
-            "API uses database field names for requests, replays and responses",
+            "API accepts category names and returns stored relation IDs",
             async () => {
                 const body = {
                     merchant: "API coffee",
@@ -1057,7 +1059,7 @@ test(
                     headers,
                 });
                 assert.equal(created.status, 201, JSON.stringify(created.data));
-                assert.equal(created.data.category, "Food & drinks");
+                assert.equal(created.data.expand.category.name, "Food & drinks");
                 assert.equal(created.data.currency, "USD");
                 assert.equal(created.data.payment_method, "Visa");
                 assert.equal(created.data.card, undefined);
@@ -1114,7 +1116,7 @@ test(
                 });
                 assert.equal(defaults.status, 201, JSON.stringify(defaults.data));
                 assert.equal(defaults.data.currency, "SGD");
-                assert.equal(defaults.data.category, "Other");
+                assert.equal(defaults.data.expand.category.name, "Other");
                 assert.equal(defaults.data.payment_method, "");
                 assert.equal(defaults.data.notes, "");
 
@@ -1145,14 +1147,16 @@ test(
             assert.equal(original.status, 201, JSON.stringify(original.data));
             assert.equal(original.data.idempotency_data, undefined);
             const storedPath = `/api/collections/expenses/records/${original.data.id}`;
-            const snapshot = (await request(storedPath, { token: admin })).data.idempotency_data;
+            const receiptQuery = `/api/collections/api_transaction_retries/records?filter=${encodeURIComponent(`user = '${account.id}' && key = 'immutable-retry'`)}`;
+            const receipt = (await request(receiptQuery, { token: admin })).data.items[0];
+            const snapshot = receipt.request;
             const changes = { amount: 700, notes: "Corrected note", occurred_at: "2090-02-01T04:00:00Z" };
             const edited = await request(storedPath, {
                 token: account.token, method: "PATCH", body: { ...changes, idempotency_data: { ...snapshot, ...changes }, idempotency_key: "overwrite" },
             });
             assert.equal(edited.status, 200, JSON.stringify(edited.data));
             assert.equal(edited.data.idempotency_data, undefined);
-            assert.deepEqual((await request(storedPath, { token: admin })).data.idempotency_data, snapshot);
+            assert.deepEqual((await request(`/api/collections/api_transaction_retries/records/${receipt.id}`, { token: admin })).data.request, snapshot);
             const replay = await send(input);
             assert.equal(replay.status, 200, JSON.stringify(replay.data));
             assert.equal(replay.data.id, original.data.id);
@@ -1190,7 +1194,7 @@ test(
             const fresh = await send(defaults, "new-defaults");
             assert.equal(fresh.status, 201, JSON.stringify(fresh.data));
             assert.equal(fresh.data.currency, "USD");
-            assert.notEqual(fresh.data.category, "Old default");
+            assert.notEqual(fresh.data.expand.category.name, "Old default");
             assert.equal((await request("/api/collections/expenses/records", { token: account.token })).data.totalItems, 3);
         });
         await t.test("idempotency expires after 24 hours without deleting expenses or extending on retries", async () => {
@@ -1267,11 +1271,12 @@ test(
             assert.notEqual(saved.id, original.data.id);
             assert.ok(Date.parse(saved.idempotency_expires_at) > Date.now());
             assert.ok(concurrent.every((result) => result.data.id === saved.id && result.data.idempotency_expires_at === saved.idempotency_expires_at));
-            assert.deepEqual((await request(`/api/collections/expenses/records/${original.data.id}`, { token: admin })).data, { ...before.data, idempotency_key: "" });
-            const oldMarker = await request(`/api/collections/expenses/records?filter=${encodeURIComponent(`id = '${original.data.id}' && idempotency_key = ''`)}`, { token: admin });
-            assert.equal(oldMarker.data.totalItems, 1);
-            const otherMarker = await request(`/api/collections/expenses/records?filter=${encodeURIComponent(`id = '${bobExpense.data.id}' && idempotency_key = '123456'`)}`, { token: admin });
-            assert.equal(otherMarker.data.totalItems, 1);
+            assert.deepEqual((await request(`/api/collections/expenses/records/${original.data.id}`, { token: admin })).data, before.data);
+            const oldReceipt = await request(`/api/collections/api_transaction_retries/records?filter=${encodeURIComponent(`transaction = '${original.data.id}'`)}`, { token: admin });
+            assert.equal(oldReceipt.data.totalItems, 0);
+            const otherReceipt = await request(`/api/collections/api_transaction_retries/records?filter=${encodeURIComponent(`transaction = '${bobExpense.data.id}' && key = '123456'`)}`, { token: admin });
+            assert.equal(otherReceipt.data.totalItems, 0);
+            assert.equal((await request(`/api/collections/expenses/records/${bobExpense.data.id}`, { token: admin })).status, 200);
 
             // Once expired, even identical data is a new request; late retries
             // must not rely on deduplication beyond the documented window.
@@ -1384,10 +1389,10 @@ test(
                         expires_at: "",
                     },
                 });
-                await request(`/api/collections/users/records/${bob.id}`, {
+                assert.equal((await request(`/api/collections/users/records/${bob.id}`, {
                     token: admin,
                     method: "DELETE",
-                });
+                })).status, 204);
                 assert.equal(
                     (await request("/api/expenses/transactions", { key: fresh.data.key }))
                         .status,

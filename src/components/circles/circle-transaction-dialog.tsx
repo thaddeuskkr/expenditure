@@ -5,7 +5,7 @@ import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { CategoryIcon } from "../category-icon";
 import { useWorkspace } from "../workspace-context";
-import { dateTimeLabel, money, recurrenceLabel, type CircleTransaction } from "@/lib/domain";
+import { categoryLabel, dateTimeLabel, money, recurrenceLabel, type CircleTransaction } from "@/lib/domain";
 
 export function CircleTransactionDialog({ transaction, onClose, onOpenCircle }: {
     transaction: CircleTransaction;
@@ -18,7 +18,7 @@ export function CircleTransactionDialog({ transaction, onClose, onOpenCircle }: 
             <DialogContent className="gap-5 p-5 sm:max-w-lg sm:p-6">
                 <DialogHeader className="gap-4">
                     <div className="flex items-start gap-3 pr-6">
-                        <CategoryIcon category={transaction.category} />
+                        <CategoryIcon category={categoryLabel(transaction)} />
                         <div className="min-w-0">
                             <DialogTitle className="font-display text-3xl leading-tight font-normal wrap-anywhere">{transaction.title}</DialogTitle>
                             <DialogDescription className="mt-1 text-[11px] wrap-anywhere">{transaction.expand.circle.name}</DialogDescription>
@@ -38,7 +38,7 @@ export function CircleTransactionDialog({ transaction, onClose, onOpenCircle }: 
                         </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                        <span className="rounded-md border px-2 py-1 wrap-anywhere">{transaction.category}</span>
+                        <span className="rounded-md border px-2 py-1 wrap-anywhere">{categoryLabel(transaction)}</span>
                         {transaction.recurrence && <span className="rounded-md bg-white/4 px-2 py-1 wrap-anywhere">{recurrenceLabel(transaction)}</span>}
                         {transaction.source === "api" && <span className="flex items-center gap-1.5 px-1 py-1"><Code2 aria-hidden="true" className="size-3" />Via API</span>}
                     </div>
@@ -63,10 +63,10 @@ export function CircleTransactionDialog({ transaction, onClose, onOpenCircle }: 
                             </div>
                         </div>
                     )}
-                    {transaction.category !== transaction.budget_category && (
+                    {categoryLabel(transaction) !== transaction.budget_category_name && (
                         <div className="min-w-0 sm:col-span-2">
                             <dt className="text-[10px] text-muted-foreground">Personal category</dt>
-                            <dd className="mt-1 text-xs wrap-anywhere">{transaction.budget_category}</dd>
+                            <dd className="mt-1 text-xs wrap-anywhere">{transaction.budget_category_name}</dd>
                         </div>
                     )}
                 </dl>

@@ -17,8 +17,8 @@ function list(app, user, query) {
     const page = integer("page", 1, 1000000), perPage = integer("perPage", 15, 100);
     const currency = query.get("currency") || "all", category = query.get("category") || "all", search = query.get("search").trim();
     if (currency !== "all" && !config.currency(currency)) throw new BadRequestError("Unsupported currency.");
-    if (category.length > 80 || search.length > 200) throw new BadRequestError("The category or search is too long.");
-    const params = { user, from, to, currency, category, search, limit: perPage, offset: (page - 1) * perPage };
+    if ((category !== "all" && category !== "unmapped" && !/^[a-z0-9]{15}$/.test(category)) || search.length > 200) throw new BadRequestError("The category or search is too long.");
+    const params = { user, from, to, currency, category: category === "unmapped" ? "" : category, search, limit: perPage, offset: (page - 1) * perPage };
     let sql = `SELECT id, 'expenses' AS collection, occurred_at, created, 0 AS allocated_amount,
                       '' AS circle, '' AS circle_name, '' AS circle_icon, 0 AS membership_active
                FROM expenses
@@ -28,6 +28,7 @@ function list(app, user, query) {
                ${search ? "AND (instr(lower(merchant), lower({:search})) > 0 OR instr(lower(notes), lower({:search})) > 0 OR instr(lower(payment_method), lower({:search})) > 0)" : ""}`;
     const includeCircles = config.preferences(app, user).show_circle_transactions;
     const personalCategory = includeCircles ? config.personalCategoryMapper(app, user) : null;
+    const categoryDefinitions = config.categories(app, user);
     if (includeCircles) {
         if (category !== "all") {
             const names = arrayOf(new DynamicModel({ category: "" }));
@@ -35,7 +36,7 @@ function list(app, user, query) {
                 JOIN circle_members membership ON membership.circle = shared.circle
                 WHERE membership.user = {:user} AND shared.occurred_at >= {:from} AND shared.occurred_at < {:to}`)
                 .bind(params).all(names);
-            params.circle_categories = JSON.stringify(names.filter((row) => personalCategory(row.category) === category).map((row) => row.category));
+            params.circle_categories = JSON.stringify(names.filter((row) => personalCategory(row.category) === params.category).map((row) => row.category));
         }
 
         sql += ` UNION ALL
@@ -60,10 +61,11 @@ function list(app, user, query) {
     return {
         page, perPage, totalItems: count.total, totalPages: Math.ceil(count.total / perPage),
         items: rows.map((row) => {
-            const entry = app.findRecordById(row.collection, row.id).publicExport();
+            const entry = config.projectCategory(app, app.findRecordById(row.collection, row.id));
             if (row.collection === "expenses") return entry;
-            return { ...entry, allocated_amount: row.allocated_amount, budget_category: personalCategory(entry.category), membership_active: !!row.membership_active,
-                expand: { circle: { id: row.circle, name: row.circle_name, icon: row.circle_icon } } };
+            const budgetCategory = personalCategory(entry.category);
+            return { ...entry, allocated_amount: row.allocated_amount, budget_category: budgetCategory, budget_category_name: categoryDefinitions.find((item) => item.id === budgetCategory)?.name || "Other", membership_active: !!row.membership_active,
+                expand: { ...entry.expand, circle: { id: row.circle, name: row.circle_name, icon: row.circle_icon } } };
         }),
     };
 }

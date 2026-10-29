@@ -1,3 +1,4 @@
+import { resolveCategoryFixture } from "./helpers/category-fixtures.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
@@ -39,6 +40,7 @@ test("API-key Circle expenses use the key owner's membership and start fully sel
     });
     const base = `http://127.0.0.1:${port}`;
     async function api(path, { token, key, body, headers = {}, method = body === undefined ? "GET" : "POST", expected = 200 } = {}) {
+        ({ path, body } = await resolveCategoryFixture(base, path, body, token));
         const response = await fetch(base + path, {
             method,
             headers: { ...headers, ...(token ? { Authorization: token } : {}), ...(key ? { "X-API-Key": key } : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
@@ -105,7 +107,7 @@ test("API-key Circle expenses use the key owner's membership and start fully sel
         assert.equal(imported.split_mode, "percentage");
         assert.deepEqual(imported.shares, [{ member: memberId, amount: 650, percentage_bp: 10000 }]);
         assert.equal(imported.currency, "SGD");
-        assert.equal(imported.category, "Other");
+        assert.equal(imported.expand.category.name, "Other");
         assert.equal(imported.source, "api");
         assert.equal(imported.kind, "expense");
         assert.equal(imported.recurrence, "");
@@ -200,7 +202,7 @@ test("API-key Circle expenses use the key owner's membership and start fully sel
         assert.equal(bridged.currency, "JPY");
         assert.equal(bridged.amount, 1234);
         assert.equal(bridged.destination, "circle");
-        assert.equal(bridged.category, "Other");
+        assert.equal(bridged.expand.category.name, "Other");
         const membership = (await api(`${root}/${firstCircle.id}`, { token: account.token })).me;
         assert.equal(bridged.paid_by, membership);
         assert.equal(bridged.created_by, membership);

@@ -78,7 +78,7 @@ import { CircleInvitationGate } from "./circles/circle-invitation";
 import { CircleTransactionDialog } from "./circles/circle-transaction-dialog";
 import { pb } from "@/lib/pocketbase";
 import { downloadExpenses, type ExportFormat } from "@/lib/export";
-import {
+import { categoryLabel,
     errorMessage,
     money,
     monthBounds,
@@ -173,8 +173,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 24)
-                    throw new Error("This app requires backend version 24. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 25)
+                    throw new Error("This app requires backend version 25. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -292,9 +292,9 @@ function Workspace({
         });
         setConfiguration(result);
     }, []);
-    const categoryNames = configuration.categories.map((c) => c.name);
+    const categoryOptions = configuration.categories.map((item) => ({ id: item.id, name: item.name }));
     const showCircleTransactions = (section === "Overview" || section === "Transactions") && preferences.show_circle_transactions;
-    if (showCircleTransactions && !categoryNames.some((name) => name.toLowerCase() === "other")) categoryNames.push("Other");
+    if (showCircleTransactions && !categoryOptions.some((item) => item.name.trim().toLowerCase() === "other")) categoryOptions.push({ id: "unmapped", name: "Other" });
     const transactionParams = useMemo(() => new URLSearchParams({ from: range.from, to: range.to, currency: filterCurrency, category, search: debouncedSearch.trim() }), [range, filterCurrency, category, debouncedSearch]);
     const visibleCurrencies = Array.from(
         new Set([...preferences.currencies, ...configuration.used_currencies]),
@@ -395,8 +395,9 @@ function Workspace({
                             transactionPage(transactionParams, page) :
                             pb
                                 .collection<Expense>("expenses")
-                                .getList(page, 15, { filter, sort: "-occurred_at,-created,-id" }),
+                                .getList(page, 15, { filter, sort: "-occurred_at,-created,-id", expand: "category" }),
                     pb.collection<Budget>("budgets").getFullList({
+                        expand: "category",
                         filter: pb.filter("month = {:month} && currency = {:currency}", {
                             month,
                             currency: mainCurrency,
@@ -527,7 +528,7 @@ function Workspace({
                     pages = result.totalPages;
                     current++;
                 } while (current <= pages);
-            } else rows = await pb.collection<Expense>("expenses").getFullList({ filter, sort: "-occurred_at,-created,-id" });
+            } else rows = await pb.collection<Expense>("expenses").getFullList({ filter, sort: "-occurred_at,-created,-id", expand: "category" });
             await downloadExpenses(rows, {
                 format,
                 month,
@@ -545,7 +546,7 @@ function Workspace({
         }
     }
 
-    const overall = budgets.find((b) => b.category === "Overall");
+    const overall = budgets.find((b) => b.category === "");
     const remaining = overall ? overall.amount - overview.total : null;
     const foreignCurrencies = overview.original_totals
         .map((item) => item.currency)
@@ -985,9 +986,9 @@ function Workspace({
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All categories</SelectItem>
-                                            {categoryNames.map((c) => (
-                                                <SelectItem key={c} value={c}>
-                                                    {c}
+                                            {categoryOptions.map((c) => (
+                                                <SelectItem key={c.id} value={c.id}>
+                                                    {c.name}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -1081,15 +1082,15 @@ function Workspace({
                                             <div className="divide-y">
                                                 {[...budgets]
                                                     .sort((a, b) =>
-                                                        a.category === "Overall" ?
+                                                        a.category === "" ?
                                                                 -1 :
-                                                            b.category === "Overall" ?
+                                                            b.category === "" ?
                                                                 1 :
-                                                                    a.category.localeCompare(b.category),
+                                                                    categoryLabel(a).localeCompare(categoryLabel(b)),
                                                     )
                                                     .map((budget) => {
                                                         const spent =
-                                                            budget.category === "Overall" ?
+                                                            budget.category === "" ?
                                                                 overview.total :
                                                                 overview.categories.find(
                                                                     (c) => c.category === budget.category,
@@ -1101,20 +1102,20 @@ function Workspace({
                                                                 onClick={() => setBudgetEditor(budget)}
                                                                 className="grid w-full gap-4 py-6 text-left transition-colors hover:bg-white/1 sm:grid-cols-[1fr_1fr] sm:gap-10">
                                                                 <div className="flex items-center gap-4">
-                                                                    {budget.category === "Overall" ?
+                                                                    {budget.category === "" ?
                                                                             (
                                                                                 <span className="flex size-10 items-center justify-center rounded-xl border bg-primary/5 text-primary">
                                                                                     <Target className="size-4" />
                                                                                 </span>
                                                                             ) :
                                                                             (
-                                                                                <CategoryIcon category={budget.category} />
+                                                                                <CategoryIcon category={categoryLabel(budget)} />
                                                                             )}
                                                                     <div>
                                                                         <p className="text-sm">
-                                                                            {budget.category === "Overall" ?
+                                                                            {budget.category === "" ?
                                                                                 "Monthly spending" :
-                                                                                budget.category}
+                                                                                    categoryLabel(budget)}
                                                                         </p>
                                                                         <p className="mt-1 text-[10px] text-muted-foreground">
                                                                             {money(budget.amount, mainCurrency)}{" "}

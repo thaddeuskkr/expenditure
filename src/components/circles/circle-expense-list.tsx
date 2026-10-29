@@ -3,7 +3,7 @@
 import { useWorkspace } from "../workspace-context";
 import { CategoryIcon } from "../category-icon";
 import type { CircleDetail } from "@/lib/circles";
-import { CATEGORY_COLORS, convertAmount, dayLabel, money, rateDate, timeLabel } from "@/lib/domain";
+import { categoryLabel, CATEGORY_COLORS, convertAmount, dayLabel, money, rateDate, timeLabel } from "@/lib/domain";
 import { SPLIT_LABELS, type CircleExpense } from "@/lib/circles";
 import { CirclePagination } from "./circle-pagination";
 
@@ -46,8 +46,8 @@ export function CircleExpenseList({
                             onClick={() => onView(expense)}
                             className="flex w-full items-center gap-3 py-5 text-left hover:bg-white/2 sm:gap-4">
                             <CategoryIcon
-                                category={expense.category}
-                                color={detail.categories.find((item) => item.name === expense.category)?.color || CATEGORY_COLORS[7]}
+                                category={categoryLabel(expense)}
+                                color={detail.categories.find((item) => item.id === expense.category)?.color || CATEGORY_COLORS[7]}
                             />
                             <span className="min-w-0 flex-1">
                                 <span className="block truncate text-sm">{expense.title}</span>
@@ -57,7 +57,7 @@ export function CircleExpenseList({
                                     {expense.receipt ? "Receipt" : SPLIT_LABELS[expense.split_mode]}
                                 </span>
                                 <span className="mt-1 block text-[10px] text-muted-foreground">
-                                    {expense.category}
+                                    {categoryLabel(expense)}
                                 </span>
                                 <span className="mt-1 block text-[10px] text-muted-foreground">
                                     Your share: {money(myShare, expense.currency)}{" "}

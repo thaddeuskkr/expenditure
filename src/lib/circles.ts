@@ -34,6 +34,7 @@ export interface CircleExpense extends RecurringFields {
     id: string;
     title: string;
     category: string;
+    expand?: { category?: CategoryDefinition };
     source: "manual" | "api";
     origin_expense: string;
     currency: string;

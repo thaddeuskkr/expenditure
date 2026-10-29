@@ -1,3 +1,4 @@
+import { resolveCategoryFixture } from "./helpers/category-fixtures.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
@@ -38,6 +39,7 @@ test("Personal monthly spending and budgets include allocated Circle expenses", 
     });
     const base = `http://127.0.0.1:${port}`;
     async function api(path, { token, key, body, method = body === undefined ? "GET" : "POST", expected = 200 } = {}) {
+        ({ path, body } = await resolveCategoryFixture(base, path, body, token));
         const response = await fetch(base + path, {
             method,
             headers: { ...(token ? { Authorization: token } : {}), ...(key ? { "X-API-Key": key } : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
@@ -136,7 +138,7 @@ test("Personal monthly spending and budgets include allocated Circle expenses", 
             assert.equal(summary.missing_count, 0);
             assert.equal(summary.previous_missing_count, 0);
             assert.deepEqual(summary.missing_currencies, []);
-            assert.deepEqual(summary.categories, [{ category: "Other", total: 200, count: 1 }]);
+            assert.deepEqual(summary.categories.map((row) => ({ category_name: row.category_name, total: row.total, count: row.count })), [{ category_name: "Other", total: 200, count: 1 }]);
             assert.deepEqual(summary.original_totals, [{ currency: "SGD", total: 200 }]);
             assert.equal(summary.activity.reduce((sum, row) => sum + row.total, 0), 200);
             assert.equal((await report(g.member, { currency: "AED" })).count, 0);
@@ -163,13 +165,13 @@ test("Personal monthly spending and budgets include allocated Circle expenses", 
         const summary = await report(g.member);
         assert.equal(summary.total, 1000);
         assert.equal(summary.count, 2);
-        assert.deepEqual(summary.categories, [{ category: "Dining", total: 1000, count: 2 }]);
+        assert.deepEqual(summary.categories.map((row) => ({ category_name: row.category_name, total: row.total, count: row.count })), [{ category_name: "Dining", total: 1000, count: 2 }]);
         assert.equal(limit.amount - summary.categories[0].total, 1000);
         assert.equal(summary.activity.reduce((sum, item) => sum + item.total, 0), 1000);
         assert.deepEqual(summary.original_totals, [{ currency: "SGD", total: 1000 }]);
         const owner = await report(g.owner);
         assert.equal(owner.total, 200);
-        assert.deepEqual(owner.categories, [{ category: "Other", total: 200, count: 1 }]);
+        assert.deepEqual(owner.categories.map((row) => ({ category_name: row.category_name, total: row.total, count: row.count })), [{ category_name: "Other", total: 200, count: 1 }]);
         assert.equal((await report(g.other)).total, 0);
         assert.equal((await api("/api/collections/expenses/records", { token: g.member.token })).totalItems, 1);
         const schema = await api("/api/collections/circle_members", { token: admin });
@@ -189,20 +191,20 @@ test("Personal monthly spending and budgets include allocated Circle expenses", 
         }
 
         let summary = await report(g.member);
-        const totals = Object.fromEntries(summary.categories.map((row) => [row.category, row.total]));
+        const totals = Object.fromEntries(summary.categories.map((row) => [row.category_name, row.total]));
         assert.deepEqual(totals, { Other: 1300, constructor: 600, "Meals  out": 500, "Food & drinks": 300, Travel: 100 });
         const before = await api("/api/expenditure/config", { token: g.member.token });
         const other = before.categories.find((row) => row.name === "Other");
         await budget(g.member, "Other");
         await api(`/api/expenditure/categories/${other.id}`, { token: g.member.token, method: "PATCH", body: { name: "other" } });
-        assert.equal((await report(g.member)).categories.find((row) => row.category === "other").total, 1300);
+        assert.equal((await report(g.member)).categories.find((row) => row.category_name === "other").total, 1300);
         await api(`/api/expenditure/categories/${other.id}`, { token: g.member.token, method: "PATCH", body: { name: "Miscellaneous" } });
         summary = await report(g.member);
-        assert.equal(summary.categories.find((row) => row.category === "Other").total, 1300);
+        assert.equal(summary.categories.find((row) => row.category_name === "Other").total, 1300);
         const after = await api("/api/expenditure/config", { token: g.member.token });
         assert.ok(!after.categories.some((row) => ["Other", "Circle only", "TRAVEL"].includes(row.name)));
         assert.equal(after.categories.length, before.categories.length);
-        assert.equal((await detail(g)).expenses.items.find((row) => row.amount === 200).category, "Circle only");
+        assert.equal((await detail(g)).expenses.items.find((row) => row.amount === 200).expand.category.name, "Circle only");
     });
     await t.test("resplits, moves and direct API imports update consumption without copying or double counting", async () => {
         const g = await group();
@@ -287,7 +289,7 @@ test("Personal monthly spending and budgets include allocated Circle expenses", 
         const summary = await report(g.member);
         assert.equal(summary.total, 41);
         assert.equal(summary.count, 41);
-        assert.deepEqual(summary.categories, [{ category: "Other", total: 41, count: 41 }]);
+        assert.deepEqual(summary.categories.map((row) => ({ category_name: row.category_name, total: row.total, count: row.count })), [{ category_name: "Other", total: 41, count: 41 }]);
         assert.equal(summary.activity[0].total, 41);
         assert.equal((await report(g.owner)).total, 0);
     });

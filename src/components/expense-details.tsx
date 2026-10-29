@@ -5,7 +5,7 @@ import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { CategoryIcon } from "./category-icon";
 import { useWorkspace } from "./workspace-context";
-import { dateTimeLabel, money, recurrenceLabel, type Expense } from "@/lib/domain";
+import { categoryLabel, dateTimeLabel, money, recurrenceLabel, type Expense } from "@/lib/domain";
 
 export function ExpenseDetails({ expense, onClose, onEdit, onDelete }: {
     expense: Expense;
@@ -19,7 +19,7 @@ export function ExpenseDetails({ expense, onClose, onEdit, onDelete }: {
             <DialogContent className="gap-5 p-5 sm:max-w-lg sm:p-6">
                 <DialogHeader className="gap-4">
                     <div className="flex items-start gap-3 pr-6">
-                        <CategoryIcon category={expense.category} />
+                        <CategoryIcon category={categoryLabel(expense)} />
                         <div className="min-w-0">
                             <DialogTitle className="font-display text-3xl leading-tight font-normal wrap-anywhere">{expense.merchant}</DialogTitle>
                             <DialogDescription className="mt-1 text-[11px]">{expense.kind === "income" ? "Income details" : "Expense details"}</DialogDescription>
@@ -33,7 +33,7 @@ export function ExpenseDetails({ expense, onClose, onEdit, onDelete }: {
                         </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted-foreground">
-                        <span className="rounded-md border px-2 py-1 wrap-anywhere">{expense.category}</span>
+                        <span className="rounded-md border px-2 py-1 wrap-anywhere">{categoryLabel(expense)}</span>
                         {expense.source === "api" && <span className="flex items-center gap-1.5 px-1 py-1"><Code2 aria-hidden="true" className="size-3" />Via API</span>}
                     </div>
                 </DialogHeader>

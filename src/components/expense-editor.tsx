@@ -58,13 +58,9 @@ export function ExpenseEditor({
     const entryKind = expense?.kind || kind;
     const [recurrence, setRecurrence] = useState<RecurrenceSchedule>({ recurrence: expense?.recurrence || "", recurrence_interval: expense?.recurrence_interval || 0, recurrence_day: expense?.recurrence_day || 0, recurrence_weekdays: expense?.recurrence_weekdays || [], recurrence_month: expense?.recurrence_month || 0 });
     const [occurredAt, setOccurredAt] = useState(() => zonedInput(expense?.occurred_at || new Date(), timezone));
-    const categoryNames = categories
-        .filter((c) => c.active || c.name === expense?.category)
-        .map((c) => c.name);
-    const preferredCategory = categories.find((category) => category.active && category.id === (entryKind === "income" ? preferences.default_income_category : preferences.default_expense_category));
-    const defaultCategory = preferredCategory?.name || (categoryNames.includes("Other") ?
-        "Other" :
-        categoryNames[0]);
+    const availableCategories = categories.filter((item) => item.active || item.id === expense?.category);
+    const preferredCategory = availableCategories.find((item) => item.active && item.id === (entryKind === "income" ? preferences.default_income_category : preferences.default_expense_category));
+    const defaultCategory = preferredCategory?.id || availableCategories.find((item) => item.name === "Other")?.id || availableCategories[0]?.id || "";
     const currencies = Array.from(
         new Set([
             ...preferences.currencies,
@@ -185,9 +181,9 @@ export function ExpenseEditor({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                {categoryNames.map((c) => (
-                                    <SelectItem key={c} value={c}>
-                                        {c}
+                                {availableCategories.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>
+                                        {c.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

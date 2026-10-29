@@ -188,7 +188,6 @@ routerAdd(
                 ) <= 1
             )
                 throw new BadRequestError("Keep at least one active category.");
-            const previous = record.getString("name");
             record.set("name", name);
             record.set("active", active);
             if (data.color !== undefined) record.set("color", data.color);
@@ -203,24 +202,6 @@ routerAdd(
                 });
             }
 
-            // Rename atomically without changing ownership, amounts, or API provenance.
-            if (previous !== name)
-                ["expenses", "budgets"].forEach((table) =>
-                    app
-                        .db()
-                        .newQuery(
-                            "UPDATE " +
-                            table +
-                            " SET category = {:name}, updated = {:now} WHERE user = {:user} AND category = {:previous}",
-                        )
-                        .bind({
-                            user: e.auth.id,
-                            previous,
-                            name,
-                            now: new Date().toISOString().replace("T", " "),
-                        })
-                        .execute(),
-                );
             updated = record.publicExport();
         });
         return e.json(200, updated);

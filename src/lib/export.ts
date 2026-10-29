@@ -1,4 +1,4 @@
-import {
+import { categoryLabel,
     asDate,
     zonedInput,
     currencyDigits,
@@ -74,7 +74,7 @@ function exportValues(
         transactionName(expense),
         transactionAmount(expense) / 10 ** currencyDigits(expense.currency),
         expense.currency,
-        expense.category,
+        categoryLabel(expense),
         localSpreadsheetDate(expense.occurred_at, timezone),
         expense.payment_method,
         expense.notes,
@@ -82,7 +82,7 @@ function exportValues(
         asDate(expense.occurred_at).toISOString(),
     ];
     const circle = isCircleTransaction(expense) ? expense : null;
-    const tail: ExportCell[] = [expense.kind, expense.recurrence, expense.recurrence ? expense.recurrence_interval : null, ["monthly", "yearly"].includes(expense.recurrence) ? expense.recurrence_day : null, ...(circles ? [circle ? "circle" : "personal", circle?.expand.circle.name || "", circle?.circle || "", expense.amount / 10 ** currencyDigits(expense.currency), circle?.budget_category || expense.category] : []), expense.recurrence === "weekly" ? (expense.recurrence_weekdays || []).join(",") : "", expense.recurrence === "yearly" ? expense.recurrence_month : null];
+    const tail: ExportCell[] = [expense.kind, expense.recurrence, expense.recurrence ? expense.recurrence_interval : null, ["monthly", "yearly"].includes(expense.recurrence) ? expense.recurrence_day : null, ...(circles ? [circle ? "circle" : "personal", circle?.expand.circle.name || "", circle?.circle || "", expense.amount / 10 ** currencyDigits(expense.currency), circle?.budget_category_name || categoryLabel(expense)] : []), expense.recurrence === "weekly" ? (expense.recurrence_weekdays || []).join(",") : "", expense.recurrence === "yearly" ? expense.recurrence_month : null];
     if (!mainCurrency) return [...row, ...tail];
 
     const convertedAmount = convertAmount(

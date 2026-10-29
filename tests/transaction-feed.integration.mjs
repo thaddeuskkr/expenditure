@@ -1,3 +1,4 @@
+import { resolveCategoryFixture } from "./helpers/category-fixtures.mjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
@@ -38,6 +39,7 @@ test("The optional combined transaction feed preserves allocation, filtering and
     });
     const base = `http://127.0.0.1:${port}`;
     async function api(path, { token, key, body, method = body === undefined ? "GET" : "POST", expected = 200 } = {}) {
+        ({ path, body } = await resolveCategoryFixture(base, path, body, token));
         const response = await fetch(base + path, {
             method,
             headers: { ...(token ? { Authorization: token } : {}), ...(key ? { "X-API-Key": key } : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
@@ -166,9 +168,9 @@ test("The optional combined transaction feed preserves allocation, filtering and
         assert.equal((await feed(g.member, { category: "Dining", perPage: "1" })).totalItems, 2);
         const other = await feed(g.member, { category: "Other" });
         assert.equal(other.totalItems, 1);
-        assert.equal(other.items[0].category, "Circle only");
-        assert.equal(other.items[0].budget_category, "Other");
-        assert.equal((await feed(g.member, { category: "Missing" })).totalItems, 0);
+        assert.equal(other.items[0].expand.category.name, "Circle only");
+        assert.equal(other.items[0].budget_category_name, "Other");
+        await feed(g.member, { category: "Missing" }, 400);
         assert.equal((await feed(g.member, { currency: "JPY" })).totalItems, 1);
         assert.equal((await feed(g.member, { search: "visa" })).totalItems, 2);
         assert.equal((await feed(g.member, { search: "receipt NOTE" })).totalItems, 1);

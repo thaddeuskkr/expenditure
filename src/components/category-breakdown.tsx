@@ -34,7 +34,7 @@ export function CategoryBreakdown({
         <div className={compact ? "space-y-5" : "space-y-7"}>
             {categories.map((item) => {
                 const color =
-                    categoryDefinitions.find((c) => c.name === item.category)?.color ||
+                    categoryDefinitions.find((c) => c.id === item.category)?.color ||
                     "#999d94";
                 const percent = overview.total ?
                         (item.total / overview.total) * 100 :
@@ -51,11 +51,11 @@ export function CategoryBreakdown({
                                             />
                                         ) :
                                         (
-                                            <CategoryIcon category={item.category} small />
+                                            <CategoryIcon category={item.category_name} small />
                                         )}
                                 <span
                                     className={`min-w-0 break-words ${compact ? "text-[10px]" : "text-xs"}`}>
-                                    {item.category}
+                                    {item.category_name}
                                 </span>
                             </div>
                             <div className="flex items-baseline gap-3">

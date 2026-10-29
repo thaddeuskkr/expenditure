@@ -85,26 +85,42 @@ function initialize(app, user) {
     });
 }
 
-function category(app, user, name, allowArchived) {
-    const match = categories(app, user).filter(
-        (c) => c.name.toLowerCase() === String(name).toLowerCase(),
-    )[0];
+function category(app, user, id, allowArchived) {
+    const match = categories(app, user).find((item) => item.id === id);
     if (!match || (!match.active && !allowArchived))
         throw new BadRequestError("Choose an active category from your account.");
-    return match.name;
+    return match.id;
+}
+
+function categoryByName(app, user, name) {
+    const match = categories(app, user).find((item) => item.name.toLowerCase() === name.toLowerCase());
+    if (!match || !match.active) throw new BadRequestError("Choose an active category from your account.");
+    return match;
+}
+
+function projectCategory(app, record) {
+    const result = record.publicExport();
+    const id = record.getString("category");
+    if (id) {
+        const category = app.findRecordById(record.collection().name === "circle_expenses" ? "circle_categories" : "categories", id);
+        result.expand = Object.assign({}, result.expand, { category: category.publicExport() });
+    }
+
+    return result;
 }
 
 function personalCategoryMapper(app, user) {
-    const names = categories(app, user).map((item) => item.name);
+    const personal = categories(app, user);
     const key = (name) => name.trim().replace(/\s+/g, " ").toLowerCase();
-    const other = names.find((name) => key(name) === "other") || "Other";
+    const other = personal.find((item) => key(item.name) === "other");
     const cached = Object.create(null);
-    return (name) => {
-        if (Object.prototype.hasOwnProperty.call(cached, name)) return cached[name];
-        const exact = names.find((item) => item === name);
-        const matches = exact ? [exact] : names.filter((item) => key(item) === key(name));
-        cached[name] = matches.length === 1 ? matches[0] : other;
-        return cached[name];
+    return (circleCategory) => {
+        if (Object.prototype.hasOwnProperty.call(cached, circleCategory)) return cached[circleCategory];
+        const name = app.findRecordById("circle_categories", circleCategory).getString("name");
+        const exact = personal.find((item) => item.name === name);
+        const matches = exact ? [exact] : personal.filter((item) => key(item.name) === key(name));
+        cached[circleCategory] = matches.length === 1 ? matches[0].id : other?.id || "";
+        return cached[circleCategory];
     };
 }
 
@@ -165,7 +181,7 @@ function validate(record, app) {
         const selected = record.getString("category");
         const sameCategory =
             !record.isNew() && selected === original.getString("category");
-        if (!(name === "budgets" && selected === "Overall"))
+        if (!(name === "budgets" && selected === ""))
             record.set("category", category(app, user, selected, sameCategory));
     }
 }
@@ -184,6 +200,13 @@ function savePreferences(event) {
     }
 }
 
+function deletePersonalContents(app, user) {
+    // Required category relations must be released before their category rows.
+    for (const collection of ["expenses", "budgets", "preferences", "categories"]) {
+        app.findRecordsByFilter(collection, "user = {:user}", "", 0, 0, { user }).forEach((record) => app.delete(record));
+    }
+}
+
 module.exports = {
     defaultNames,
     colors,
@@ -193,6 +216,9 @@ module.exports = {
     categories,
     initialize,
     category,
+    categoryByName,
+    projectCategory,
+    deletePersonalContents,
     personalCategoryMapper,
     validate,
     savePreferences,

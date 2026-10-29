@@ -30,6 +30,7 @@ import {
 export function Transactions({
     rows,
     timezone,
+    onView,
     onEdit,
     onDelete,
     onMove,
@@ -40,6 +41,7 @@ export function Transactions({
     rows: Transaction[];
     onCircle?: (transaction: CircleTransaction) => void;
     timezone: string;
+    onView: (expense: Expense) => void;
     onEdit: (expense: Expense) => void;
     onDelete: (expense: Expense) => void;
     onMove: (expense: Expense) => void;
@@ -78,7 +80,7 @@ export function Transactions({
                     {rows.map((expense) => {
                         const circle = isCircleTransaction(expense) ? expense : null;
                         const label = transactionName(expense);
-                        const open = () => circle ? onCircle?.(circle) : onEdit(expense as Expense);
+                        const open = () => circle ? onCircle?.(circle) : onView(expense as Expense);
                         return (
                             <tr
                                 key={`${expense.collectionName}:${expense.id}`}
@@ -138,21 +140,20 @@ export function Transactions({
                                             </Button>
                                         </DropdownMenuTrigger>
                                         <DropdownMenuContent align="end" className="w-max max-w-(--radix-dropdown-menu-content-available-width) whitespace-nowrap">
-                                            {circle ?
-                                                    <DropdownMenuItem onClick={open}>View Circle transaction</DropdownMenuItem> :
-                                                    (
-                                                        <>
-                                                            <DropdownMenuItem onClick={open}>
-                                                                Edit {expense.kind}
-                                                            </DropdownMenuItem>
-                                                            {expense.kind === "expense" && <DropdownMenuItem onClick={() => onMove(expense as Expense)}>Move to Circle</DropdownMenuItem>}
-                                                            <DropdownMenuItem
-                                                                variant="destructive"
-                                                                onClick={() => onDelete(expense as Expense)}>
-                                                                Delete {expense.kind}
-                                                            </DropdownMenuItem>
-                                                        </>
-                                                    )}
+                                            <DropdownMenuItem onClick={open}>View details</DropdownMenuItem>
+                                            {!circle && (
+                                                <>
+                                                    <DropdownMenuItem onClick={() => onEdit(expense as Expense)}>
+                                                        Edit {expense.kind}
+                                                    </DropdownMenuItem>
+                                                    {expense.kind === "expense" && <DropdownMenuItem onClick={() => onMove(expense as Expense)}>Move to Circle</DropdownMenuItem>}
+                                                    <DropdownMenuItem
+                                                        variant="destructive"
+                                                        onClick={() => onDelete(expense as Expense)}>
+                                                        Delete {expense.kind}
+                                                    </DropdownMenuItem>
+                                                </>
+                                            )}
                                         </DropdownMenuContent>
                                     </DropdownMenu>
                                 </td>

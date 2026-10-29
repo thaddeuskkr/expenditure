@@ -65,6 +65,7 @@ import { Brand } from "./brand";
 import { UserAvatar } from "./user-avatar";
 import { CategoryIcon } from "./category-icon";
 import { ExpenseEditor } from "./expense-editor";
+import { ExpenseDetails } from "./expense-details";
 import { Transactions } from "./transactions";
 import { CategoryBreakdown } from "./category-breakdown";
 import { EmptyState } from "./empty-state";
@@ -258,6 +259,7 @@ function Workspace({
     );
     const [mobileNav, setMobileNav] = useState(false);
     const [editor, setEditor] = useState<Expense | "new" | "income" | null>(null);
+    const [viewing, setViewing] = useState<Expense | null>(null);
     const [deleting, setDeleting] = useState<Expense | null>(null);
     const [moving, setMoving] = useState<Expense | null>(null);
     const [deleteBusy, setDeleteBusy] = useState(false);
@@ -940,6 +942,7 @@ function Workspace({
                                     </div>
                                     <Transactions
                                         rows={expenses.slice(0, 5)}
+                                        onView={setViewing}
                                         onCircle={setCircleTransaction}
                                         timezone={timezone}
                                         onEdit={setEditor}
@@ -996,6 +999,7 @@ function Workspace({
                                 {!error && (
                                     <Transactions
                                         rows={expenses}
+                                        onView={setViewing}
                                         onCircle={setCircleTransaction}
                                         timezone={timezone}
                                         onEdit={setEditor}
@@ -1206,6 +1210,20 @@ function Workspace({
                         )}
                     </main>
                 </div>
+                {viewing && (
+                    <ExpenseDetails
+                        expense={viewing}
+                        onClose={() => setViewing(null)}
+                        onEdit={() => {
+                            setViewing(null);
+                            setEditor(viewing);
+                        }}
+                        onDelete={() => {
+                            setViewing(null);
+                            setDeleting(viewing);
+                        }}
+                    />
+                )}
                 {circleTransaction && (
                     <CircleTransactionDialog
                         transaction={circleTransaction}

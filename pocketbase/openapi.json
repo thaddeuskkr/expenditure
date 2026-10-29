@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "25.0.0",
+    "version": "26.0.0",
     "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring income and expenses run on the PocketBase server every minute, with custom intervals and monthly dates, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -1847,7 +1847,7 @@
     "/api/expenditure/circles/{id}/expenses/{expense}/move-to-personal": {
       "post": {
         "summary": "Move a Circle expense or income to the paid-by user\u2019s personal ledger",
-        "description": "Normal users session only. Requires active Circle membership and the authenticated user to own the paid_by membership; author or Circle owner status alone grants no permission. Atomically removes the Circle entry and creates a fresh personal entry with the full positive amount and original kind, currency (even when disabled personally), occurrence, created/updated timestamps, payment method, notes and provenance. A supplied category must be an active personal category ID owned by the user. Omission matches active personal categories by exact name, then a unique case/whitespace-insensitive name, then Other, then the first active category. Removes all Circle allocations and recalculates balances while preserving former-member balances and recorded repayments. Recurrence timezone, calendar controls, anchor, cursor and pause error move intact; earlier generated entries stay in the Circle. Locked move receipts retain the original snapshot, including receipt breakdown and shares. Identical version/category-ID retries return the current personal entry without duplicates or overwriting edits. Changed retries conflict; a deleted personal target returns 410; a target moved onwards conflicts. Earlier personal-to-Circle receipts remain immutable. Circle API idempotency receipts keep their original destination and return 410 after this move rather than recreating the entry.",
+        "description": "Normal users session only. Requires active Circle membership and the authenticated user to own the paid_by membership; author or Circle owner status alone grants no permission. Atomically removes the Circle entry and creates a fresh personal entry with the full positive amount and original kind, currency (even when disabled personally), occurrence, created/updated timestamps, payment method, notes and provenance. A supplied category must be an active personal category ID owned by the user. Omission matches active personal categories by exact name, then a unique case/whitespace-insensitive name, then Other, then the first active category. Removes all Circle allocations and recalculates balances while preserving former-member balances and recorded repayments. Recurrence timezone, calendar controls, anchor, cursor and pause error move intact; earlier generated entries stay in the Circle. No move receipt or original split/receipt snapshot is retained. After a successful move, repeated requests return 404 because the Circle source no longer exists. If a response is lost, refresh both ledgers to confirm the result. Earlier personal-to-Circle receipts remain immutable. Circle API idempotency receipts keep their original destination and return 410 after this move rather than recreating the entry.",
         "security": [
           {
             "UserSession": []
@@ -1904,13 +1904,10 @@
             "description": "Only the paid-by user can move this entry"
           },
           "404": {
-            "description": "Transaction or active Circle membership not found"
+            "description": "Transaction or active Circle membership not found, including a source already moved or deleted"
           },
           "409": {
-            "description": "Stale version, changed retry or target moved onwards"
-          },
-          "410": {
-            "description": "Already moved and personal target deleted"
+            "description": "Stale transaction version"
           }
         }
       }

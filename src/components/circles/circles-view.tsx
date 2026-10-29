@@ -654,6 +654,10 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                     circle={detail.circle.id}
                     expense={moving}
                     onClose={() => setMoving(null)}
+                    onRefresh={() => {
+                        refresh();
+                        onTransactionMoved();
+                    }}
                     onMoved={() => {
                         refresh();
                         onTransactionMoved();

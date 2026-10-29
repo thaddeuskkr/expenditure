@@ -168,36 +168,39 @@ test("Circle transactions move atomically to the paid-by personal ledger", { tim
             assert.ok(!(await config()).preferences.currencies.includes(currency));
         }
     });
-    await t.test("concurrent identical retries produce one entry and never overwrite later edits or recreate deletions", async () => {
+    await t.test("concurrent moves create one entry; retries return 404 without altering or recreating it", async () => {
         const g = await group(), expense = await create(g);
-        const results = await Promise.all(Array.from({ length: 8 }, () => move(g, expense)));
-        assert.ok(results.every((row) => row.id === results[0].id));
-        const target = results[0];
+        const before = (await api(personalRoot, { token: payer.token })).totalItems;
+        const results = await Promise.all(Array.from({ length: 8 }, async () => {
+            const response = await fetch(base + movePath(g, expense), {
+                method: "POST", headers: { Authorization: payer.token, "Content-Type": "application/json" }, body: JSON.stringify({ version: expense.version }),
+            });
+            return { status: response.status, data: await response.json() };
+        }));
+        assert.equal(results.filter((row) => row.status === 200).length, 1);
+        assert.equal(results.filter((row) => row.status === 404).length, 7, JSON.stringify(results));
+        const target = results.find((row) => row.status === 200).data;
+        assert.equal((await api(personalRoot, { token: payer.token })).totalItems, before + 1);
         await api(`${personalRoot}/${target.id}`, { token: payer.token, method: "PATCH", body: { notes: "Edited after moving" } });
-        assert.equal((await move(g, expense)).notes, "Edited after moving");
-        await move(g, expense, { body: { version: expense.version, category: "Other" }, expected: 409 });
-        await move(g, expense, { token: owner.token, expected: 403 });
-        const receipts = await api("/api/collections/circle_personal_moves/records", { token: admin });
-        const receipt = receipts.items.find((row) => row.expense === expense.id);
-        assert.ok(receipt);
-        await api("/api/collections/circle_personal_moves/records", { token: payer.token, expected: 403 });
-        await api(`/api/collections/circle_personal_moves/records/${receipt.id}`, { token: payer.token, expected: 403 });
-        await api(`/api/collections/circle_personal_moves/records/${receipt.id}`, { token: payer.token, method: "PATCH", body: { personal: "different000000" }, expected: 403 });
+        await move(g, expense, { expected: 404 });
+        await move(g, expense, { body: { version: expense.version, category: "Other" }, expected: 404 });
+        await move(g, expense, { token: owner.token, expected: 404 });
+        assert.equal((await api(`${personalRoot}/${target.id}`, { token: payer.token })).notes, "Edited after moving");
         await api(`${personalRoot}/${target.id}`, { token: payer.token, method: "DELETE", expected: 204 });
-        await move(g, expense, { expected: 410 });
+        await move(g, expense, { expected: 404 });
+        assert.equal((await api(personalRoot, { token: payer.token })).totalItems, before);
         assert.equal((await detail(g)).expenses.totalItems, 0);
+        await api("/api/collections/circle_personal_moves", { token: admin, expected: 404 });
     });
     await t.test("former-member balance changes roll back the entire move", async () => {
         const g = await group(), expense = await create(g);
         await api(`/api/collections/circle_members/records/${g.ids.member}`, { token: admin, method: "PATCH", body: { active: false } });
         const before = await detail(g);
         const personalCount = (await api(personalRoot, { token: payer.token })).totalItems;
-        const receiptCount = (await api("/api/collections/circle_personal_moves/records", { token: admin })).totalItems;
         await move(g, expense, { expected: 400 });
         assert.deepEqual((await detail(g)).balances, before.balances);
         assert.equal((await detail(g)).expenses.totalItems, 1);
         assert.equal((await api(personalRoot, { token: payer.token })).totalItems, personalCount);
-        assert.equal((await api("/api/collections/circle_personal_moves/records", { token: admin })).totalItems, receiptCount);
         await api(`/api/collections/circle_members/records/${g.ids.payer}`, { token: admin, method: "PATCH", body: { active: false } });
         await move(g, expense, { expected: 404 });
     });
@@ -238,18 +241,13 @@ test("Circle transactions move atomically to the paid-by personal ledger", { tim
         assert.equal(rows.filter((row) => row.recurrence).length, 1);
         assert.ok(rows.every((row) => row.kind === "income" && row.amount === active.amount));
     });
-    await t.test("receipt totals transfer intact while source breakdowns remain in locked audit receipts", async () => {
+    await t.test("receipt totals transfer intact without retaining Circle splits or breakdowns", async () => {
         const g = await group();
         const receipt = { input_mode: "subtotals", items: [{ label: "Payer", amount: 2000, members: [g.ids.payer] }, { label: "Member", amount: 3000, members: [g.ids.member] }], discount: 0, service_rate_bp: 1000, service_amount: null, gst_mode: "added", gst_rate_bp: 900, gst_amount: null, adjustment: 0 };
         const expense = await create(g, { title: "Dinner receipt", amount: 5995, split_mode: "exact", receipt, shares: [{ member: g.ids.payer, amount: 2398 }, { member: g.ids.member, amount: 3597 }] });
         const result = await move(g, expense);
         assert.equal(result.amount, 5995);
         assert.equal(result.receipt, undefined);
-        const records = await api(`/api/collections/circle_personal_moves/records?filter=expense='${expense.id}'`, { token: admin });
-        assert.equal(records.totalItems, 1);
-        assert.equal(records.items[0].personal, result.id);
-        assert.deepEqual(records.items[0].snapshot.receipt, receipt);
-        assert.deepEqual(records.items[0].snapshot.shares, expense.shares);
         assert.deepEqual((await detail(g)).balances, []);
     });
     await t.test("reports and combined feeds count the full personal entry without a remaining Circle allocation", async () => {
@@ -288,7 +286,7 @@ test("Circle transactions move atomically to the paid-by personal ledger", { tim
         assert.equal(replay.status, 200);
         assert.equal((await replay.json()).id, original.id);
         const again = await api(`${g.path}/expenses/move`, { token: payer.token, body: { expense: returned.id, previous_updated: returned.updated, category: "Other" } });
-        await move(g, shared, { expected: 409 });
+        await move(g, shared, { expected: 404 });
         await move(g, again);
         const directPayload = { title: "Circle API purchase", amount: 650 };
         const directHeaders = { ...headers, "Idempotency-Key": "circle-roundtrip" };

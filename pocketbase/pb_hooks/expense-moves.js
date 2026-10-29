@@ -75,24 +75,6 @@ function moveToPersonal(e) {
         const { circle } = service.access(app, e.request.pathValue("id"), e.auth.id);
         const id = e.request.pathValue("expense");
         if (!/^[a-z0-9]{15}$/.test(id)) throw new NotFoundError("Transaction not found.");
-        const receipt = app.findRecordsByFilter("circle_personal_moves", "circle = {:circle} && expense = {:expense}", "", 1, 0, { circle: circle.id, expense: id })[0];
-        if (receipt) {
-            if (receipt.getString("user") !== e.auth.id) throw new ForbiddenError("Only the paid-by user can move this transaction.");
-            if (receipt.getInt("version") !== data.version || receipt.getString("requested_category") !== requestedCategory)
-                throw new ApiError(409, "This transaction was already moved with different details.");
-            let personal;
-            try {
-                personal = app.findRecordById("expenses", receipt.getString("personal"));
-            } catch {
-                throw new ApiError(410, "This transaction was already moved and the personal entry has been deleted.");
-            }
-
-            if (personal.getString("user") !== e.auth.id || personal.getString("moved_to"))
-                throw new ApiError(409, "This transaction was already moved onwards.");
-            result = configuration.projectCategory(app, personal);
-            return;
-        }
-
         let shared;
         try {
             shared = app.findRecordById("circle_expenses", id);
@@ -117,9 +99,6 @@ function moveToPersonal(e) {
         app.saveNoValidate(personal);
         app.db().newQuery("UPDATE expenses SET created = {:created}, updated = {:updated} WHERE id = {:id}")
             .bind({ id: personal.id, created: shared.getString("created"), updated: shared.getString("updated") }).execute();
-        const moved = new Record(app.findCollectionByNameOrId("circle_personal_moves"));
-        moved.load({ user: e.auth.id, circle: circle.id, expense: shared.id, personal: personal.id, version: data.version, requested_category: requestedCategory, snapshot: configuration.projectCategory(app, shared) });
-        app.save(moved);
         app.delete(shared);
         service.preserveFormerBalances(app, circle.id, members, before);
         result = configuration.projectCategory(app, app.findRecordById("expenses", personal.id));

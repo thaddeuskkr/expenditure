@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 
-for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_recurrence_calendar_choices.js", "1793296800_circle_budget_preference.js", "1793300400_immutable_api_retries.js"]) test(`schedule upgrade from ${cutoff} preserves active and paused cursors, records, identities and Circle balances`, { timeout: 30000 }, async (t) => {
+for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_recurrence_calendar_choices.js", "1793296800_circle_budget_preference.js", "1793300400_immutable_api_retries.js", "1793383200_api_transaction_retries.js", "1793386800_default_api_workspace.js"]) test(`schedule upgrade from ${cutoff} preserves active and paused cursors, records, identities and Circle balances`, { timeout: 30000 }, async (t) => {
     const binary = process.env.POCKETBASE_BINARY;
     assert.ok(binary, "Set POCKETBASE_BINARY to a PocketBase 0.40.6 executable.");
     const directory = await mkdtemp(join(tmpdir(), "expenditure-schedule-upgrade-"));
@@ -89,6 +89,10 @@ for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_re
     const weekly = await api("/api/collections/expenses/records", admin, { ...fields, merchant: "Existing weekly", recurrence: "weekly", recurrence_anchor: "2091-01-31T09:00:00", recurrence_next: "2091-02-07T14:00:00.000Z" });
     const yearly = await api("/api/collections/expenses/records", admin, { ...fields, merchant: "Existing yearly", recurrence: "yearly", recurrence_next: "2092-01-31T14:00:00.000Z" });
     const income = await api("/api/collections/expenses/records", admin, { ...fields, kind: "income", merchant: "Existing income", recurrence: "", recurrence_anchor: "", recurrence_timezone: "", recurrence_next: "" });
+    const retryInput = { merchant: "Existing API purchase", amount: 650, currency: "SGD", category: "Other", notes: "Accepted request", payment_method: "Saved card", occurred_at: "2091-01-31T14:00:00.000Z" };
+    const apiExpense = await api("/api/collections/expenses/records", admin, { ...retryInput, user: user.id, source: "api", kind: "expense", recurrence_weekdays: [], idempotency_key: "upgrade-retry", idempotency_data: retryInput });
+    if (cutoff > "1793383200_api_transaction_retries.js")
+        await api("/api/collections/api_transaction_retries/records", admin, { user: user.id, key: "upgrade-retry", circle: "", transaction: apiExpense.id, request: retryInput, created: apiExpense.created });
     const circle = await api("/api/collections/circles/records", admin, { owner: user.id, name: "Existing circle", icon: "users", currency: "SGD", version: 2 });
     const payer = await api("/api/collections/circle_members/records", admin, { circle: circle.id, user: user.id, name: user.name, active: true });
     const former = await api("/api/collections/circle_members/records", admin, { circle: circle.id, name: "Former member", active: false });
@@ -98,12 +102,13 @@ for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_re
     const upgrade = spawnSync(binary, ["migrate", "up", ...newFlags], { encoding: "utf8" });
     assert.equal(upgrade.status, 0, upgrade.stdout + upgrade.stderr);
     await start(newFlags);
-    assert.equal((await api("/api/expenditure/status")).version, 19);
+    assert.equal((await api("/api/expenditure/status")).version, 21);
     const upgradedPreferences = await api(`/api/collections/preferences/records/${prefs.id}`, admin);
     for (const key of Object.keys(prefs)) assert.deepEqual(upgradedPreferences[key], prefs[key], `preferences.${key}`);
     assert.equal(upgradedPreferences.include_circle_in_budgets, prefs.include_circle_in_budgets ?? true);
+    assert.equal(upgradedPreferences.default_api_circle, "");
     assert.deepEqual((await api("/api/collections/users", admin)).oauth2, identity.oauth2);
-    for (const [collection, records] of [["expenses", [active, paused, income, weekly, yearly]], ["circle_expenses", [shared]]]) {
+    for (const [collection, records] of [["expenses", [active, paused, income, weekly, yearly, apiExpense]], ["circle_expenses", [shared]]]) {
         for (const original of records) {
             const upgraded = await api(`/api/collections/${collection}/records/${original.id}`, admin);
             for (const key of Object.keys(original)) assert.deepEqual(upgraded[key], original[key], `${collection}.${key}`);
@@ -115,6 +120,13 @@ for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_re
     }
 
     const auth = await api("/api/collections/users/auth-with-password", null, { identity: user.email, password });
+    const credentials = await api("/api/expenditure/keys", auth.token, { name: "Upgraded retries", scopes: ["expenses:write"], expires_at: "" });
+    const retryResponse = await fetch(base + "/api/expenses/transactions", { method: "POST", headers: { "X-API-Key": credentials.key, "Idempotency-Key": "upgrade-retry", "Content-Type": "application/json" }, body: JSON.stringify(retryInput) });
+    const retry = await retryResponse.json();
+    assert.equal(retryResponse.status, 200, JSON.stringify(retry));
+    assert.equal(retry.id, apiExpense.id);
+    assert.equal(retry.replay, true);
+    assert.equal(Date.parse(retry.idempotency_expires_at), Date.parse(apiExpense.created.replace(" ", "T")) + 24 * 3600000);
     const detail = await api(`/api/expenditure/circles/${circle.id}`, auth.token);
     assert.equal(detail.balances.find((row) => row.member === payer.id).net, 400);
     assert.equal(detail.balances.find((row) => row.member === former.id).net, -400);

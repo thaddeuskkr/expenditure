@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Check, Loader2 } from "lucide-react";
 import { Switch } from "radix-ui";
 import { Button } from "./ui/button";
@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { CategorySettings } from "./category-settings";
 import { RecurringTransactions } from "./recurring-transactions";
 import { useWorkspace } from "./workspace-context";
+import { circlesApi, type Circle } from "@/lib/circles";
 import {
     DEFAULT_TABS,
     type Expense,
@@ -28,12 +29,35 @@ export function WorkspaceSettings({
     onEditRecurring: (expense: Expense) => void;
     recurringRevision: number;
     onSave: (
-        data: Pick<Preferences, "currency" | "timezone" | "currencies" | "default_tab" | "time_format" | "show_circle_transactions" | "include_circle_in_budgets">,
+        data: Pick<Preferences, "currency" | "timezone" | "currencies" | "default_tab" | "time_format" | "show_circle_transactions" | "include_circle_in_budgets" | "default_api_circle">,
     ) => Promise<void>;
     onCategoriesChanged: () => Promise<void>;
 }) {
     const { preferences, categories, rates } = useWorkspace();
     const [defaultTab, setDefaultTab] = useState(preferences.default_tab);
+    const [defaultApiCircle, setDefaultApiCircle] = useState(preferences.default_api_circle);
+    const [circles, setCircles] = useState<Circle[]>([]);
+    const [circlesError, setCirclesError] = useState("");
+    const [circlesLoaded, setCirclesLoaded] = useState(false);
+    const [circlesRevision, setCirclesRevision] = useState(0);
+    useEffect(() => {
+        let active = true;
+        circlesApi.list().then((index) => {
+            if (active) {
+                setCircles(index.circles);
+                setCirclesLoaded(true);
+                setCirclesError("");
+            }
+        }).catch((failure) => { if (active) setCirclesError(errorMessage(failure)); });
+        return () => {
+            active = false;
+        };
+    }, [circlesRevision]);
+    const apiWorkspaceOptions = [
+        { value: "personal", label: "Personal workspace" },
+        ...circles.map((circle) => ({ value: circle.id, label: circle.name, description: "Circle" })),
+        ...(defaultApiCircle && !circles.some((circle) => circle.id === defaultApiCircle) ? [{ value: defaultApiCircle, label: circlesLoaded ? "Unavailable Circle" : "Saved Circle", description: circlesLoaded ? "Choose another workspace to resume API imports" : "Loading workspace…" }] : []),
+    ];
     const [main, setMain] = useState(preferences.currency);
     const [timezone, setTimezone] = useState(preferences.timezone);
     const [timeFormat, setTimeFormat] = useState(preferences.time_format);
@@ -51,7 +75,7 @@ export function WorkspaceSettings({
         setBusy(true);
         setError("");
         try {
-            await onSave({ currency: main, timezone, currencies: enabled, default_tab: defaultTab, time_format: timeFormat, show_circle_transactions: showCircleTransactions, include_circle_in_budgets: includeCircleInBudgets });
+            await onSave({ currency: main, timezone, currencies: enabled, default_tab: defaultTab, time_format: timeFormat, show_circle_transactions: showCircleTransactions, include_circle_in_budgets: includeCircleInBudgets, default_api_circle: defaultApiCircle });
         } catch (e) {
             setError(errorMessage(e));
         } finally {
@@ -68,6 +92,12 @@ export function WorkspaceSettings({
                 <div>
                     <label className="field-label" htmlFor="default-tab">Default tab on login</label>
                     <SearchableSelect id="default-tab" value={defaultTab} onValueChange={(value) => setDefaultTab(value as Preferences["default_tab"])} options={DEFAULT_TABS.map((value) => ({ value, label: value }))} searchPlaceholder="Find a tab…" />
+                </div>
+                <div>
+                    <label className="field-label" htmlFor="default-api-workspace">Default API workspace</label>
+                    <SearchableSelect id="default-api-workspace" value={defaultApiCircle || "personal"} onValueChange={(value) => setDefaultApiCircle(value === "personal" ? "" : value)} onOpenChange={(open) => { if (open) setCirclesRevision((value) => value + 1); }} options={apiWorkspaceOptions} searchPlaceholder="Find a workspace…" />
+                    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">New expenses sent to the general API endpoint use this workspace across all your API keys. Explicit Circle requests keep their destination.</p>
+                    {circlesError && <p role="alert" className="mt-2 text-xs text-destructive">{circlesError} <button type="button" className="underline" onClick={() => setCirclesRevision((value) => value + 1)}>Retry</button></p>}
                 </div>
                 <div className="grid gap-6 sm:grid-cols-2">
                     <div>

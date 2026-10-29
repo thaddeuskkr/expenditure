@@ -1,12 +1,6 @@
 // Shared helpers are loaded inside each handler: PocketBase isolates handler scopes.
 const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
-function idempotencyExpiresAt(record) {
-    if (!record.getString("idempotency_key")) return null;
-    const created = Date.parse(record.getString("created").replace(" ", "T"));
-    return new Date(created + IDEMPOTENCY_TTL_MS).toISOString();
-}
-
 function cleanKey(record) {
     return {
         id: record.id,
@@ -78,7 +72,7 @@ function optionalText(value, label, maxLength) {
     return value;
 }
 
-function validateExpense(data, app, user, original) {
+function validateExpense(data, app, user, original, circle) {
     if (!data || typeof data !== "object" || Array.isArray(data))
         throw new BadRequestError("The request body must be a JSON object.");
     if (data.user !== undefined)
@@ -92,7 +86,7 @@ function validateExpense(data, app, user, original) {
     // Replays resolve omitted defaults against the original request, independent
     // of later edits, archived categories, and changed currency preferences.
     const preferences = original || config.preferences(app, user);
-    const code = data.currency === undefined ? preferences.currency : data.currency;
+    const code = data.currency === undefined ? (circle ? circle.getString("currency") : preferences.currency) : data.currency;
     if (typeof code !== "string")
         throw new BadRequestError("Currency must be a supported uppercase currency code.");
     const definition = config.currency(code);
@@ -114,11 +108,12 @@ function validateExpense(data, app, user, original) {
             "amount must be a positive integer, up to 99999999999.",
         );
     if (!definition) throw new BadRequestError("Unsupported currency.");
-    if (!original && preferences.currencies.indexOf(code) < 0)
+    if (!original && !circle && preferences.currencies.indexOf(code) < 0)
         throw new BadRequestError("Enable this currency in Settings first.");
     let categoryName = data.category;
     if (categoryName === undefined) {
         if (original) categoryName = original.category;
+        else if (circle) categoryName = require(`${__hooks}/circle-categories.js`).select(app, circle.id, undefined, null);
         else {
             const available = config.categories(app, user).filter((c) => c.active);
             const fallback = available.find((c) => c.name === "Other") || available[0];
@@ -136,7 +131,7 @@ function validateExpense(data, app, user, original) {
 
     const category = original ?
         categoryName.trim().toLowerCase() === original.category.toLowerCase() ? original.category : categoryName.trim() :
-            config.category(app, user, categoryName.trim(), false);
+        circle ? require(`${__hooks}/circle-categories.js`).select(app, circle.id, categoryName.trim(), null) : config.category(app, user, categoryName.trim(), false);
     const paymentMethod = optionalText(data.payment_method, "Payment method", 80);
     const notes = optionalText(data.notes, "Notes", 2000);
     const occurred = data.occurred_at === undefined ?
@@ -193,7 +188,6 @@ function bounds(query) {
 
 module.exports = {
     IDEMPOTENCY_TTL_MS,
-    idempotencyExpiresAt,
     cleanKey,
     authenticate,
     touch,

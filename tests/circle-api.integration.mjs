@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createServer } from "node:net";
 import { randomBytes } from "node:crypto";
+import { DatabaseSync } from "node:sqlite";
 
 test("API-key Circle expenses use the key owner's membership and start fully self-allocated", { timeout: 60000 }, async (t) => {
     const binary = process.env.POCKETBASE_BINARY;
@@ -37,10 +38,10 @@ test("API-key Circle expenses use the key owner's membership and start fully sel
         await rm(directory, { recursive: true, force: true });
     });
     const base = `http://127.0.0.1:${port}`;
-    async function api(path, { token, key, body, method = body === undefined ? "GET" : "POST", expected = 200 } = {}) {
+    async function api(path, { token, key, body, headers = {}, method = body === undefined ? "GET" : "POST", expected = 200 } = {}) {
         const response = await fetch(base + path, {
             method,
-            headers: { ...(token ? { Authorization: token } : {}), ...(key ? { "X-API-Key": key } : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+            headers: { ...headers, ...(token ? { Authorization: token } : {}), ...(key ? { "X-API-Key": key } : {}), ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
             body: body === undefined ? undefined : JSON.stringify(body),
         });
         const content = await response.text();
@@ -172,6 +173,139 @@ test("API-key Circle expenses use the key owner's membership and start fully sel
         assert.equal((await detail()).balances.find((row) => row.member === memberId && row.currency === "SGD").net, 325);
         await api(`${root}/${circle.id}/expenses/${imported.id}`, { token: owner.token, method: "PATCH", body: { ...edit, split_mode: "percentage", shares: [{ member: memberId, percentage_bp: 10000 }], version: changed.version } });
         assert.ok((await detail()).balances.every((row) => row.net === 0));
+    });
+    await t.test("API workspace bridging preserves bodies, destinations, retries and access boundaries", async () => {
+        const account = await user("Bridge"), stranger = await user("BridgeStranger");
+        const credentials = await key(account), readKey = await key(account, ["expenses:read"]);
+        const config = await api("/api/expenditure/config", { token: account.token });
+        const prefs = `/api/collections/preferences/records/${config.preferences.id}`;
+        assert.equal(config.preferences.default_api_circle, "");
+        const firstCircle = await api(root, { token: account.token, body: { name: "Default API Circle", currency: "JPY" }, expected: 201 });
+        const secondCircle = await api(root, { token: account.token, body: { name: "Explicit API Circle", currency: "KWD" }, expected: 201 });
+        const privateCircle = await api(root, { token: stranger.token, body: { name: "Private", currency: "SGD" }, expected: 201 });
+        const setDefault = (id, expected = 200) => api(prefs, { token: account.token, method: "PATCH", body: { default_api_circle: id }, expected });
+        await setDefault(privateCircle.id, 400);
+        await setDefault("not-a-circle", 400);
+        assert.equal((await api(prefs, { token: account.token })).default_api_circle, "");
+        const generic = "/api/expenses/transactions";
+        const payload = { merchant: "Bridged purchase", amount: 1234, payment_method: "Saved card", notes: "Original note", occurred_at: "2090-01-01T00:00:45.123Z" };
+        const send = (body, marker, expected = 200, route = generic, secret = credentials.key) => api(route, { key: secret, body, headers: marker ? { "Idempotency-Key": marker } : {}, expected });
+        const personal = await send(payload, "personal-before-circle", 201);
+        assert.equal(personal.destination, "personal");
+        await setDefault(firstCircle.id);
+        const bridged = await send(payload, "bridged-purchase", 201);
+        assert.equal(bridged.title, payload.merchant);
+        assert.equal(bridged.merchant, undefined);
+        assert.equal(bridged.circle, firstCircle.id);
+        assert.equal(bridged.currency, "JPY");
+        assert.equal(bridged.amount, 1234);
+        assert.equal(bridged.destination, "circle");
+        assert.equal(bridged.category, "Other");
+        const membership = (await api(`${root}/${firstCircle.id}`, { token: account.token })).me;
+        assert.equal(bridged.paid_by, membership);
+        assert.equal(bridged.created_by, membership);
+        assert.deepEqual(bridged.shares, [{ member: membership, amount: 1234, percentage_bp: 10000 }]);
+        assert.equal((await send(payload, "personal-before-circle")).id, personal.id);
+        await setDefault(secondCircle.id);
+        assert.equal((await send(payload, "bridged-purchase")).id, bridged.id);
+        assert.equal((await send(payload, "bridged-purchase")).idempotency_expires_at, bridged.idempotency_expires_at);
+        await send({ ...payload, amount: 1235 }, "bridged-purchase", 409);
+        const explicitBody = { ...payload, title: payload.merchant };
+        delete explicitBody.merchant;
+        const firstPath = `/api/expenses/circles/${firstCircle.id}/transactions`;
+        const secondPath = `/api/expenses/circles/${secondCircle.id}/transactions`;
+        assert.equal((await send(explicitBody, "bridged-purchase", 200, firstPath)).id, bridged.id);
+        await send(explicitBody, "bridged-purchase", 409, secondPath);
+        await send(payload, "bridged-purchase", 403, generic, readKey.key);
+        const explicit = await send(explicitBody, "explicit-purchase", 201, firstPath);
+        assert.equal(explicit.circle, firstCircle.id);
+        assert.equal(explicit.currency, "JPY");
+        const newDefault = await send(payload, "new-default-purchase", 201);
+        assert.equal(newDefault.circle, secondCircle.id);
+        assert.equal(newDefault.currency, "KWD");
+        await send({ ...payload, title: "Unsupported" }, null, 400);
+        await send({ ...payload, paid_by: membership }, null, 400);
+        await send({ ...payload, category: "Unknown category" }, null, 400);
+        // Snapshot comparisons survive Circle category edits and changed defaults.
+        const category = await api(`${root}/${secondCircle.id}/categories`, { token: account.token, body: { name: "Original category", color: "#123456" }, expected: 201 });
+        const categorized = { ...payload, category: " original CATEGORY " };
+        const original = await send(categorized, "category-retry", 201);
+        await api(`${root}/${secondCircle.id}/categories/${category.id}`, { token: account.token, method: "PATCH", body: { name: "Renamed category", active: false } });
+        assert.equal((await send(categorized, "category-retry")).id, original.id);
+        await send({ ...categorized, category: "Renamed category" }, "category-retry", 409);
+        await setDefault("");
+        assert.equal((await send(payload, "bridged-purchase")).circle, firstCircle.id);
+        assert.equal((await send(payload, "back-to-personal", 201)).destination, "personal");
+        await setDefault(secondCircle.id);
+        await api(`${root}/${secondCircle.id}`, { token: account.token, method: "DELETE", body: { confirmation: secondCircle.name, version: secondCircle.version } });
+        assert.equal((await api(prefs, { token: account.token })).default_api_circle, secondCircle.id);
+        await send(payload, "unavailable-default", 404);
+        await send(payload, "new-default-purchase", 404);
+        // Unrelated preference edits remain possible while the saved Circle is unavailable.
+        await api(prefs, { token: account.token, method: "PATCH", body: { time_format: "12h", default_api_circle: secondCircle.id } });
+        await setDefault("");
+        assert.equal((await send(payload, "unavailable-default", 201)).destination, "personal");
+        await send(payload, "new-default-purchase", 404);
+        await send(explicitBody, null, 201, firstPath);
+        // Losing membership blocks both fresh imports and existing replays.
+        await setDefault(firstCircle.id);
+        await api(`/api/collections/circle_members/records/${membership}`, { token: admin, method: "PATCH", body: { active: false } });
+        await send(payload, "lost-membership", 404);
+        await send(payload, "bridged-purchase", 404);
+        await setDefault("");
+        await send(payload, "personal-after-removal", 201);
+        const personalRows = await api("/api/collections/expenses/records?perPage=100", { token: account.token });
+        assert.equal(personalRows.totalItems, 4);
+    });
+    await t.test("Circle retries are user-scoped, atomic, immutable and expire without changing the ledger", async () => {
+        const headers = { "Idempotency-Key": "circle-retry" };
+        const send = (body = input, expected = 200, key = memberKey.key) => api(path, { key, headers, body, expected });
+        const count = (await detail()).expenses.totalItems;
+        const first = await send(input, 201);
+        assert.equal(first.replay, false);
+        assert.equal(first.destination, "circle");
+        assert.equal(first.idempotency_data, undefined);
+        const secondKey = await key(member);
+        const retries = await Promise.all(Array.from({ length: 5 }, () => send(input, 200, secondKey.key)));
+        assert.ok(retries.every((row) => row.id === first.id && row.replay && row.idempotency_expires_at === first.idempotency_expires_at));
+        assert.equal((await detail()).expenses.totalItems, count + 1);
+        for (const change of [{ amount: 651 }, { title: "Different" }, { category: "Food & drinks" }, { notes: "Different" }, { currency: "USD" }, { occurred_at: "2090-01-01T00:00:00Z" }])
+            await send({ ...input, ...change }, 409);
+        const edited = await api(`${root}/${circle.id}/expenses/${first.id}`, { token: member.token, method: "PATCH", body: {
+            title: "Corrected", amount: 800, currency: first.currency, category: first.category, paid_by: memberId, occurred_at: first.occurred_at.replace(" ", "T"),
+            split_mode: "even", shares: [{ member: memberId }, { member: ownerId }], notes: "Edited", version: first.version,
+        } });
+        const replay = await send();
+        assert.equal(replay.amount, edited.amount);
+        assert.equal(replay.title, edited.title);
+        assert.deepEqual(replay.shares, edited.shares);
+        await send({ ...input, amount: edited.amount }, 409);
+        await api(`${root}/${circle.id}/expenses/${edited.id}`, { token: member.token, method: "DELETE", body: { version: edited.version } });
+        await send(input, 410);
+        const other = await send(input, 201, ownerKey.key);
+        assert.notEqual(other.id, first.id);
+        const database = new DatabaseSync(join(directory, "data.db"));
+        try {
+            database.exec("PRAGMA busy_timeout = 5000");
+            database.prepare("UPDATE api_transaction_retries SET created = ? WHERE user = ? AND key = ?")
+                .run(new Date(Date.now() - 25 * 3600000).toISOString().replace("T", " "), member.id, "circle-retry");
+        } finally {
+            database.close();
+        }
+
+        const fresh = await send(input, 201);
+        assert.notEqual(fresh.id, first.id);
+        const marker = { "Idempotency-Key": "concurrent-new-circle" };
+        const parallel = await Promise.all(Array.from({ length: 6 }, async () => {
+            const response = await fetch(base + path, { method: "POST", headers: { ...marker, "X-API-Key": memberKey.key, "Content-Type": "application/json" }, body: JSON.stringify(input) });
+            return { status: response.status, record: await response.json() };
+        }));
+        assert.equal(parallel.filter((item) => item.status === 201).length, 1, JSON.stringify(parallel));
+        assert.ok(parallel.every((item) => [200, 201].includes(item.status) && item.record.id === parallel[0].record.id));
+        await api(path, { key: memberKey.key, body: input, headers: { "Idempotency-Key": "bad key" }, expected: 400 });
+        await api(`/api/expenses/circles/${otherCircle.id}/transactions`, { key: ownerKey.key, headers, body: input, expected: 409 });
+        for (const route of ["/api/collections/api_transaction_retries/records", `/api/collections/api_transaction_retries/records/${first.id}`])
+            await api(route, { token: member.token, expected: 403 });
     });
     await t.test("concurrent member and owner requests cannot mix payer identities", async () => {
         const records = await Promise.all([memberKey, ownerKey, memberKey, ownerKey].map((key) => api(path, { key: key.key, body: input, expected: 201 })));

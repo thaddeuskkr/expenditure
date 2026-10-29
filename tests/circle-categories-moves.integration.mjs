@@ -27,6 +27,7 @@ test(
         routerAdd("POST", "/api/test/age", (e) => {
             const data = e.requestInfo().body;
             e.app.db().newQuery("UPDATE expenses SET created = {:created} WHERE id = {:id}").bind(data).execute();
+            e.app.db().newQuery('UPDATE api_transaction_retries SET created = {:created} WHERE "transaction" = {:id}').bind(data).execute();
             return e.json(200, {});
         }, $apis.requireAuth("_superusers"));`);
         const flags = [

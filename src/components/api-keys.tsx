@@ -147,6 +147,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
   }'`;
     const circleExample = `curl -X POST '${pocketbaseUrl}/api/expenses/circles/CIRCLE_ID/transactions' \\
   -H 'X-API-Key: YOUR_API_KEY' \\
+  -H 'Idempotency-Key: a-unique-transaction-id' \\
   -H 'Content-Type: application/json' \\
   -d '{
     "title": "Coffee together",
@@ -248,10 +249,11 @@ export function ApiKeys({ timezone }: { timezone: string }) {
             <div className="mt-10 space-y-10">
                 <section className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
                     <div className="min-w-0">
-                        <h3 className="text-sm font-medium">Personal transactions</h3>
+                        <h3 className="text-sm font-medium">Default workspace transactions</h3>
                         <p className="mt-4 text-xs leading-6 text-muted-foreground">
                             Create a key with write access and send it in the X-API-Key header.
-                            Use an enabled currency and an active personal category, or omit them to use your defaults.
+                            Choose your Default API workspace in Settings. This request uses that workspace across all your keys.
+                            Keep merchant in the body for either destination. Currency and category default to that workspace when omitted.
                         </p>
                         <p className="mt-4 flex gap-2 text-[10px] leading-5 text-muted-foreground">
                             <ShieldCheck className="mt-0.5 size-3.5 shrink-0" />
@@ -259,10 +261,10 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                         </p>
                     </div>
                     <RequestExample
-                        title="Personal transaction request"
+                        title="Default workspace request"
                         request={personalExample}
                         onCopy={copy}
-                        note="Use a unique Idempotency-Key per purchase and keep it for retries within 24 hours. Retries do not extend the window."
+                        note="Use a unique Idempotency-Key per purchase and retain it for retries within 24 hours. Retries keep the original destination and do not extend the window. Read access still lists personal expenses only."
                     />
                 </section>
                 <section className="grid gap-6 border-t pt-8 lg:grid-cols-[1fr_1.2fr]">
@@ -298,7 +300,7 @@ export function ApiKeys({ timezone }: { timezone: string }) {
                         title="Circle transaction request"
                         request={circleExample}
                         onCopy={copy}
-                        note="Circle requests do not support Idempotency-Key replay protection. Check whether a transaction was saved before resending it."
+                        note="Idempotency-Key provides the same 24-hour retry protection as the general endpoint. Keys are shared across destinations: use a new key for each purchase. Explicit Circle requests ignore your default workspace."
                     />
                 </section>
             </div>

@@ -1,5 +1,5 @@
 /// <reference path="../pb_data/types.d.ts" />
-routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 19 }));
+routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 21 }));
 
 routerAdd(
     "GET",
@@ -129,82 +129,7 @@ routerAdd(
 routerAdd(
     "POST",
     "/api/expenses/transactions",
-    (e) => {
-        const lib = require(`${__hooks}/expenditure.js`);
-        const identity = lib.authenticate(e, "expenses:write");
-        const data = e.requestInfo().body;
-        const idempotency = e.request.header.get("Idempotency-Key");
-        if (idempotency && !/^[A-Za-z0-9_.:-]{1,128}$/.test(idempotency))
-            throw new BadRequestError("Invalid Idempotency-Key.");
-        let record,
-            replay = false;
-        e.app.runInTransaction((app) => {
-            lib.authenticate(e, "expenses:write", app);
-            if (idempotency) {
-                // Free only the expired retry marker, preserving the expense and
-                // its timestamps. Do this in the same transaction as insertion.
-                app.db().newQuery(
-                    "UPDATE expenses SET idempotency_key = '' WHERE user = {:user} AND idempotency_key = {:key} AND created <= {:cutoff}",
-                ).bind({
-                    user: identity.user.id,
-                    key: idempotency,
-                    cutoff: new Date(Date.now() - lib.IDEMPOTENCY_TTL_MS).toISOString().replace("T", " "),
-                }).execute();
-                const existing = app.findRecordsByFilter(
-                    "expenses",
-                    "user = {:user} && idempotency_key = {:key}",
-                    "",
-                    1,
-                    0,
-                    { user: identity.user.id, key: idempotency },
-                );
-                if (existing.length) {
-                    record = existing[0];
-                    const original = JSON.parse(record.getString("idempotency_data"));
-                    const fields = lib.validateExpense(data, app, identity.user.id, original);
-                    const equal = [
-                        "merchant",
-                        "amount",
-                        "currency",
-                        "category",
-                        "notes",
-                        "payment_method",
-                    ].every(
-                        (field) => String(original[field]) === String(fields[field]),
-                    );
-                    if (
-                        !equal ||
-                        (data.occurred_at !== undefined &&
-                            new Date(original.occurred_at).getTime() !==
-                                new Date(fields.occurred_at).getTime())
-                    )
-                        throw new ApiError(
-                            409,
-                            "Idempotency-Key is already in use for different data within the 24-hour retry window. Use a new key for a new purchase.",
-                        );
-                    replay = true;
-                    return;
-                }
-            }
-
-            const fields = lib.validateExpense(data, app, identity.user.id);
-            record = new Record(app.findCollectionByNameOrId("expenses"));
-            record.load(fields);
-            record.load({
-                user: identity.user.id,
-                source: "api",
-                idempotency_key: idempotency || "",
-                idempotency_data: idempotency ? fields : null,
-            });
-            app.save(record);
-        });
-        lib.touch(e.app, identity.key);
-        return e.json(replay ? 200 : 201, {
-            ...record.publicExport(),
-            replay,
-            idempotency_expires_at: lib.idempotencyExpiresAt(record),
-        });
-    },
+    (e) => require(`${__hooks}/api-transactions.js`).create(e),
     $apis.bodyLimit(8192),
 );
 

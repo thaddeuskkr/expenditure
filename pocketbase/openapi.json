@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "19.0.0",
+    "version": "21.0.0",
     "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring income and expenses run on the PocketBase server every minute, with custom intervals and monthly dates, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
@@ -19,7 +19,7 @@
     "/api/expenses/transactions": {
       "post": {
         "summary": "Add an expense",
-        "description": "Requires expenses:write. Idempotency-Key is optional and scoped to the user. For 24 hours from the original server-created timestamp, requests are compared with an immutable snapshot of the original accepted data and defaults. Identical data replays the existing expense, including its current edits, and different data conflicts. Edits, category renames or archiving, and changed currency preferences do not invalidate an identical retry. After expiry, even identical data creates a new expense; old expenses are retained. Retries and edits do not extend the window. Use a timestamp plus a random number per purchase, retained for retries. Omit user.",
+        "description": "Requires expenses:write. New expenses use preferences.default_api_circle: empty saves personally; a Circle ID saves directly in that Circle with merchant mapped internally to title. The request accepts merchant, never title; other fields retain their names. Omitted currency and category use the destination defaults. Supplied categories must be active in that destination, and supplied personal currencies must be enabled. No personal expense copy is created for Circle imports. Circle imports are self-paid and initially 100% self-allocated. Responses return the stored Expense (merchant) or CircleExpense (title, circle), plus destination, replay and idempotency_expires_at. The preference applies across all of the user's keys and affects creation only; existing retries retain their original destination, including after preference changes. Explicit Circle URLs ignore the preference. Unavailable defaults return 404 without falling back to personal. Idempotency-Key is optional and shared across both expense creation endpoints, scoped to the user across API keys. The fixed 24-hour window starts at the original server-created timestamp and survives transaction edits or deletion. Identical accepted data replays the current transaction; changed data or a different explicitly targeted Circle conflicts. Omitted defaults resolve against the immutable original request on replay. Retries never extend the window. After expiry the key can create a new expense. A deleted transaction returns 410 during the window; an unavailable Circle or inactive membership returns 404. Failed writes do not consume a key.",
         "parameters": [
           {
             "in": "header",
@@ -30,7 +30,7 @@
               "maxLength": 128,
               "pattern": "^[A-Za-z0-9_.:-]+$"
             },
-            "description": "Fixed 24-hour retry protection. Generate once per purchase and reuse only for that payload. Expiry is based on server creation time, not occurred_at. After expiry a late retry can create a duplicate."
+            "description": "Optional user-scoped key shared across personal, routed and explicit Circle creation, with immutable 24-hour retry protection. Generate once per purchase and retain for retries. Explicitly changing the Circle while reusing a live key conflicts."
           }
         ],
         "requestBody": {
@@ -53,11 +53,11 @@
         },
         "responses": {
           "200": {
-            "description": "Idempotent replay within the fixed 24-hour window",
+            "description": "Idempotent replay of the current stored transaction; retry window is unchanged",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Expense"
+                  "$ref": "#/components/schemas/ApiTransaction"
                 }
               }
             }
@@ -67,7 +67,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Expense"
+                  "$ref": "#/components/schemas/ApiTransaction"
                 }
               }
             }
@@ -82,12 +82,18 @@
             "description": "Missing expenses:write scope"
           },
           "409": {
-            "description": "Key already used with different data within the 24-hour window; no new expense created"
+            "description": "Key already used with different accepted data or a different explicitly targeted destination within 24 hours"
+          },
+          "410": {
+            "description": "The original transaction was deleted; use a new key only to intentionally create another expense"
+          },
+          "404": {
+            "description": "The destination Circle was deleted or the key owner is no longer an active member; nothing is saved elsewhere"
           }
         }
       },
       "get": {
-        "summary": "List the key owner\u2019s expenses",
+        "summary": "List the key owner’s expenses",
         "description": "Requires expenses:read. Ordered by occurred_at, then created, newest first.",
         "parameters": [
           {
@@ -1659,7 +1665,7 @@
       ],
       "post": {
         "summary": "Add a self-paid Circle expense using an API key",
-        "description": "Requires expenses:write in X-API-Key and active membership in the Circle. The key and membership are checked inside the creation transaction. Only the key owner can be the payer and sole initial share member. Other Circle routes remain session-only. source is api. Idempotency-Key replay protection is not supported; each successful request creates an entry.",
+        "description": "Requires expenses:write in X-API-Key and active Circle membership. The URL explicitly selects the Circle and ignores default_api_circle. Accepts title instead of merchant; the payer, creator and sole initial 100% share belong to the API key owner. Other Circle routes remain session-only. Idempotency-Key is optional and shared across both expense creation endpoints, scoped to the user across API keys. The fixed 24-hour window starts at the original server-created timestamp and survives transaction edits or deletion. Identical accepted data replays the current transaction; changed data or a different explicitly targeted Circle conflicts. Omitted defaults resolve against the immutable original request on replay. Retries never extend the window. After expiry the key can create a new expense. A deleted transaction returns 410 during the window; an unavailable Circle or inactive membership returns 404. Failed writes do not consume a key.",
         "tags": [
           "Circles"
         ],
@@ -1691,7 +1697,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CircleExpense"
+                  "$ref": "#/components/schemas/CircleApiTransaction"
                 }
               }
             }
@@ -1706,9 +1712,38 @@
             "description": "Missing expenses:write scope"
           },
           "404": {
-            "description": "Circle not found or the key owner is not an active member"
+            "description": "The destination Circle was deleted or the key owner is no longer an active member; nothing is saved elsewhere"
+          },
+          "409": {
+            "description": "Key already used with different accepted data or a different explicitly targeted destination within 24 hours"
+          },
+          "410": {
+            "description": "The original transaction was deleted; use a new key only to intentionally create another expense"
+          },
+          "200": {
+            "description": "Idempotent replay of the current stored transaction; retry window is unchanged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CircleApiTransaction"
+                }
+              }
+            }
           }
-        }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_.:-]+$"
+            },
+            "description": "Optional user-scoped key shared across personal, routed and explicit Circle creation, with immutable 24-hour retry protection. Generate once per purchase and retain for retries. Explicitly changing the Circle while reusing a live key conflicts."
+          }
+        ]
       }
     },
     "/api/expenditure/transactions": {
@@ -1996,13 +2031,13 @@
               "ZMW",
               "ZWG"
             ],
-            "description": "A supported uppercase currency code enabled in the user account. Defaults to the user main currency only when omitted; null, empty strings and non-string values are rejected."
+            "description": "Supported currency code; personal imports require it to be enabled. Omit to use personal currency or the selected Circle currency. amount is always minor units of this currency."
           },
           "category": {
             "type": "string",
             "minLength": 1,
             "maxLength": 60,
-            "description": "A non-empty string naming an active category belonging to the user; surrounding whitespace is trimmed and matching is case-insensitive. Defaults to active Other, otherwise the first active category, only when omitted."
+            "description": "Active category in the destination selected by default_api_circle. Omit to use that workspace default. Categories are not translated between workspaces."
           },
           "occurred_at": {
             "type": "string",
@@ -5736,6 +5771,13 @@
             "type": "boolean",
             "default": false,
             "description": "Shows personal transactions and positive own Circle expense/income allocations together in dashboard recent transactions, the Transactions page and its exports. Off by default for new and upgraded accounts. Does not change monthly budgets or spending summaries."
+          },
+          "default_api_circle": {
+            "type": "string",
+            "default": "",
+            "maxLength": 15,
+            "pattern": "^([a-z0-9]{15})?$",
+            "description": "Default destination for new expenses submitted to POST /api/expenses/transactions across all user API keys. Empty means personal workspace; otherwise an active Circle ID. Retained after Circle deletion or membership loss so new API writes fail clearly until changed. Explicit Circle URLs and existing idempotency retries retain their destinations."
           }
         },
         "description": "Persisted per-account preferences, editable through the owner-protected PocketBase preferences collection."
@@ -6222,7 +6264,7 @@
           "title",
           "amount"
         ],
-        "description": "Creates an expense as the API key owner, who must be an active Circle member. paid_by and created_by are that membership ID. A percentage split assigns 10000 basis points (100%) and the entire amount to that same member, initially creating no shared debt. Payer, shares, split_mode, kind, recurrence and provenance fields are server-managed and rejected in requests. Edit allocations through the authenticated website.",
+        "description": "Creates an expense as the API key owner, who must be an active Circle member. paid_by and created_by are that membership ID. A percentage split assigns 10000 basis points (100%) and the entire amount to that same member, initially creating no shared debt. Payer, shares, split_mode, kind, recurrence and provenance fields are server-managed and rejected in requests. Edit allocations through the authenticated website. Optional Idempotency-Key header provides the same user-scoped, fixed 24-hour retry protection as the general endpoint.",
         "properties": {
           "title": {
             "type": "string",
@@ -6640,6 +6682,90 @@
           }
         },
         "description": "Saved receipt calculation for expense entries with exact splits. The server recomputes amount and shares and rejects mismatches. At most 50 participants across all items. No floating-point money; all money is in currency minor units. Charges use receipt-level half-up rounding and deterministic largest-remainder allocation."
+      },
+      "CircleApiTransaction": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CircleExpense"
+          },
+          {
+            "type": "object",
+            "required": [
+              "destination",
+              "replay",
+              "idempotency_expires_at"
+            ],
+            "properties": {
+              "destination": {
+                "type": "string",
+                "enum": [
+                  "circle"
+                ],
+                "readOnly": true
+              },
+              "replay": {
+                "type": "boolean",
+                "readOnly": true
+              },
+              "idempotency_expires_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "readOnly": true,
+                "description": "Fixed expiry based on the original server creation time; null when no key was supplied."
+              }
+            }
+          }
+        ]
+      },
+      "PersonalApiTransaction": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Expense"
+          },
+          {
+            "type": "object",
+            "required": [
+              "destination",
+              "replay",
+              "idempotency_expires_at"
+            ],
+            "properties": {
+              "destination": {
+                "type": "string",
+                "enum": [
+                  "personal"
+                ],
+                "readOnly": true
+              },
+              "replay": {
+                "type": "boolean",
+                "readOnly": true
+              },
+              "idempotency_expires_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "readOnly": true,
+                "description": "Fixed expiry based on the original server creation time; null when no key was supplied."
+              }
+            }
+          }
+        ]
+      },
+      "ApiTransaction": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/PersonalApiTransaction"
+          },
+          {
+            "$ref": "#/components/schemas/CircleApiTransaction"
+          }
+        ]
       }
     }
   }

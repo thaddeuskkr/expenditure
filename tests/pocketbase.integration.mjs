@@ -1203,7 +1203,11 @@ test(
                 try {
                     database.exec("PRAGMA busy_timeout = 5000");
                     const update = database.prepare("UPDATE expenses SET created = ? WHERE id = ?");
-                    for (const id of ids) update.run(created.replace("T", " "), id);
+                    const receipts = database.prepare("UPDATE api_transaction_retries SET created = ? WHERE \"transaction\" = ?");
+                    for (const id of ids) {
+                        update.run(created.replace("T", " "), id);
+                        receipts.run(created.replace("T", " "), id);
+                    }
                 } finally {
                     database.close();
                 }

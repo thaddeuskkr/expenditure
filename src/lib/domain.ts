@@ -95,6 +95,7 @@ export interface Budget extends RecordModel {
     amount: number;
 }
 export interface Preferences extends RecordModel {
+    default_api_circle: string;
     include_circle_in_budgets: boolean;
     show_circle_transactions: boolean;
     default_tab: DefaultTab;

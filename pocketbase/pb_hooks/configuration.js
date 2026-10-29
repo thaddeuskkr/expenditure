@@ -66,7 +66,7 @@ function initialize(app, user) {
     app.runInTransaction((tx) => {
         if (tx.countRecords("preferences", $dbx.hashExp({ user })) === 0) {
             const record = new Record(tx.findCollectionByNameOrId("preferences"));
-            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview", time_format: "24h", show_circle_transactions: false, include_circle_in_budgets: true });
+            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview", time_format: "24h", show_circle_transactions: false, include_circle_in_budgets: true, default_api_circle: "" });
             tx.save(record);
         }
 
@@ -121,6 +121,15 @@ function validate(record, app) {
     const code = record.getString("currency");
     if (!currency(code)) throw new BadRequestError("Unsupported currency.");
     if (name === "preferences") {
+        const circle = record.getString("default_api_circle");
+        if (circle && (record.isNew() || circle !== record.original().getString("default_api_circle"))) {
+            try {
+                require(`${__hooks}/circles-service.js`).access(app, circle, user);
+            } catch {
+                throw new BadRequestError("Choose a Circle you currently belong to as your default API workspace.");
+            }
+        }
+
         const selected = record.getStringSlice("currencies");
         if (!selected.length) throw new BadRequestError("Enable at least one currency.");
         if (selected.indexOf(code) < 0)

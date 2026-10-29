@@ -12,6 +12,7 @@ import {
     DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useWorkspace } from "../workspace-context";
+import { useAuth } from "../auth-provider";
 import { dateTimeLabel, dayLabel, errorMessage, money, recurrenceLabel } from "@/lib/domain";
 import {
     circlesApi,
@@ -39,6 +40,7 @@ import {
 import { CircleCategorySettings } from "./circle-category-settings";
 import { CircleExpenseEditor } from "./circle-expense-editor";
 import { CircleExpenseDetails } from "./circle-expense-details";
+import { MoveToPersonalDialog } from "./move-to-personal-dialog";
 import { SettlementDialog } from "./settlement-dialog";
 
 type Confirmation = {
@@ -49,8 +51,9 @@ type Confirmation = {
     action: (name: string) => Promise<void>;
 };
 
-export function CirclesView({ initialCircle }: { initialCircle?: string }) {
+export function CirclesView({ initialCircle, onTransactionMoved }: { initialCircle?: string; onTransactionMoved: () => void }) {
     const { preferences } = useWorkspace();
+    const { user } = useAuth();
     const [index, setIndex] = useState<CircleIndex | null>(null),
         [data, setData] = useState<CircleDetail | null>(null);
     const [selected, setSelected] = useState<string | null>(initialCircle || null);
@@ -65,6 +68,7 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
     );
     const [editor, setEditor] = useState<CircleExpense | "new" | "income" | null>(null),
         [viewing, setViewing] = useState<CircleExpense | null>(null);
+    const [moving, setMoving] = useState<CircleExpense | null>(null);
     const [settlement, setSettlement] = useState<SettlementSuggestion | CircleSettlement | null>(null),
         [confirmation, setConfirmation] = useState<Confirmation | null>(null);
     const [filterCurrency, setFilterCurrency] = useState("");
@@ -630,6 +634,12 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                     expense={viewing}
                     detail={detail}
                     onClose={() => setViewing(null)}
+                    onMove={user && detail.members.find((member) => member.id === viewing.paid_by)?.user === user.id ?
+                            () => {
+                                setMoving(viewing);
+                                setViewing(null);
+                            } :
+                        undefined}
                     onDelete={canModify(viewing.created_by) ? () => removeExpense(viewing) : undefined}
                     onEdit={canModify(viewing.created_by) ?
                             () => {
@@ -637,6 +647,18 @@ export function CirclesView({ initialCircle }: { initialCircle?: string }) {
                                 setViewing(null);
                             } :
                         undefined}
+                />
+            )}
+            {detail && moving && (
+                <MoveToPersonalDialog
+                    circle={detail.circle.id}
+                    expense={moving}
+                    onClose={() => setMoving(null)}
+                    onMoved={() => {
+                        refresh();
+                        onTransactionMoved();
+                        toast.success(`${moving.kind === "income" ? "Income" : "Expense"} moved to personal`);
+                    }}
                 />
             )}
         </section>

@@ -140,6 +140,10 @@ export const circlesApi = {
         pb.send<CircleExpense>(`${base}/${circle}/expenses/move`, {
             method: "POST", body: { expense: expense.id, previous_updated: expense.updated, category },
         }),
+    moveToPersonal: (circle: string, expense: CircleExpense, category: string) =>
+        pb.send<Expense>(`${base}/${circle}/expenses/${expense.id}/move-to-personal`, {
+            method: "POST", body: { version: expense.version, category },
+        }),
     copyCategories: (circle: string, previous_ids: string[]) =>
         pb.send<{ items: CategoryDefinition[] }>(`${base}/${circle}/categories/copy`, { method: "POST", body: { previous_ids } }),
     saveExpense: (circle: string, data: CircleExpenseInput, id?: string) =>

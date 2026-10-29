@@ -1843,6 +1843,77 @@
           }
         }
       }
+    },
+    "/api/expenditure/circles/{id}/expenses/{expense}/move-to-personal": {
+      "post": {
+        "summary": "Move a Circle expense or income to the paid-by user\u2019s personal ledger",
+        "description": "Normal users session only. Requires active Circle membership and the authenticated user to own the paid_by membership; author or Circle owner status alone grants no permission. Atomically removes the Circle entry and creates a fresh personal entry with the full positive amount and original kind, currency (even when disabled personally), occurrence, created/updated timestamps, payment method, notes and provenance. A supplied category must be active and owned by the user. Omission matches active personal categories by exact name, then a unique case/whitespace-insensitive name, then Other, then the first active category. Removes all Circle allocations and recalculates balances while preserving former-member balances and recorded repayments. Recurrence timezone, calendar controls, anchor, cursor and pause error move intact; earlier generated entries stay in the Circle. Locked move receipts retain the original snapshot, including receipt breakdown and shares. Identical version/category retries return the current personal entry without duplicates or overwriting edits. Changed retries conflict; a deleted personal target returns 410; a target moved onwards conflicts. Earlier personal-to-Circle receipts remain immutable. Circle API idempotency receipts keep their original destination and return 410 after this move rather than recreating the entry.",
+        "security": [
+          {
+            "UserSession": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{15}$"
+            }
+          },
+          {
+            "name": "expense",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z0-9]{15}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveToPersonalInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The saved personal expense or income",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Expense"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input/category or a change to former-member balances"
+          },
+          "401": {
+            "description": "User session required"
+          },
+          "403": {
+            "description": "Only the paid-by user can move this entry"
+          },
+          "404": {
+            "description": "Transaction or active Circle membership not found"
+          },
+          "409": {
+            "description": "Stale version, changed retry or target moved onwards"
+          },
+          "410": {
+            "description": "Already moved and personal target deleted"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6785,6 +6856,25 @@
             "$ref": "#/components/schemas/CircleApiTransaction"
           }
         ]
+      },
+      "MoveToPersonalInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version"
+        ],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 60,
+            "description": "Active personal category name. Omit for automatic name matching."
+          }
+        }
       }
     }
   }

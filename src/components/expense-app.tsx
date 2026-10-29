@@ -173,8 +173,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 23)
-                    throw new Error("This app requires backend version 23. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 24)
+                    throw new Error("This app requires backend version 24. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -1179,7 +1179,16 @@ function Workspace({
                                 </p>
                             </section>
                         )}
-                        {section === "Circles" && <CirclesView key={focusedCircle || "circles"} initialCircle={focusedCircle} />}
+                        {section === "Circles" && (
+                            <CirclesView
+                                key={focusedCircle || "circles"}
+                                initialCircle={focusedCircle}
+                                onTransactionMoved={() => {
+                                    void reloadConfiguration().catch(() => {});
+                                    refresh();
+                                }}
+                            />
+                        )}
                         {section === "Settings" && (
                             <WorkspaceSettings
                                 onEditRecurring={setEditor}

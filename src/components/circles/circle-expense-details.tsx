@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarDays, Code2, CreditCard, Pencil, Trash2 } from "lucide-react";
+import { ArrowUpRight, CalendarDays, Code2, CreditCard, Pencil, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { CategoryIcon } from "../category-icon";
@@ -15,12 +15,13 @@ function MemberAvatar({ member, name }: { member?: CircleMember; name: string })
     return <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#363e30] text-[11px] text-[#d4dcc6]">{name.slice(0, 2).toUpperCase()}</span>;
 }
 
-export function CircleExpenseDetails({ expense, detail, onClose, onEdit, onDelete }: {
+export function CircleExpenseDetails({ expense, detail, onClose, onEdit, onDelete, onMove }: {
     expense: CircleExpense;
     detail: CircleDetail;
     onClose: () => void;
     onEdit?: () => void;
     onDelete?: () => void;
+    onMove?: () => void;
 }) {
     const { preferences } = useWorkspace();
     const payer = detail.members.find((member) => member.id === expense.paid_by);
@@ -115,10 +116,13 @@ export function CircleExpenseDetails({ expense, detail, onClose, onEdit, onDelet
                     </ul>
                 </section>
                 {expense.notes && <section className="border-t pt-4"><h3 className="mb-2 text-[10px] text-muted-foreground">Notes</h3><p className="text-xs leading-6 wrap-anywhere whitespace-pre-wrap">{expense.notes}</p></section>}
-                {(onEdit || onDelete) && (
-                    <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:justify-between">
-                        {onDelete && <Button variant="ghost" className="h-10 text-destructive" onClick={onDelete}><Trash2 />Delete {expense.kind}</Button>}
-                        {onEdit && <Button className="h-10 px-5" onClick={onEdit}><Pencil />Edit {expense.kind}</Button>}
+                {(onEdit || onDelete || onMove) && (
+                    <div className="flex flex-col-reverse gap-2 border-t pt-4 sm:flex-row sm:flex-wrap sm:justify-between">
+                        {onDelete && <Button variant="ghost" className="h-10 text-destructive sm:px-3 sm:text-xs" onClick={onDelete}><Trash2 />Delete {expense.kind}</Button>}
+                        <div className="flex flex-col-reverse gap-2 sm:ml-auto sm:flex-row">
+                            {onMove && <Button variant="outline" className="h-10 sm:px-3 sm:text-xs" onClick={onMove}><ArrowUpRight />Move to personal</Button>}
+                            {onEdit && <Button className="h-10 px-5 sm:px-3 sm:text-xs" onClick={onEdit}><Pencil />Edit {expense.kind}</Button>}
+                        </div>
                     </div>
                 )}
             </DialogContent>

@@ -47,7 +47,7 @@ function create(e, explicitCircle) {
             try {
                 record = app.findRecordById(circleId ? "circle_expenses" : "expenses", receipt.getString("transaction"));
             } catch {
-                throw new ApiError(410, "This transaction was deleted. Use a new Idempotency-Key to intentionally create another expense.");
+                throw new ApiError(410, "This transaction was deleted or moved to another ledger. Use a new Idempotency-Key to intentionally create another expense.");
             }
 
             replay = true;

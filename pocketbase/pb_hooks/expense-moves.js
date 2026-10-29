@@ -53,4 +53,79 @@ function move(e) {
     return e.json(200, result);
 }
 
-module.exports = { move };
+function personalCategory(app, user, name) {
+    const categories = require(`${__hooks}/configuration.js`).categories(app, user).filter((item) => item.active);
+    const normalized = (value) => value.trim().replace(/\s+/g, " ").toLowerCase();
+    const exact = categories.find((item) => item.name === name);
+    const matches = categories.filter((item) => normalized(item.name) === normalized(name));
+    const selected = exact || (matches.length === 1 ? matches[0] : null) || categories.find((item) => normalized(item.name) === "other") || categories[0];
+    if (!selected) throw new BadRequestError("Create an active personal category before moving this transaction.");
+    return selected.name;
+}
+
+function moveToPersonal(e) {
+    const data = e.requestInfo().body;
+    if (!data || typeof data !== "object" || Array.isArray(data) || Object.keys(data).some((key) => ["version", "category"].indexOf(key) < 0) || !Number.isSafeInteger(data.version) || data.version < 1 || (data.category !== undefined && (typeof data.category !== "string" || !data.category.trim() || data.category.trim().length > 60)))
+        throw new BadRequestError("Provide the current version and optionally an active personal category.");
+    const requestedCategory = data.category === undefined ? "" : data.category.trim();
+    let result;
+    e.app.runInTransaction((app) => {
+        const service = require(`${__hooks}/circles-service.js`);
+        const configuration = require(`${__hooks}/configuration.js`);
+        const { circle } = service.access(app, e.request.pathValue("id"), e.auth.id);
+        const id = e.request.pathValue("expense");
+        if (!/^[a-z0-9]{15}$/.test(id)) throw new NotFoundError("Transaction not found.");
+        const receipt = app.findRecordsByFilter("circle_personal_moves", "circle = {:circle} && expense = {:expense}", "", 1, 0, { circle: circle.id, expense: id })[0];
+        if (receipt) {
+            if (receipt.getString("user") !== e.auth.id) throw new ForbiddenError("Only the paid-by user can move this transaction.");
+            if (receipt.getInt("version") !== data.version || receipt.getString("requested_category") !== requestedCategory)
+                throw new ApiError(409, "This transaction was already moved with different details.");
+            let personal;
+            try {
+                personal = app.findRecordById("expenses", receipt.getString("personal"));
+            } catch {
+                throw new ApiError(410, "This transaction was already moved and the personal entry has been deleted.");
+            }
+
+            if (personal.getString("user") !== e.auth.id || personal.getString("moved_to"))
+                throw new ApiError(409, "This transaction was already moved onwards.");
+            result = personal.publicExport();
+            return;
+        }
+
+        let shared;
+        try {
+            shared = app.findRecordById("circle_expenses", id);
+        } catch {
+            throw new NotFoundError("Transaction not found.");
+        }
+
+        if (shared.getString("circle") !== circle.id) throw new NotFoundError("Transaction not found.");
+        const payer = app.findRecordById("circle_members", shared.getString("paid_by"));
+        if (payer.getString("user") !== e.auth.id) throw new ForbiddenError("Only the paid-by user can move this transaction.");
+        if (shared.getInt("version") !== data.version) throw new ApiError(409, "This transaction changed. Refresh it before moving.");
+        if (["expense", "income"].indexOf(shared.getString("kind")) < 0 || !configuration.currency(shared.getString("currency")) || shared.getInt("amount") < 1 || shared.getInt("amount") > require(`${__hooks}/circles-core.cjs`).MAX_AMOUNT)
+            throw new BadRequestError("This transaction has invalid financial data.");
+        const category = requestedCategory ? configuration.category(app, e.auth.id, requestedCategory, false) : personalCategory(app, e.auth.id, shared.getString("category"));
+        const members = service.memberRecords(app, circle.id), before = service.balances(app, circle.id);
+        const personal = new Record(app.findCollectionByNameOrId("expenses"));
+        personal.load({ user: e.auth.id, merchant: shared.getString("title"), category });
+        for (const field of ["kind", "amount", "currency", "payment_method", "notes", "occurred_at", "source", "recurrence", "recurrence_interval", "recurrence_day", "recurrence_weekdays", "recurrence_month", "recurrence_timezone", "recurrence_anchor", "recurrence_next", "recurrence_error"]) personal.set(field, shared.get(field));
+        // Copy only canonical stored ledger values and the server-validated category.
+        // New-entry validation would reject disabled historical currencies and reset
+        // the saved recurrence timezone/cursor. No client money or ownership is loaded.
+        app.saveNoValidate(personal);
+        app.db().newQuery("UPDATE expenses SET created = {:created}, updated = {:updated} WHERE id = {:id}")
+            .bind({ id: personal.id, created: shared.getString("created"), updated: shared.getString("updated") }).execute();
+        const moved = new Record(app.findCollectionByNameOrId("circle_personal_moves"));
+        moved.load({ user: e.auth.id, circle: circle.id, expense: shared.id, personal: personal.id, version: data.version, requested_category: requestedCategory, snapshot: shared.publicExport() });
+        app.save(moved);
+        app.delete(shared);
+        service.preserveFormerBalances(app, circle.id, members, before);
+        result = app.findRecordById("expenses", personal.id).publicExport();
+    });
+    e.response.header().set("Cache-Control", "no-store");
+    return e.json(200, result);
+}
+
+module.exports = { move, moveToPersonal };

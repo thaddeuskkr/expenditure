@@ -139,7 +139,7 @@ export function CircleSettingsDialog({
 
     return (
         <CircleModal
-            title={circle ? "Circle settings" : "Create circle"}
+            title={circle ? "Circle settings" : "New Circle"}
             busy={busy}
             onClose={onClose}>
             <form onSubmit={submit} className="space-y-5 pt-3">
@@ -180,13 +180,13 @@ export function CircleSettingsDialog({
                     </label>
                     <CurrencySelect value={code} onChange={setCode} />
                     <p className="mt-2 text-[11px] leading-5 text-muted-foreground">
-                        New expenses use this currency. Existing amounts and balances keep their
+                        New transactions use this currency. Existing amounts and balances keep their
                         original currencies.
                     </p>
                 </div>
                 <FormError error={error} />
                 <DialogFooter>
-                    <SaveButton busy={busy} label={circle ? "Save changes" : "Create circle"} />
+                    <SaveButton busy={busy} label={circle ? "Save changes" : "Create Circle"} />
                 </DialogFooter>
             </form>
         </CircleModal>

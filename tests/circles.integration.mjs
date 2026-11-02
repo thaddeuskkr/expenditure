@@ -10,7 +10,7 @@ import { randomBytes } from "node:crypto";
 
 test(
     "Circles membership, financial splits, settlements and owner controls",
-    { timeout: 60000 },
+    { timeout: 90000 },
     async (t) => {
         const binary = process.env.POCKETBASE_BINARY;
         assert.ok(binary, "Set POCKETBASE_BINARY to a PocketBase 0.40.6 executable.");
@@ -726,5 +726,61 @@ test(
                 assert.equal(retained.expenses.totalItems, 1);
             },
         );
+        await t.test("monthly Circle filters precede pagination without changing overall balances", async () => {
+            const filteredCircle = await api(root, alice.token, { name: "Filtered ledger", icon: "home", currency: "SGD" }, "POST", 201);
+            const initial = await api(`${root}/${filteredCircle.id}`, alice.token);
+            const invitation = await api(`${root}/${filteredCircle.id}/invitations`, alice.token, { email: bob.email }, "POST", 201);
+            const joined = await api(`/api/expenditure/circle-invitations/${invitation.id}/accept`, bob.token, {});
+            const food = initial.categories.find((row) => row.name === "Food & drinks").id;
+            const transport = initial.categories.find((row) => row.name === "Transport").id;
+            async function entry(title, occurred_at, category = food, currency = "SGD", kind = "expense", member = initial.me) {
+                return api(`${root}/${filteredCircle.id}/expenses`, alice.token, {
+                    title, occurred_at, category, currency, kind, amount: 100,
+                    paid_by: initial.me, split_mode: "even", shares: [{ member }],
+                }, "POST", 201);
+            }
+
+            const matches = [];
+            for (let index = 0; index < 28; index++) {
+                matches.push(await entry(`Matching ${index}`, "2026-11-15T12:00:00+08:00", food, "SGD", index === 0 ? "income" : "expense", index === 1 ? joined.member : initial.me));
+            }
+
+            const start = await entry("Inclusive Singapore boundary", "2026-11-01T00:00:00+08:00");
+            matches.push(start);
+            await entry("Before Singapore month", "2026-10-31T23:59:59+08:00");
+            await entry("Exclusive Singapore boundary", "2026-12-01T00:00:00+08:00");
+            await entry("Other category", "2026-11-12T12:00:00+08:00", transport);
+            await entry("Other currency", "2026-11-12T12:00:00+08:00", food, "USD");
+            const complete = await api(`${root}/${filteredCircle.id}`, alice.token);
+            assert.equal(complete.expenses.totalItems, 33, "Unfiltered callers retain the complete ledger");
+            const query = new URLSearchParams({ expense_from: "2026-11-01T00:00:00+08:00", expense_to: "2026-12-01T00:00:00+08:00", expense_category: food, expense_currency: "SGD" });
+            const first = await api(`${root}/${filteredCircle.id}?${query}`, alice.token);
+            query.set("expense_page", "2");
+            const second = await api(`${root}/${filteredCircle.id}?${query}`, alice.token);
+            assert.equal(first.expenses.totalItems, 29);
+            assert.equal(first.expenses.totalPages, 2);
+            assert.equal(first.expenses.items.length, 25);
+            assert.equal(second.expenses.items.length, 4);
+            assert.deepEqual(new Set([...first.expenses.items, ...second.expenses.items].map((row) => row.id)), new Set(matches.map((row) => row.id)));
+            assert.ok([...first.expenses.items, ...second.expenses.items].some((row) => row.kind === "income"));
+            assert.ok([...first.expenses.items, ...second.expenses.items].some((row) => row.shares.every((share) => share.member !== initial.me)), "Include entries with no viewer allocation");
+            for (const field of ["balances", "suggestions", "totals", "settlements", "categories"]) assert.deepEqual(first[field], complete[field], `${field} stays all-time`);
+            query.set("expense_category", "all");
+            query.set("expense_currency", "all");
+            query.set("expense_page", "1");
+            assert.equal((await api(`${root}/${filteredCircle.id}?${query}`, alice.token)).expenses.totalItems, 31);
+            query.set("expense_category", transport);
+            query.set("expense_currency", "USD");
+            assert.equal((await api(`${root}/${filteredCircle.id}?${query}`, alice.token)).expenses.totalItems, 0);
+            const unauthorized = await user("FilterOutsider");
+            await api(`${root}/${filteredCircle.id}?${query}`, unauthorized.token, undefined, "GET", 404);
+            await api(`${root}/${filteredCircle.id}?${query}`, null, undefined, "GET", 401);
+            for (const fields of [
+                { expense_from: "2026-11-01T00:00:00Z" },
+                { expense_from: "2026-12-01T00:00:00Z", expense_to: "2026-11-01T00:00:00Z" },
+                { expense_from: "2026-10-01T00:00:00Z", expense_to: "2026-12-01T00:00:00Z" },
+                { expense_category: "x\" || true" }, { expense_currency: "FAKE" },
+            ]) await api(`${root}/${filteredCircle.id}?${new URLSearchParams(fields)}`, alice.token, undefined, "GET", 400);
+        });
     },
 );

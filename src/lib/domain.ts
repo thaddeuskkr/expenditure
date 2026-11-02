@@ -109,6 +109,7 @@ export interface Preferences extends RecordModel {
     currency: string;
     timezone: string;
     currencies: string[];
+    payment_methods: string[];
 }
 
 export interface CircleTransaction extends RecordModel, RecurringFields {

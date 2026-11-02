@@ -66,7 +66,7 @@ function initialize(app, user) {
     app.runInTransaction((tx) => {
         if (tx.countRecords("preferences", $dbx.hashExp({ user })) === 0) {
             const record = new Record(tx.findCollectionByNameOrId("preferences"));
-            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, default_tab: "Overview", time_format: "24h", show_circle_transactions: false, include_circle_in_budgets: true, default_api_circle: "", default_entry_currency: "", default_expense_category: "", default_income_category: "" });
+            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, payment_methods: [], default_tab: "Overview", time_format: "24h", show_circle_transactions: false, include_circle_in_budgets: true, default_api_circle: "", default_entry_currency: "", default_expense_category: "", default_income_category: "" });
             tx.save(record);
         }
 
@@ -137,6 +137,22 @@ function validate(record, app) {
     const code = record.getString("currency");
     if (!currency(code)) throw new BadRequestError("Unsupported currency.");
     if (name === "preferences") {
+        let methods;
+        try {
+            methods = JSON.parse(record.getString("payment_methods") || "null");
+        } catch {
+            throw new BadRequestError("Payment methods must be a list of names.");
+        }
+
+        if (!Array.isArray(methods) || methods.length > 50 || methods.some((method) => typeof method !== "string"))
+            throw new BadRequestError("Provide up to 50 payment method names.");
+        const cleaned = methods.map((method) => method.trim().replace(/\s+/g, " "));
+        if (cleaned.some((method) => !method || method.length > 80))
+            throw new BadRequestError("Payment method names must contain 1 to 80 characters.");
+        const keys = cleaned.map((method) => method.toLowerCase());
+        if (keys.some((key, index) => keys.indexOf(key) !== index))
+            throw new BadRequestError("Payment method names must be unique.");
+        record.set("payment_methods", cleaned);
         const circle = record.getString("default_api_circle");
         if (circle && (record.isNew() || circle !== record.original().getString("default_api_circle"))) {
             try {

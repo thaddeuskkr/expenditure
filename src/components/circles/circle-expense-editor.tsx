@@ -270,7 +270,7 @@ export function CircleExpenseEditor({
                     </Select>
                 </div>
                 <section aria-labelledby="shared-split-heading" className="min-w-0 border-t pt-5">
-                    <h3 id="shared-split-heading" className="field-label">Split between</h3>
+                    <h3 id="shared-split-heading" className="field-label">Split method</h3>
                     <div className={`mb-5 grid gap-1 rounded-lg border p-1 ${entryKind === "expense" ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-3"}`}>
                         {(
                             [

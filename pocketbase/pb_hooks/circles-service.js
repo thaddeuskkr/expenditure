@@ -218,8 +218,39 @@ function memberInCircle(members, id, formerAllowed) {
     return member;
 }
 
-function page(app, collection, circle, requested, mapper) {
-    const total = app.countRecords(collection, $dbx.hashExp({ circle }));
+function expenseFilters(query) {
+    const clauses = [], params = {};
+    const from = query.get("expense_from"), to = query.get("expense_to");
+    if (from || to) {
+        const timestamp = require(`${__hooks}/request.js`).timestamp;
+        const start = timestamp(from), end = timestamp(to);
+        if (end <= start || Date.parse(end) - Date.parse(start) > 32 * 86400000)
+            throw new BadRequestError("Provide a valid monthly date range.");
+        params.from = start.replace("T", " ");
+        params.to = end.replace("T", " ");
+        clauses.push("occurred_at >= {:from}", "occurred_at < {:to}");
+    }
+
+    const selectedCurrency = query.get("expense_currency") || "all";
+    if (selectedCurrency !== "all") {
+        params.currency = currency(selectedCurrency);
+        clauses.push("currency = {:currency}");
+    }
+
+    const category = query.get("expense_category") || "all";
+    if (category !== "all") {
+        if (!/^[a-z0-9]{15}$/.test(category)) throw new BadRequestError("Choose a valid category.");
+        params.category = category;
+        clauses.push("category = {:category}");
+    }
+
+    return { clauses, params };
+}
+
+function page(app, collection, circle, requested, mapper, filters) {
+    const clauses = ["circle = {:circle}"].concat(filters ? filters.clauses : []);
+    const params = Object.assign({ circle }, filters ? filters.params : {});
+    const total = app.countRecords(collection, $dbx.exp(clauses.join(" AND "), params));
     const pageNumber = Math.max(
         1,
         Math.min(Math.max(1, Math.ceil(total / 25)), parseInt(requested, 10) || 1),
@@ -228,11 +259,11 @@ function page(app, collection, circle, requested, mapper) {
         items: app
             .findRecordsByFilter(
                 collection,
-                "circle = {:circle}",
+                clauses.join(" && "),
                 "-occurred_at,-created,-id",
                 25,
                 (pageNumber - 1) * 25,
-                { circle },
+                params,
             )
             .map(mapper || ((r) => collection === "circle_expenses" ? configuration.projectCategory(app, r) : r.publicExport())),
         page: pageNumber,
@@ -365,6 +396,7 @@ function detail(e) {
         .all(totals);
     const net = balances(e.app, circle.id);
     const query = e.request.url.query();
+    const filters = expenseFilters(query);
     const invitations = canManage ?
             e.app
                 .findRecordsByFilter(
@@ -392,7 +424,7 @@ function detail(e) {
         invitations,
         categories: require(`${__hooks}/circle-categories.js`).list(e.app, circle.id),
         recurring: e.app.findRecordsByFilter("circle_expenses", "circle = {:circle} && recurrence != ''", "recurrence_next,id", 0, 0, { circle: circle.id }).map((r) => configuration.projectCategory(e.app, r)),
-        expenses: page(e.app, "circle_expenses", circle.id, query.get("expense_page")),
+        expenses: page(e.app, "circle_expenses", circle.id, query.get("expense_page"), undefined, filters),
         settlements: page(e.app, "circle_settlements", circle.id, query.get("settlement_page")),
     });
 }

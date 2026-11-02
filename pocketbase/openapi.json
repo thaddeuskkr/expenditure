@@ -2,8 +2,8 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Expenditure API",
-    "version": "28.0.0",
-    "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. Circle management, reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring income and expenses run on the PocketBase server every minute, with custom intervals and monthly dates, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
+    "version": "31.0.0",
+    "description": "Personal API keys authorize personal expense automation and self-paid Circle expense creation. API keys with expenses:read can retrieve categories from the default API workspace or an explicitly selected Circle. Circle management, transaction reads and split edits require a normal PocketBase users session in the Authorization header. Ownership, membership, currency precision, splits, and settlements are validated on the server. Requests and stored records use amount (integer currency minor units) and payment_method. Field aliases are not accepted. Income uses positive amounts and kind=income; spending reports and budgets include expenses only. Recurring income and expenses run on the PocketBase server every minute, with custom intervals and monthly dates, catching up after downtime. Schedule edits affect future copies; stopping or deleting the original preserves generated entries."
   },
   "servers": [
     {
@@ -255,7 +255,7 @@
       ],
       "get": {
         "summary": "Read circle ledger",
-        "description": "",
+        "description": "Optional expense filters apply before pagination. Date bounds are timezone-qualified ISO timestamps, start-inclusive/end-exclusive, provided together and at most 32 days apart. Balances, suggestions, totals, categories and settlements always cover the complete Circle history. Omitting expense filters preserves the complete ledger.",
         "tags": [
           "Circles"
         ],
@@ -305,6 +305,42 @@
               "type": "integer",
               "minimum": 1,
               "default": 1
+            }
+          },
+          {
+            "name": "expense_from",
+            "in": "query",
+            "description": "Inclusive ledger start; pair with expense_to.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "expense_to",
+            "in": "query",
+            "description": "Exclusive ledger end; pair with expense_from.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "expense_category",
+            "in": "query",
+            "description": "Circle category ID, including archived categories, or all.",
+            "schema": {
+              "type": "string",
+              "default": "all"
+            }
+          },
+          {
+            "name": "expense_currency",
+            "in": "query",
+            "description": "ISO currency code or all.",
+            "schema": {
+              "type": "string",
+              "default": "all"
             }
           }
         ]
@@ -1665,7 +1701,7 @@
       ],
       "post": {
         "summary": "Add a self-paid Circle expense using an API key",
-        "description": "Requires expenses:write in X-API-Key and active Circle membership. The URL explicitly selects the Circle and ignores default_api_circle. Accepts title instead of merchant; the payer, creator and sole initial 100% share belong to the API key owner. Other Circle routes remain session-only. Idempotency-Key is optional and shared across both expense creation endpoints, scoped to the user across API keys. The fixed 24-hour window starts at the original server-created timestamp and survives transaction edits or deletion. Identical accepted data replays the current transaction; changed data or a different explicitly targeted Circle conflicts. Omitted defaults resolve against the immutable original request on replay. Retries never extend the window. After expiry the key can create a new expense. A deleted transaction returns 410 during the window; an unavailable Circle or inactive membership returns 404. Failed writes do not consume a key. New Circle entries require Add permission, checked inside the write transaction. Existing idempotent retries can replay after Add permission is revoked.",
+        "description": "Requires expenses:write in X-API-Key and active Circle membership. The URL explicitly selects the Circle and ignores default_api_circle. Accepts title instead of merchant; the payer, creator and sole initial 100% share belong to the API key owner. Circle category lookup also supports API keys with expenses:read; management, transaction reads and split edits remain session-only. Idempotency-Key is optional and shared across both expense creation endpoints, scoped to the user across API keys. The fixed 24-hour window starts at the original server-created timestamp and survives transaction edits or deletion. Identical accepted data replays the current transaction; changed data or a different explicitly targeted Circle conflicts. Omitted defaults resolve against the immutable original request on replay. Retries never extend the window. After expiry the key can create a new expense. A deleted transaction returns 410 during the window; an unavailable Circle or inactive membership returns 404. Failed writes do not consume a key. New Circle entries require Add permission, checked inside the write transaction. Existing idempotent retries can replay after Add permission is revoked.",
         "tags": [
           "Circles"
         ],
@@ -1982,6 +2018,87 @@
           }
         }
       }
+    },
+    "/api/expenses/categories": {
+      "get": {
+        "summary": "List the default API workspace\u2019s categories",
+        "description": "Requires expenses:read in X-API-Key. Returns a plain JSON array of all category records, including archived categories (active=false), in saved sort_order, created, name, id order. Use active categories\u2019 names in API expense creation payloads. Uses the key owner\u2019s preferences.default_api_circle, matching new expense imports: empty selects personal categories, otherwise selects that Circle\u2019s categories and requires active membership. An unavailable default returns 404 without falling back to personal. Unrelated user sessions never override API-key identity.",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete ordered category array; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CategoryDefinition"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked API key; session authentication alone is insufficient"
+          },
+          "403": {
+            "description": "The API key lacks expenses:read"
+          },
+          "404": {
+            "description": "Circle does not exist or the API key owner is not an active member"
+          }
+        }
+      }
+    },
+    "/api/expenses/circles/{id}/categories": {
+      "get": {
+        "summary": "List an explicit Circle\u2019s categories using an API key",
+        "description": "Requires expenses:read in X-API-Key. Returns a plain JSON array of all category records, including archived categories (active=false), in saved sort_order, created, name, id order. Use active categories\u2019 names in API expense creation payloads. The URL overrides default_api_circle. Requires the key owner to be an active Circle member; owner/Admin or Add permission is not required.",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Complete ordered category array; Cache-Control: no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CircleCategory"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked API key; session authentication alone is insufficient"
+          },
+          "403": {
+            "description": "The API key lacks expenses:read"
+          },
+          "404": {
+            "description": "Circle does not exist or the API key owner is not an active member"
+          }
+        }
+      },
+      "parameters": [
+        {
+          "name": "id",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9]{15}$"
+          }
+        }
+      ]
     }
   },
   "components": {
@@ -6008,6 +6125,18 @@
             "maxLength": 15,
             "pattern": "^([a-z0-9]{15})?$",
             "description": "Optional single relation ID of an active personal category owned by this user, used to prefill new personal income forms. Empty selects Other, then the first active category. Renames preserve the selection; archiving clears matching defaults atomically. Existing transactions, Circle entries and API import defaults are unchanged."
+          },
+          "payment_methods": {
+            "type": "array",
+            "maxItems": 50,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "default": [],
+            "description": "Ordered per-account payment choices for personal and Circle entry. Names are trimmed, whitespace-normalized and unique ignoring case. New and upgraded accounts start empty. Renaming or removing a choice never changes stored payment_method labels or restricts automation writes."
           }
         },
         "description": "Persisted per-account preferences, editable through the owner-protected PocketBase preferences collection."

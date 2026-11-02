@@ -178,10 +178,10 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
 
     function undoSettlement(payment: CircleSettlement) {
         setConfirmation({
-            title: "Undo recorded settlement?",
+            title: "Delete repayment?",
             description:
                 "The repayment record will be removed and member balances recalculated. No money will be moved.",
-            label: "Undo settlement",
+            label: "Delete repayment",
             action: async () => {
                 await circlesApi.undoSettlement(selected!, payment);
                 refresh();
@@ -192,7 +192,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
     function removeMember(member: CircleMember) {
         setConfirmation({
             title: `Remove ${member.name}?`,
-            description: "They will lose access. Their shared expense history will remain.",
+            description: "They will lose access. Their transaction history will remain.",
             label: "Remove member",
             action: async () => {
                 await circlesApi.removeMember(selected!, member.id);
@@ -230,7 +230,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                         (
                             <Button variant="ghost" onClick={() => open(null)} className="-ml-3">
                                 <ArrowLeft />
-                                All circles
+                                All Circles
                             </Button>
                         ) :
                         (
@@ -250,7 +250,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                     {!selected && (
                         <Button onClick={() => setDialog("create")}>
                             <Plus />
-                            Create circle
+                            New Circle
                         </Button>
                     )}
                 </div>
@@ -351,16 +351,16 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                 name="users"
                                 className="mx-auto mb-4 size-8 text-primary/60"
                             />
-                            <h2 className="font-display text-3xl">No circles</h2>
+                            <h2 className="font-display text-3xl">No Circles</h2>
                             <p className="mt-3 text-xs text-muted-foreground">
-                                Create a circle to split expenses and income with friends.
+                                Create a Circle to share expenses and income.
                             </p>
                             <Button
                                 className="mt-6"
                                 variant="outline"
                                 onClick={() => setDialog("create")}>
                                 <Plus />
-                                Create circle
+                                New Circle
                             </Button>
                         </div>
                     )}
@@ -384,7 +384,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                 </h2>
                                 <p className="mt-2 text-[11px] text-muted-foreground">
                                     {detail.circle.member_count} {detail.circle.member_count === 1 ? "member" : "members"}
-                                    {detail.circle.is_owner ? " · You own this circle" : detail.circle.can_manage ? " · Admin" : ""}
+                                    {detail.circle.is_owner ? " · Owner" : detail.circle.can_manage ? " · Admin" : ""}
                                 </p>
                             </div>
                         </div>
@@ -415,7 +415,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                     {detail.circle.can_manage && (
                                         <>
                                             <DropdownMenuItem onClick={() => setDialog("settings")}>
-                                                Rename, icon & currency
+                                                Circle settings
                                             </DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => setDialog("categories")}>Categories</DropdownMenuItem>
                                             <DropdownMenuItem onClick={() => setDialog("invite")}>
@@ -434,10 +434,10 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                                         variant="destructive"
                                                         onClick={() =>
                                                             setConfirmation({
-                                                                title: "Delete circle?",
+                                                                title: "Delete Circle?",
                                                                 description:
-                                                            "This permanently deletes the circle, shared expenses, invitations, settlements, and balances for every member. This cannot be undone.",
-                                                                label: "Delete circle",
+                                                            "This permanently deletes the Circle, shared transactions, invitations, repayments, and balances for every member. This cannot be undone.",
+                                                                label: "Delete Circle",
                                                                 confirmationName: detail.circle.name,
                                                                 action: async (confirmation) => {
                                                                     await circlesApi.remove(
@@ -448,7 +448,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                                                     refresh();
                                                                 },
                                                             })}>
-                                                        Delete circle
+                                                        Delete Circle
                                                     </DropdownMenuItem>
                                                 </>
                                             ) :
@@ -460,10 +460,10 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                                     )}
                                                     onClick={() =>
                                                         setConfirmation({
-                                                            title: "Leave circle?",
+                                                            title: "Leave Circle?",
                                                             description:
-                                                        "You will lose access. Your shared expense history will remain.",
-                                                            label: "Leave circle",
+                                                        "You will lose access. Your transaction history will remain.",
+                                                            label: "Leave Circle",
                                                             action: async () => {
                                                                 await circlesApi.removeMember(
                                                                     detail.circle.id,
@@ -473,7 +473,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                                                 refresh();
                                                             },
                                                         })}>
-                                                    Leave circle
+                                                    Leave Circle
                                                 </DropdownMenuItem>
                                             )}
                                 </DropdownMenuContent>

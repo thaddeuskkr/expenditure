@@ -85,9 +85,31 @@ test("Personal transaction defaults persist, validate ownership and preserve led
             assert.equal(initial.preferences[field], "");
         const fresh = await api("/api/collections/users/records", { token: admin, body: { email: "native@example.com", password, passwordConfirm: password } });
         const created = await api("/api/collections/preferences/records", { token: admin, body: { user: fresh.id, currency: "SGD", currencies: ["SGD"], timezone: "Asia/Singapore" } });
+        assert.deepEqual(initial.preferences.payment_methods, []);
+        assert.deepEqual(created.payment_methods, []);
         assert.equal(created.default_entry_currency, "");
         assert.equal(created.default_expense_category, "");
         assert.equal(created.default_income_category, "");
+    });
+    await t.test("payment choices persist, normalize and preserve historical labels", async () => {
+        const before = await api(`/api/collections/expenses/records/${entry.id}`, { token: owner.token });
+        assert.deepEqual((await save({ payment_methods: ["  Travel   Visa  ", "Joint account"] })).payment_methods, ["Travel Visa", "Joint account"]);
+        assert.deepEqual((await config()).preferences.payment_methods, ["Travel Visa", "Joint account"]);
+        await api(path, { token: outsider.token, method: "PATCH", body: { payment_methods: ["Foreign"] }, expected: 404 });
+        assert.deepEqual((await api("/api/expenditure/config", { token: outsider.token })).preferences.payment_methods, []);
+        for (const invalid of [null, "Visa", {}, [1], [""], ["  "], ["Visa", "visa"], [" Joint  account ", "Joint account"], ["x".repeat(81)], Array.from({ length: 51 }, (_, i) => `Card ${i}`)])
+            await save({ payment_methods: invalid }, 400);
+        assert.deepEqual((await config()).preferences.payment_methods, ["Travel Visa", "Joint account"]);
+        await save({ payment_methods: ["Joint account", "Renamed Visa"] });
+        assert.deepEqual((await config()).preferences.payment_methods, ["Joint account", "Renamed Visa"]);
+        await save({ payment_methods: [] });
+        assert.deepEqual((await config()).preferences.payment_methods, []);
+        assert.deepEqual(await api(`/api/collections/expenses/records/${entry.id}`, { token: owner.token }), before);
+        // Stored labels remain free text for existing entries and automation.
+        const imported = await api("/api/collections/expenses/records", { token: owner.token, body: { user: owner.id, merchant: "External payment label", amount: 100, currency: "SGD", category: expenseCategory.id, occurred_at: "2026-10-29T04:05:06Z", payment_method: "External import method" } });
+        const updated = await api(`/api/collections/expenses/records/${imported.id}`, { token: owner.token, method: "PATCH", body: { payment_method: "Another import method" } });
+        assert.equal(updated.payment_method, "Another import method");
+        await api(`/api/collections/expenses/records/${imported.id}`, { token: owner.token, method: "DELETE", expected: 204 });
     });
     await t.test("separate category IDs and an enabled entry currency survive reload", async () => {
         await save({ default_entry_currency: "USD", default_expense_category: expenseCategory.id, default_income_category: incomeCategory.id });

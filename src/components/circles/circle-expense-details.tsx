@@ -26,6 +26,7 @@ export function CircleExpenseDetails({ expense, detail, onClose, onEdit, onDelet
     const { preferences } = useWorkspace();
     const payer = detail.members.find((member) => member.id === expense.paid_by);
     const payerName = payer?.name || "Former member";
+    const myShare = expense.shares.find((share) => share.member === detail.me)?.amount || 0;
     const receiptResult = expense.receipt ? receiptCore.calculate(expense.receipt) : null;
     const splitLabel = expense.receipt ? "Receipt split" : `${SPLIT_LABELS[expense.split_mode]}${expense.split_mode === "exact" ? "" : " split"}`;
     return (
@@ -63,6 +64,10 @@ export function CircleExpenseDetails({ expense, detail, onClose, onEdit, onDelet
                     </div>
                 </DialogHeader>
                 <dl className="grid gap-4 border-y py-4 sm:grid-cols-2">
+                    <div className="min-w-0">
+                        <dt className="text-[10px] text-muted-foreground">Your share</dt>
+                        <dd className="mt-1 text-sm tabular-nums wrap-anywhere">{money(myShare, expense.currency)} <span className="text-[10px] text-muted-foreground">{expense.currency}</span></dd>
+                    </div>
                     <div className="flex min-w-0 items-start gap-2.5">
                         <CalendarDays aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
                         <div className="min-w-0">

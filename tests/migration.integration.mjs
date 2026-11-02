@@ -236,6 +236,7 @@ test(
         assert.equal(Date.parse(rates.fetched_at), Date.parse("2026-10-27T00:00:00Z"));
         const storedPreferences = await request(`/api/collections/preferences/records/${prefs.id}`, admin);
         assert.deepEqual(storedPreferences.currencies, ["SGD", "USD", "EUR", "GBP", "AUD", "MYR"]);
+        assert.deepEqual(storedPreferences.payment_methods, []);
         assert.equal(storedPreferences.updated, preferencesBefore.updated);
         const rateSchema = await request("/api/collections/exchange_rates", admin);
         assert.ok(rateSchema.fields.some((field) => field.name === "quotes"));

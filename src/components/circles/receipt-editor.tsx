@@ -121,7 +121,7 @@ export function ReceiptEditor({ draft, onChange, members, me, currency, result, 
     return (
         <div className="space-y-6 motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200">
             <div>
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h3 className="text-xs font-medium">What did everyone have?</h3><div className="flex rounded-lg bg-background/40 p-0.5">{([["subtotals", "Per person"], ["items", "By item"]] as const).map(([mode, label]) => <Button key={mode} type="button" variant={draft.input_mode === mode ? "secondary" : "ghost"} aria-pressed={draft.input_mode === mode} className="h-8 px-3 text-[11px]" disabled={mode === "subtotals" && draft.input_mode === "items" && !result && draft.items.some((item) => item.label.trim() || item.amount.trim())} onClick={() => changeInput(mode)}>{label}</Button>)}</div></div>
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-3"><h3 className="text-xs font-medium">Item amounts</h3><div className="flex rounded-lg bg-background/40 p-0.5">{([["subtotals", "Per person"], ["items", "By item"]] as const).map(([mode, label]) => <Button key={mode} type="button" variant={draft.input_mode === mode ? "secondary" : "ghost"} aria-pressed={draft.input_mode === mode} className="h-8 px-3 text-[11px]" disabled={mode === "subtotals" && draft.input_mode === "items" && !result && draft.items.some((item) => item.label.trim() || item.amount.trim())} onClick={() => changeInput(mode)}>{label}</Button>)}</div></div>
                 {draft.input_mode === "subtotals" ?
                         (
                             <div className="divide-y border-y">
@@ -154,7 +154,7 @@ export function ReceiptEditor({ draft, onChange, members, me, currency, result, 
                         )}
             </div>
             <div>
-                <h3 className="mb-3 text-xs font-medium">How are charges shown?</h3>
+                <h3 className="mb-3 text-xs font-medium">Charges & taxes</h3>
                 <div className="grid grid-cols-3 gap-2">{([
                     ["nett", "Nett", "GST included", "0", "included"],
                     ["restaurant", "Service + GST", "10% + 9%", "10", "added"],
@@ -179,10 +179,10 @@ export function ReceiptEditor({ draft, onChange, members, me, currency, result, 
                     (
                         <>
                             <ReceiptSummary result={result} currency={currency} receipt={parseReceipt(draft, currency)} />
-                            <div><h3 className="mb-1 text-xs font-medium">Everyone pays</h3><div className="divide-y">{result.rows.map((row) => <div key={row.member} className="flex items-start justify-between gap-4 py-3"><div className="min-w-0"><p className="truncate text-xs">{members.find((member) => member.id === row.member)?.name || "Former member"}{row.member === me ? " (you)" : ""}</p><p className="mt-1 text-[10px] leading-5 text-muted-foreground">Items {money(row.items, currency)}{row.discount ? ` − ${money(row.discount, currency)} discount` : ""}{row.service ? ` + ${money(row.service, currency)} service` : ""}{row.gst ? ` + ${money(row.gst, currency)} GST` : ""}{row.adjustment ? ` ${row.adjustment < 0 ? "−" : "+"} ${money(Math.abs(row.adjustment), currency)} adjustment` : ""}</p></div><p className="shrink-0 text-sm tabular-nums text-primary">{money(row.amount, currency)}</p></div>)}</div><p className="mt-1 text-[10px] leading-5 text-muted-foreground">Charges follow each person’s items. Rounding cents are distributed automatically.</p></div>
+                            <div><h3 className="mb-1 text-xs font-medium">Split breakdown</h3><div className="divide-y">{result.rows.map((row) => <div key={row.member} className="flex items-start justify-between gap-4 py-3"><div className="min-w-0"><p className="truncate text-xs">{members.find((member) => member.id === row.member)?.name || "Former member"}{row.member === me ? " (you)" : ""}</p><p className="mt-1 text-[10px] leading-5 text-muted-foreground">Items {money(row.items, currency)}{row.discount ? ` − ${money(row.discount, currency)} discount` : ""}{row.service ? ` + ${money(row.service, currency)} service` : ""}{row.gst ? ` + ${money(row.gst, currency)} GST` : ""}{row.adjustment ? ` ${row.adjustment < 0 ? "−" : "+"} ${money(Math.abs(row.adjustment), currency)} adjustment` : ""}</p></div><p className="shrink-0 text-sm tabular-nums text-primary">{money(row.amount, currency)}</p></div>)}</div><p className="mt-1 text-[10px] leading-5 text-muted-foreground">Charges follow each person’s items. Rounding cents are distributed automatically.</p></div>
                         </>
                     ) :
-                    <div className="rounded-xl border border-dashed px-4 py-5"><p className="text-xs text-muted-foreground">{draft.items.some((item) => item.amount.trim()) ? error : "Enter item amounts to see the receipt and everyone’s share."}</p></div>}
+                    <div className="rounded-xl border border-dashed px-4 py-5"><p className="text-xs text-muted-foreground">{draft.items.some((item) => item.amount.trim()) ? error : "Enter item amounts to preview the split."}</p></div>}
         </div>
     );
 }

@@ -60,14 +60,14 @@ export function CircleBalances({
                                     className={`text-right text-xs tabular-nums ${balance < 0 ? "text-[#d6b79a]" : "text-primary"}`}>
                                     {balance === 0 ?
                                         "Settled" :
-                                        `${balance > 0 ? "Gets back" : "Owes"} ${money(Math.abs(balance), currency)} ${currency}`}
+                                        `${balance > 0 ? "Is owed" : "Owes"} ${money(Math.abs(balance), currency)} ${currency}`}
                                 </span>
                             </div>
                         );
                     })}
             </div>
             <div>
-                <h3 className="mb-3 text-sm font-medium">Suggested settlements · {currency}</h3>
+                <h3 className="mb-3 text-sm font-medium">Suggested repayments · {currency}</h3>
                 {!detail.suggestions.some((row) => row.currency === currency) && (
                     <p className="text-xs text-muted-foreground">
                         No outstanding balance in {currency}.
@@ -97,7 +97,7 @@ export function CircleBalances({
                                         suggestion.to_member !== detail.me
                                     }
                                     onClick={() => onSettle(suggestion)}>
-                                    Record
+                                    Record repayment
                                 </Button>
                             </div>
                         ))}
@@ -129,7 +129,7 @@ export function CircleBalances({
                                         Edit
                                     </Button>
                                     <Button variant="ghost" size="sm" onClick={() => onUndo(payment)}>
-                                        Undo
+                                        Delete
                                     </Button>
                                 </div>
                             )}
@@ -139,7 +139,7 @@ export function CircleBalances({
                 <CirclePagination
                     page={detail.settlements.page}
                     totalPages={detail.settlements.totalPages}
-                    label="settlements"
+                    label="repayments"
                     onPage={onPage}
                 />
             </div>

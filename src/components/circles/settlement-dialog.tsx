@@ -75,7 +75,7 @@ export function SettlementDialog({
 
     return (
         <CircleModal
-            title={settlement ? "Edit repayment" : "Record settlement"}
+            title={settlement ? "Edit repayment" : "Record repayment"}
             description={`${settlement ? "Update" : "Record"} a repayment made outside Expenditure. This does not transfer money.`}
             busy={busy}
             onClose={onClose}>
@@ -163,7 +163,7 @@ export function SettlementDialog({
                 </div>
                 <FormError error={error} />
                 <DialogFooter>
-                    <SaveButton busy={busy} label={settlement ? "Save changes" : "Record settlement"} />
+                    <SaveButton busy={busy} label={settlement ? "Save changes" : "Record repayment"} />
                 </DialogFooter>
             </form>
         </CircleModal>

@@ -118,7 +118,7 @@ for (const cutoff of ["1793206800_recurring_income_schedules.js", "1793293200_re
     const upgrade = spawnSync(binary, ["migrate", "up", ...newFlags], { encoding: "utf8" });
     assert.equal(upgrade.status, 0, upgrade.stdout + upgrade.stderr);
     await start(newFlags);
-    assert.equal((await api("/api/expenditure/status")).version, 28);
+    assert.equal((await api("/api/expenditure/status")).version, 31);
     assert.equal((await fetch(base + "/api/collections/circle_personal_moves", { headers: { Authorization: admin } })).status, 404);
     const upgradedPreferences = await api(`/api/collections/preferences/records/${prefs.id}`, admin);
     for (const key of Object.keys(prefs)) assert.deepEqual(upgradedPreferences[key], key === "default_tab" && prefs[key] === "API keys" ? "Settings" : prefs[key], `preferences.${key}`);

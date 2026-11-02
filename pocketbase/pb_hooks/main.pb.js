@@ -1,5 +1,5 @@
 /// <reference path="../pb_data/types.d.ts" />
-routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 28 }));
+routerAdd("GET", "/api/expenditure/status", (e) => e.json(200, { version: 31 }));
 
 routerAdd(
     "GET",
@@ -132,6 +132,9 @@ routerAdd(
     (e) => require(`${__hooks}/api-transactions.js`).create(e),
     $apis.bodyLimit(8192),
 );
+
+routerAdd("GET", "/api/expenses/categories", (e) => require(`${__hooks}/api-categories.js`).list(e));
+routerAdd("GET", "/api/expenses/circles/{id}/categories", (e) => require(`${__hooks}/api-categories.js`).list(e, true));
 
 routerAdd("GET", "/api/expenses/transactions", (e) => {
     const lib = require(`${__hooks}/expenditure.js`);

@@ -224,6 +224,8 @@ routerAdd(
 );
 
 onRecordCreateRequest((e) => {
+    if (e.requestInfo().body.payment_methods === undefined)
+        e.record.set("payment_methods", []);
     if (e.requestInfo().body.include_circle_in_budgets === undefined)
         e.record.set("include_circle_in_budgets", true);
     return e.next();

@@ -82,7 +82,7 @@ export function BudgetEditor({
             }}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle className="font-display text-3xl font-normal">
+                    <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.5px]">
                         {budget ? "Edit budget" : "Add budget"}
                     </DialogTitle>
                     <DialogDescription>

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, MoveUpRight } from "lucide-react";
 import type { AuthProviderInfo } from "pocketbase";
 import { Button } from "@/components/ui/button";
 import { pb } from "@/lib/pocketbase";
@@ -43,10 +43,16 @@ export function SignIn() {
             id="main-content"
             className="grid min-h-svh lg:grid-cols-[1.08fr_1fr]">
             <section
-                className="relative hidden overflow-hidden border-r border-white/10 lg:block"
+                className="relative hidden overflow-hidden border-r lg:block"
                 aria-label="Expenditure">
-                <div className="absolute inset-0 bg-[url('/images/misty-mountains.jpg')] bg-cover bg-[center_65%] saturate-30" />
-                <div className="absolute inset-0 bg-linear-to-b from-[#101712]/40 via-[#101712]/15 to-[#101712]/75" />
+                <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center">
+                    <div className="relative flex size-100 items-center justify-center rounded-full border border-primary/8 xl:size-120">
+                        <div className="flex size-72 items-center justify-center rounded-full border border-primary/13 xl:size-86">
+                            <MoveUpRight className="size-24 text-primary" strokeWidth={0.65} />
+                        </div>
+                        <span className="absolute top-[14%] right-[14%] size-2.5 rounded-full bg-primary" />
+                    </div>
+                </div>
                 <div className="relative p-12">
                     <Brand />
                 </div>
@@ -55,8 +61,17 @@ export function SignIn() {
                 <div className="absolute top-9 left-7 lg:hidden">
                     <Brand />
                 </div>
-                <div className="mx-auto w-full max-w-88 animate-enter">
-                    <h1 className="font-display text-5xl tracking-[-1px]">Sign in</h1>
+                <div className="mx-auto w-full max-w-96 animate-enter">
+                    <div aria-hidden="true" className="mb-8 flex h-44 items-center justify-center lg:hidden">
+                        <div className="relative flex size-44 items-center justify-center rounded-full border border-primary/8">
+                            <div className="flex size-32 items-center justify-center rounded-full border border-primary/13">
+                                <MoveUpRight className="size-12 text-primary" strokeWidth={0.8} />
+                            </div>
+                            <span className="absolute top-[14%] right-[14%] size-1.5 rounded-full bg-primary" />
+                        </div>
+                    </div>
+                    <h1 className="font-display text-[38px] leading-[1.08] font-semibold tracking-[-0.7px] sm:text-5xl">Sign in to<br />Expenditure</h1>
+                    <p className="mt-4 text-[15px] leading-6 text-muted-foreground">Track expenses, income, and shared spending.</p>
                     <div className="mt-8 space-y-3">
                         {loading ?
                                 (

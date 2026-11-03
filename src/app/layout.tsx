@@ -1,9 +1,19 @@
 import type { Metadata, Viewport } from "next";
-import "@fontsource-variable/inter";
-import "@fontsource/instrument-serif/400.css";
+import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { Toaster } from "@/components/ui/sonner";
+
+const spaceGrotesk = localFont({
+    src: [
+        { path: "./fonts/SpaceGrotesk-Regular.ttf", weight: "400", style: "normal" },
+        { path: "./fonts/SpaceGrotesk-Medium.ttf", weight: "500", style: "normal" },
+        { path: "./fonts/SpaceGrotesk-SemiBold.ttf", weight: "600", style: "normal" },
+        { path: "./fonts/SpaceGrotesk-Bold.ttf", weight: "700", style: "normal" },
+    ],
+    variable: "--font-space-grotesk",
+    display: "swap",
+});
 
 const description = "Track expenses and income, manage monthly budgets, and split shared spending with Circles.";
 const socialImage = {
@@ -54,7 +64,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        <html lang="en" className="dark h-full">
+        <html lang="en" className={`${spaceGrotesk.variable} dark h-full`}>
             <body className="min-h-full">
                 <a
                     href="#main-content"

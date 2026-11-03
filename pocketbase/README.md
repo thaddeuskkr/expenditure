@@ -9,4 +9,4 @@ Tested with PocketBase **0.40.6** and an existing `users` auth collection.
 
 Use these steps for upgrades too. Keep previously applied migrations and their history intact. Do not run `migrate down` as an uninstall step; some rollback migrations delete data.
 
-Your identity provider's callback URL is `<POCKETBASE_URL>/api/oauth2-redirect`. If you restrict allowed origins, include your frontend URL. Your reverse proxy must support realtime/SSE connections.
+Keep `<POCKETBASE_URL>/api/oauth2-redirect` as your identity provider's allowed callback for the Next.js web app. For the native Expenditure iOS app, also allow `dev.tkkr.expenditure://oauth2/callback` on the same provider client. Add the native URL without replacing the web URL or changing the existing client ID/secret. iOS uses direct authorization-code exchange with PKCE so Private Relay does not affect the realtime IP check; the web app keeps its existing browser flow. If you restrict allowed origins, include your frontend URL. Your reverse proxy must support realtime/SSE connections.

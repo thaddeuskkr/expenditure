@@ -21,7 +21,7 @@ export function ExpenseDetails({ expense, onClose, onEdit, onDelete }: {
                     <div className="flex items-start gap-3 pr-6">
                         <CategoryIcon category={categoryLabel(expense)} />
                         <div className="min-w-0">
-                            <DialogTitle className="font-display text-3xl leading-tight font-normal wrap-anywhere">{expense.merchant}</DialogTitle>
+                            <DialogTitle className="font-display text-2xl leading-tight font-semibold tracking-[-0.5px] wrap-anywhere">{expense.merchant}</DialogTitle>
                             <DialogDescription className="mt-1 text-[11px]">{expense.kind === "income" ? "Income details" : "Expense details"}</DialogDescription>
                         </div>
                     </div>

@@ -66,7 +66,7 @@ export function CircleModal({
             <DialogContent
                 className={`max-h-[90svh] overflow-y-auto ${wide ? "sm:max-w-2xl" : "sm:max-w-lg"}`}>
                 <DialogHeader>
-                    <DialogTitle className="font-display text-3xl font-normal">{title}</DialogTitle>
+                    <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.5px]">{title}</DialogTitle>
                     <DialogDescription className={description ? "" : "sr-only"}>
                         {description || title}
                     </DialogDescription>

@@ -27,7 +27,7 @@ export function EmptyState({
                             <Wallet className="size-5" strokeWidth={1.3} />
                         )}
             </span>
-            <h3 className="font-display text-2xl">{title}</h3>
+            <h3 className="font-display text-xl font-semibold tracking-[-0.4px]">{title}</h3>
             <p className="mt-3 max-w-75 text-xs leading-6 text-muted-foreground">
                 {detail}
             </p>

@@ -199,7 +199,7 @@ function AccountWorkspace({
             <main className="flex min-h-svh flex-col items-center justify-center px-6">
                 <Brand />
                 <div className="mt-10 max-w-md text-center">
-                    <h1 className="font-display text-3xl">Backend unavailable</h1>
+                    <h1 className="font-display text-3xl font-semibold tracking-[-0.7px]">Backend unavailable</h1>
                     <p className="mt-4 text-sm leading-7 text-muted-foreground">
                         The Expenditure API is not available yet. Install this project’s
                         PocketBase migrations and hooks, then restart PocketBase.
@@ -605,7 +605,7 @@ function Workspace({
                                 key={label}
                                 aria-current={section === label ? "page" : undefined}
                                 onClick={() => navigate(label)}
-                                className={`group flex h-11 w-full items-center gap-3 rounded-lg px-3 text-[12px] transition-colors ${section === label ? "bg-[#c2cbb0]/9 text-[#d7dfc8]" : "text-muted-foreground hover:bg-white/3 hover:text-foreground"}`}>
+                                className={`group flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-colors ${section === label ? "bg-[#c2cbb0]/9 text-[#d7dfc8]" : "text-muted-foreground hover:bg-white/3 hover:text-foreground"}`}>
                                 <Icon className="size-4" strokeWidth={1.5} />
                                 {label}
                                 {section === label && (
@@ -617,7 +617,7 @@ function Workspace({
                     <div className="mt-auto pt-12">
                         <button
                             onClick={() => navigate("Settings")}
-                            className={`flex h-10 w-full items-center gap-3 rounded-lg px-3 text-xs ${section === "Settings" ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
+                            className={`flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[13px] font-medium ${section === "Settings" ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
                             <Settings2 className="size-4" strokeWidth={1.5} />
                             Settings
                         </button>
@@ -665,7 +665,7 @@ function Workspace({
                         className="mx-auto max-w-355 px-5 py-7 sm:px-9 sm:py-9 xl:px-12">
                         <div className="mb-9 flex flex-wrap items-end justify-between gap-5">
                             <div>
-                                <h1 className="font-display text-[42px] leading-none tracking-[-1px] sm:text-5xl">
+                                <h1 className="font-display text-[34px] leading-tight font-semibold tracking-[-0.7px] sm:text-[38px]">
                                     {section}
                                 </h1>
                             </div>
@@ -802,7 +802,7 @@ function Workspace({
                                             </span>
                                         </p>
                                         <div className="mt-3 flex items-baseline gap-2">
-                                            <span className="font-display text-[clamp(48px,5vw,72px)] leading-none tracking-[-2px]">
+                                            <span className="text-[clamp(44px,5vw,64px)] leading-none tracking-[-2px] tabular-nums">
                                                 {money(overview.total, mainCurrency)}
                                             </span>
                                         </div>
@@ -847,7 +847,7 @@ function Workspace({
                                                     "Monthly budget"}
                                             </p>
                                             <p
-                                                className={`mt-3 text-[24px] font-light tracking-[-0.5px] ${remaining !== null && remaining < 0 ? "text-destructive" : "text-foreground/90"}`}>
+                                                className={`mt-3 text-[24px] font-medium tabular-nums tracking-[-0.5px] ${remaining !== null && remaining < 0 ? "text-destructive" : "text-foreground/90"}`}>
                                                 {remaining !== null ?
                                                         money(remaining, mainCurrency) :
                                                     "Not set"}
@@ -876,7 +876,7 @@ function Workspace({
                                         </div>
                                         <div>
                                             <p className="eyebrow text-[9px]">Daily average</p>
-                                            <p className="mt-3 text-[24px] font-light tracking-[-0.5px]">
+                                            <p className="mt-3 text-[24px] font-medium tabular-nums tracking-[-0.5px]">
                                                 {money(
                                                     Math.round(overview.total / elapsed),
                                                     mainCurrency,

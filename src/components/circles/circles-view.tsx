@@ -331,7 +331,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                     <CircleIcon name={circle.icon} />
                                 </span>
                                 <span className="min-w-0 flex-1">
-                                    <span className="block truncate font-display text-2xl">
+                                    <span className="block truncate font-display text-xl font-semibold tracking-[-0.4px]">
                                         {circle.name}
                                     </span>
                                     <span className="mt-1 block text-[11px] text-muted-foreground">
@@ -351,7 +351,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                 name="users"
                                 className="mx-auto mb-4 size-8 text-primary/60"
                             />
-                            <h2 className="font-display text-3xl">No Circles</h2>
+                            <h2 className="font-display text-xl font-semibold tracking-[-0.4px]">No Circles</h2>
                             <p className="mt-3 text-xs text-muted-foreground">
                                 Create a Circle to share expenses and income.
                             </p>
@@ -379,7 +379,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                 <CircleIcon name={detail.circle.icon} />
                             </span>
                             <div className="min-w-0">
-                                <h2 className="font-display text-3xl break-words sm:text-4xl">
+                                <h2 className="font-display text-[28px] font-semibold tracking-[-0.7px] break-words sm:text-[34px]">
                                     {detail.circle.name}
                                 </h2>
                                 <p className="mt-2 text-[11px] text-muted-foreground">
@@ -508,7 +508,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                         <div className="grid grid-cols-2 gap-6 border-b pb-7 sm:gap-12">
                             <div>
                                 <p className="eyebrow text-[9px]">Total spent · {currency}</p>
-                                <p className="mt-3 font-display text-4xl sm:text-5xl">
+                                <p className="mt-3 text-[clamp(28px,4vw,48px)] tracking-[-1px] break-words tabular-nums">
                                     {money(summary?.total || 0, currency)}
                                 </p>
                                 <p className="mt-2 text-[10px] text-muted-foreground">
@@ -527,7 +527,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                     · {currency}
                                 </p>
                                 <p
-                                    className={`mt-3 font-display text-4xl sm:text-5xl ${ownBalance < 0 ? "text-[#d6b79a]" : "text-primary"}`}>
+                                    className={`mt-3 text-[clamp(28px,4vw,48px)] tracking-[-1px] break-words tabular-nums ${ownBalance < 0 ? "text-[#d6b79a]" : "text-primary"}`}>
                                     {money(Math.abs(ownBalance), currency)}
                                 </p>
                                 <p className="mt-2 text-[10px] text-muted-foreground">

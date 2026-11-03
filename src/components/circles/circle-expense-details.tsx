@@ -36,7 +36,7 @@ export function CircleExpenseDetails({ expense, detail, onClose, onEdit, onDelet
                     <div className="flex items-start gap-3 pr-6">
                         <CategoryIcon category={categoryLabel(expense)} color={detail.categories.find((category) => category.id === expense.category)?.color} />
                         <div className="min-w-0">
-                            <DialogTitle className="font-display text-3xl leading-tight font-normal wrap-anywhere">{expense.title}</DialogTitle>
+                            <DialogTitle className="font-display text-2xl leading-tight font-semibold tracking-[-0.5px] wrap-anywhere">{expense.title}</DialogTitle>
                             <DialogDescription className="mt-1 text-[11px] wrap-anywhere">{detail.circle.name}</DialogDescription>
                         </div>
                     </div>

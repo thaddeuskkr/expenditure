@@ -240,7 +240,7 @@ export function ApiKeys({ timezone, children }: { timezone: string; children: Re
                         (
                             <div className="flex flex-col items-center border-b py-15 text-center">
                                 <KeyRound className="mb-4 size-7 text-primary/65" strokeWidth={1.2} />
-                                <h3 className="font-display text-2xl">No API keys</h3>
+                                <h3 className="font-display text-xl font-semibold tracking-[-0.4px]">No API keys</h3>
                                 <p className="mt-2 max-w-75 text-xs leading-6 text-muted-foreground">
                                     Create a key to add or read expenses from another app.
                                 </p>
@@ -319,7 +319,7 @@ export function ApiKeys({ timezone, children }: { timezone: string; children: Re
                 }}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle className="font-display text-3xl font-normal">
+                        <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.5px]">
                             {secret ? "Your key is ready." : "Create an API key."}
                         </DialogTitle>
                         <DialogDescription>

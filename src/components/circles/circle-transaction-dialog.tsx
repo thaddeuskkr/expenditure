@@ -20,7 +20,7 @@ export function CircleTransactionDialog({ transaction, onClose, onOpenCircle }: 
                     <div className="flex items-start gap-3 pr-6">
                         <CategoryIcon category={categoryLabel(transaction)} />
                         <div className="min-w-0">
-                            <DialogTitle className="font-display text-3xl leading-tight font-normal wrap-anywhere">{transaction.title}</DialogTitle>
+                            <DialogTitle className="font-display text-2xl leading-tight font-semibold tracking-[-0.5px] wrap-anywhere">{transaction.title}</DialogTitle>
                             <DialogDescription className="mt-1 text-[11px] wrap-anywhere">{transaction.expand.circle.name}</DialogDescription>
                         </div>
                     </div>

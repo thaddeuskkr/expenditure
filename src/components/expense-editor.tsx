@@ -121,7 +121,7 @@ export function ExpenseEditor({
             }}>
             <DialogContent className="sm:max-w-115">
                 <DialogHeader>
-                    <DialogTitle className="font-display text-3xl font-normal">
+                    <DialogTitle className="font-display text-2xl font-semibold tracking-[-0.5px]">
                         {`${expense ? "Edit" : "Add"} ${entryKind}`}
                     </DialogTitle>
                     <DialogDescription className="sr-only">

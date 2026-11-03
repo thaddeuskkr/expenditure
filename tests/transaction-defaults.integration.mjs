@@ -1,4 +1,5 @@
 import { resolveCategoryFixture } from "./helpers/category-fixtures.mjs";
+import themes from "../pocketbase/pb_hooks/theme-core.cjs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { spawn, spawnSync } from "node:child_process";
@@ -90,6 +91,35 @@ test("Personal transaction defaults persist, validate ownership and preserve led
         assert.equal(created.default_entry_currency, "");
         assert.equal(created.default_expense_category, "");
         assert.equal(created.default_income_category, "");
+    });
+    await t.test("account themes persist across clients and reject unreadable or foreign writes", async () => {
+        assert.equal(initial.preferences.theme.preset, "mauve");
+        const before = await api(`/api/collections/expenses/records/${entry.id}`, { token: owner.token });
+        for (const preset of themes.presets) {
+            const theme = { preset: preset.id, colors: preset.colors };
+            assert.deepEqual((await save({ theme })).theme, theme);
+            assert.deepEqual((await config()).preferences.theme, theme);
+        }
+
+        const custom = { preset: "custom", colors: { ...themes.presets[1].colors, accent: "#aaccff" } };
+        const expected = themes.normalizeTheme(custom);
+        assert.deepEqual((await save({ theme: custom })).theme, expected);
+        assert.deepEqual((await config()).preferences.theme, expected);
+        // Separate sessions for the same account read the identical persisted value.
+        const secondSession = await api("/api/collections/users/auth-with-password", { body: { identity: owner.email, password } });
+        assert.deepEqual((await api("/api/expenditure/config", { token: secondSession.token })).preferences.theme, expected);
+        await api(path, { token: outsider.token, method: "PATCH", body: { theme: custom }, expected: 404 });
+        assert.equal((await api("/api/expenditure/config", { token: outsider.token })).preferences.theme.preset, "mauve");
+        const invalid = [null, [], "mauve", {}, { ...custom, extra: true }, { ...custom, preset: "unknown" },
+            { preset: "custom", colors: {} }, { ...custom, colors: { ...custom.colors, accent: "red" } },
+            { ...custom, colors: { ...custom.colors, text: custom.colors.background } },
+            { ...custom, colors: { ...custom.colors, muted: custom.colors.raised } },
+            { ...custom, colors: { ...custom.colors, accent: custom.colors.surface } },
+            { ...custom, colors: { ...custom.colors, extra: "#000000" } }];
+        for (const theme of invalid) await save({ theme }, 400);
+        assert.deepEqual((await config()).preferences.theme, expected);
+        assert.deepEqual(await api(`/api/collections/expenses/records/${entry.id}`, { token: owner.token }), before);
+        await save({ theme: initial.preferences.theme });
     });
     await t.test("payment choices persist, normalize and preserve historical labels", async () => {
         const before = await api(`/api/collections/expenses/records/${entry.id}`, { token: owner.token });

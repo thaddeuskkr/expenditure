@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { themeBootstrap } from "@/lib/theme-cache";
 
 const spaceGrotesk = localFont({
     src: [
@@ -54,7 +55,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-    themeColor: "#181b18",
+    themeColor: "#1c181d",
     colorScheme: "dark",
 };
 
@@ -64,7 +65,10 @@ export default function RootLayout({
     children: React.ReactNode;
 }) {
     return (
-        <html lang="en" className={`${spaceGrotesk.variable} dark h-full`}>
+        <html lang="en" className={`${spaceGrotesk.variable} dark h-full`} suppressHydrationWarning>
+            <head>
+                <script dangerouslySetInnerHTML={{ __html: themeBootstrap((process.env.NEXT_PUBLIC_POCKETBASE_URL || "https://e.tkkr.dev").replace(/\/$/, "")) }} />
+            </head>
             <body className="min-h-full">
                 <a
                     href="#main-content"

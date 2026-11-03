@@ -13,7 +13,7 @@ export function EmptyState({
     title: string;
     detail: string;
     action?: string;
-    onAction: () => void;
+    onAction?: () => void;
     icon?: "expense" | "budget";
 }) {
     return (

@@ -1,6 +1,6 @@
 # PocketBase setup
 
-Tested with PocketBase **0.40.6** and an existing `users` auth collection.
+Tested with PocketBase **0.40.6** and an existing `users` auth collection. The matching web and iPhone clients require backend **33**, which makes Charcoal & Mauve the default and retires Sage.
 
 1. Back up your existing `pb_data` directory and stop PocketBase.
 2. Copy all files from `pb_hooks/` and `pb_migrations/` into the directories used by your PocketBase instance. Preserve existing data, unrelated files, and identity-provider settings.

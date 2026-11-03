@@ -11,10 +11,12 @@ export function CircleExpenseList({
     detail,
     onView,
     onPage,
+    filtered = false,
 }: {
     detail: CircleDetail;
     onView: (expense: CircleExpense) => void;
     onPage: (page: number) => void;
+    filtered?: boolean;
 }) {
     const { preferences, rates } = useWorkspace();
     const name = (id: string) =>
@@ -23,7 +25,7 @@ export function CircleExpenseList({
         <div>
             {!detail.expenses.items.length && (
                 <p className="py-12 text-center text-xs text-muted-foreground">
-                    No shared transactions yet.
+                    {filtered ? "No transactions match this month and filters." : "No shared transactions yet."}
                 </p>
             )}
             <div className="divide-y">

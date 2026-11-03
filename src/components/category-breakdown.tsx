@@ -35,7 +35,7 @@ export function CategoryBreakdown({
             {categories.map((item) => {
                 const color =
                     categoryDefinitions.find((c) => c.id === item.category)?.color ||
-                    "#999d94";
+                    "#a59aaa";
                 const percent = overview.total ?
                         (item.total / overview.total) * 100 :
                     0;

@@ -1,5 +1,8 @@
 "use client";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { PaymentMethodSettings } from "./payment-method-settings";
+import { ThemeSettings } from "./theme-settings";
+import { sameTheme, themeError } from "@/lib/theme";
 import { Loader2 } from "lucide-react";
 import { Switch, Tabs } from "radix-ui";
 import { Button } from "./ui/button";
@@ -33,12 +36,23 @@ export function WorkspaceSettings({
     recurringRevision: number;
     onDirtyChange: (dirty: boolean) => void;
     onSave: (
-        data: Pick<Preferences, "currency" | "timezone" | "currencies" | "default_tab" | "time_format" | "show_circle_transactions" | "include_circle_in_budgets" | "default_api_circle" | "default_entry_currency" | "default_expense_category" | "default_income_category">,
+        data: Pick<Preferences, "payment_methods" | "theme" | "currency" | "timezone" | "currencies" | "default_tab" | "time_format" | "show_circle_transactions" | "include_circle_in_budgets" | "default_api_circle" | "default_entry_currency" | "default_expense_category" | "default_income_category">,
     ) => Promise<void>;
     onCategoriesChanged: () => Promise<void>;
 }) {
     const { preferences, categories, rates } = useWorkspace();
     const [tab, setTab] = useState("General");
+    const [appearance, setAppearance] = useState({ saved: preferences.theme, draft: preferences.theme });
+    if (!sameTheme(appearance.saved, preferences.theme)) {
+        setAppearance({ saved: preferences.theme, draft: sameTheme(appearance.draft, appearance.saved) ? preferences.theme : appearance.draft });
+    }
+
+    const [methods, setMethods] = useState({ saved: preferences.payment_methods, draft: preferences.payment_methods });
+    if (JSON.stringify(methods.saved) !== JSON.stringify(preferences.payment_methods)) {
+        setMethods({ saved: preferences.payment_methods, draft: JSON.stringify(methods.draft) === JSON.stringify(methods.saved) ? preferences.payment_methods : methods.draft });
+    }
+
+    const theme = appearance.draft;
     const [defaultTab, setDefaultTab] = useState(preferences.default_tab);
     const [defaultApiCircle, setDefaultApiCircle] = useState(preferences.default_api_circle);
     const [circles, setCircles] = useState<Circle[]>([]);
@@ -94,10 +108,22 @@ export function WorkspaceSettings({
     async function save(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
         if (!dirty || busy) return;
+        if (themeError(theme)) {
+            setError(themeError(theme));
+            return;
+        }
+
+        const paymentMethods = methods.draft.map((method) => method.trim().replace(/\s+/g, " "));
+        if (paymentMethods.some((method) => !method || method.length > 80) || new Set(paymentMethods.map((method) => method.toLowerCase())).size !== paymentMethods.length) {
+            setError("Payment methods need unique names of 1 to 80 characters.");
+            return;
+        }
+
         setBusy(true);
         setError("");
         try {
-            await onSave({ currency: main, timezone, currencies: enabled, default_tab: defaultTab, time_format: timeFormat, show_circle_transactions: showCircleTransactions, include_circle_in_budgets: includeCircleInBudgets, default_api_circle: defaultApiCircle, default_entry_currency: entryCurrency, default_expense_category: categoryDefaults.expense, default_income_category: categoryDefaults.income });
+            await onSave({ payment_methods: paymentMethods, theme, currency: main, timezone, currencies: enabled, default_tab: defaultTab, time_format: timeFormat, show_circle_transactions: showCircleTransactions, include_circle_in_budgets: includeCircleInBudgets, default_api_circle: defaultApiCircle, default_entry_currency: entryCurrency, default_expense_category: categoryDefaults.expense, default_income_category: categoryDefaults.income });
+            setMethods({ saved: paymentMethods, draft: paymentMethods });
         } catch (e) {
             setError(errorMessage(e));
         } finally {
@@ -107,7 +133,8 @@ export function WorkspaceSettings({
 
     const changedTabs: Record<string, boolean> = {
         General: defaultTab !== preferences.default_tab || timezone !== preferences.timezone || timeFormat !== preferences.time_format,
-        Transactions: showCircleTransactions !== preferences.show_circle_transactions || includeCircleInBudgets !== preferences.include_circle_in_budgets || entryCurrency !== preferences.default_entry_currency || categoryDefaults.expense !== preferences.default_expense_category || categoryDefaults.income !== preferences.default_income_category,
+        Appearance: !sameTheme(theme, preferences.theme),
+        Transactions: JSON.stringify(methods.draft) !== JSON.stringify(preferences.payment_methods) || showCircleTransactions !== preferences.show_circle_transactions || includeCircleInBudgets !== preferences.include_circle_in_budgets || entryCurrency !== preferences.default_entry_currency || categoryDefaults.expense !== preferences.default_expense_category || categoryDefaults.income !== preferences.default_income_category,
         Categories: false,
         Currencies: main !== preferences.currency || JSON.stringify(enabled) !== JSON.stringify(preferences.currencies),
         Recurring: false,
@@ -129,6 +156,8 @@ export function WorkspaceSettings({
         return () => window.removeEventListener("beforeunload", warn);
     }, [dirty]);
     function discard() {
+        setAppearance({ saved: preferences.theme, draft: preferences.theme });
+        setMethods({ saved: preferences.payment_methods, draft: preferences.payment_methods });
         setDefaultTab(preferences.default_tab);
         setTimezone(preferences.timezone);
         setTimeFormat(preferences.time_format);
@@ -157,12 +186,16 @@ export function WorkspaceSettings({
                 </div>
             </div>
             <div className="pt-7">
+                <Tabs.Content value="Appearance" className="space-y-6 outline-none data-[state=inactive]:hidden">
+                    <h2 className="text-sm font-medium">Appearance</h2>
+                    <ThemeSettings value={theme} onChange={(draft) => setAppearance({ saved: preferences.theme, draft })} disabled={busy} />
+                </Tabs.Content>
                 <Tabs.Content value="General" className="space-y-6 outline-none data-[state=inactive]:hidden motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150">
                     <h2 className="text-sm font-medium">General preferences</h2>
                     <fieldset disabled={busy} className="space-y-6">
                         <div>
                             <label className="field-label" htmlFor="default-tab">Default tab on login</label>
-                            <SearchableSelect id="default-tab" value={defaultTab} onValueChange={(value) => setDefaultTab(value as Preferences["default_tab"])} options={DEFAULT_TABS.map((value) => ({ value, label: value }))} searchPlaceholder="Find a tab…" />
+                            <SearchableSelect id="default-tab" value={defaultTab} onValueChange={(value) => setDefaultTab(value as Preferences["default_tab"])} options={DEFAULT_TABS.map((value) => ({ value, label: value === "Categories" || value === "Budgets" ? `Spending · ${value}` : value }))} searchPlaceholder="Find a tab…" />
                         </div>
                         <div>
                             <label className="field-label" htmlFor="preference-timezone">
@@ -221,6 +254,7 @@ export function WorkspaceSettings({
                             </div>
                         </fieldset>
                     </section>
+                    <PaymentMethodSettings value={methods.draft} onChange={(draft) => setMethods({ saved: preferences.payment_methods, draft })} disabled={busy} />
                     <section className="space-y-5">
                         <h2 className="text-sm font-medium">Circle transactions</h2>
                         <fieldset disabled={busy}>

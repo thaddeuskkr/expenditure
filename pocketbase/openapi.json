@@ -6137,6 +6137,9 @@
             },
             "default": [],
             "description": "Ordered per-account payment choices for personal and Circle entry. Names are trimmed, whitespace-normalized and unique ignoring case. New and upgraded accounts start empty. Renaming or removing a choice never changes stored payment_method labels or restricts automation writes."
+          },
+          "theme": {
+            "$ref": "#/components/schemas/ThemePreference"
           }
         },
         "description": "Persisted per-account preferences, editable through the owner-protected PocketBase preferences collection."
@@ -7290,6 +7293,65 @@
           "move_scope"
         ],
         "additionalProperties": false
+      },
+      "ThemePreference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "preset",
+          "colors"
+        ],
+        "properties": {
+          "preset": {
+            "type": "string",
+            "enum": [
+              "mauve",
+              "graphite",
+              "amber",
+              "midnight",
+              "custom"
+            ]
+          },
+          "colors": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "background",
+              "surface",
+              "raised",
+              "accent",
+              "text",
+              "muted"
+            ],
+            "properties": {
+              "background": {
+                "type": "string",
+                "pattern": "^#[a-fA-F0-9]{6}$"
+              },
+              "surface": {
+                "type": "string",
+                "pattern": "^#[a-fA-F0-9]{6}$"
+              },
+              "raised": {
+                "type": "string",
+                "pattern": "^#[a-fA-F0-9]{6}$"
+              },
+              "accent": {
+                "type": "string",
+                "pattern": "^#[a-fA-F0-9]{6}$"
+              },
+              "text": {
+                "type": "string",
+                "pattern": "^#[a-fA-F0-9]{6}$"
+              },
+              "muted": {
+                "type": "string",
+                "pattern": "^#[a-fA-F0-9]{6}$"
+              }
+            }
+          }
+        },
+        "description": "Per-account theme shared by web and iPhone clients. New accounts use Charcoal & Mauve. Backend 33 migrates the retired Sage preset to Mauve, preserving other selected themes. Preset colours are normalized to the catalog. Custom text, secondary text and accent must contrast at least 4.5:1 against background, surface and raised. Six opaque sRGB hex colours; button foreground and error colours are derived. Category colours are separate."
       }
     }
   }

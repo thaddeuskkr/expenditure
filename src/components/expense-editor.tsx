@@ -10,6 +10,7 @@ import {
     DialogDescription,
     DialogFooter,
 } from "./ui/dialog";
+import { PaymentMethodField } from "./payment-method-field";
 import { Input } from "./ui/input";
 import { RecurrenceControl } from "./recurrence-control";
 import { CurrencyPicker } from "./currency-picker";
@@ -212,14 +213,7 @@ export function ExpenseEditor({
                                 (optional)
                             </span>
                         </label>
-                        <Input
-                            id="payment_method"
-                            name="payment_method"
-                            placeholder="e.g. DBS Live Fresh, cash"
-                            maxLength={80}
-                            defaultValue={expense?.payment_method}
-                            className="h-11"
-                        />
+                        <PaymentMethodField id="payment_method" defaultValue={expense?.payment_method} />
                     </div>
                     <div>
                         <label className="field-label" htmlFor="notes">

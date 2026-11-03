@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ArrowLeft, ArrowRight, Copy, Ellipsis, Loader2, Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "../ui/button";
@@ -12,7 +12,11 @@ import {
     DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { useWorkspace } from "../workspace-context";
-import { dateTimeLabel, dayLabel, errorMessage, money, recurrenceLabel } from "@/lib/domain";
+import { dateTimeLabel, dayLabel, errorMessage, money, monthBounds, recurrenceLabel } from "@/lib/domain";
+import { MonthPicker } from "../month-picker";
+import { CategoryIcon } from "../category-icon";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "../ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import {
     circlesApi,
     canModifyCircleExpense,
@@ -53,18 +57,17 @@ type Confirmation = {
     action: (name: string) => Promise<void>;
 };
 
-export function CirclesView({ initialCircle, onTransactionMoved }: { initialCircle?: string; onTransactionMoved: () => void }) {
+export function CirclesView({ initialCircle, month, onMonthChange, onTransactionMoved }: { initialCircle?: string; month: string; onMonthChange: (month: string) => void; onTransactionMoved: () => void }) {
     const { preferences } = useWorkspace();
     const [index, setIndex] = useState<CircleIndex | null>(null),
         [data, setData] = useState<CircleDetail | null>(null);
     const [selected, setSelected] = useState<string | null>(initialCircle || null);
-    const [tab, setTab] = useState<"Expenses" | "Balances" | "Members">("Expenses");
-    const [expensePage, setExpensePage] = useState(1),
-        [settlementPage, setSettlementPage] = useState(1);
+    const [tab, setTab] = useState<"Expenses" | "Balances">("Expenses");
+    const [settlementPage, setSettlementPage] = useState(1);
     const [revision, setRevision] = useState(0),
         [loading, setLoading] = useState(true),
         [error, setError] = useState("");
-    const [dialog, setDialog] = useState<"create" | "settings" | "categories" | "invite" | "transfer" | null>(
+    const [dialog, setDialog] = useState<"create" | "settings" | "categories" | "members" | "invite" | "transfer" | null>(
         null,
     );
     const [editor, setEditor] = useState<CircleExpense | "new" | "income" | null>(null),
@@ -74,6 +77,10 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
     const [settlement, setSettlement] = useState<SettlementSuggestion | CircleSettlement | null>(null),
         [confirmation, setConfirmation] = useState<Confirmation | null>(null);
     const [filterCurrency, setFilterCurrency] = useState("");
+    const [ledgerFilters, setLedgerFilters] = useState({ month, category: "all", currency: "all", page: 1 });
+    // A shared month change starts at page one, even when this Circle is already open.
+    if (ledgerFilters.month !== month) setLedgerFilters({ ...ledgerFilters, month, page: 1 });
+    const range = useMemo(() => monthBounds(month, preferences.timezone), [month, preferences.timezone]);
     const refresh = useCallback(() => setRevision((value) => value + 1), []);
     useEffect(() => {
         const timer = setInterval(() => {
@@ -93,7 +100,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                 const [nextIndex, nextDetail] = await Promise.all([
                     circlesApi.list(),
                     selected ?
-                            circlesApi.detail(selected, expensePage, settlementPage) :
+                            circlesApi.detail(selected, ledgerFilters.page, settlementPage, { expense_from: range.from, expense_to: range.to, expense_category: ledgerFilters.category, expense_currency: ledgerFilters.currency }) :
                             Promise.resolve(null),
                 ]);
                 if (active) {
@@ -112,7 +119,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
         return () => {
             active = false;
         };
-    }, [selected, expensePage, settlementPage, revision]);
+    }, [selected, ledgerFilters, range, settlementPage, revision]);
     useEffect(() => {
         const onKey = (event: KeyboardEvent) => {
             if (
@@ -131,9 +138,9 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
     }, [data, selected]);
     function open(id: string | null) {
         setSelected(id);
-        setExpensePage(1);
         setSettlementPage(1);
         setFilterCurrency("");
+        setLedgerFilters({ month, category: "all", currency: "all", page: 1 });
         setTab("Expenses");
     }
 
@@ -355,13 +362,6 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                             <p className="mt-3 text-xs text-muted-foreground">
                                 Create a Circle to share expenses and income.
                             </p>
-                            <Button
-                                className="mt-6"
-                                variant="outline"
-                                onClick={() => setDialog("create")}>
-                                <Plus />
-                                New Circle
-                            </Button>
                         </div>
                     )}
                 </>
@@ -408,6 +408,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                                     </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-max max-w-(--radix-dropdown-menu-content-available-width) whitespace-nowrap">
+                                    <DropdownMenuItem onClick={() => setDialog("members")}>Members</DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => void copyCircleId()}>
                                         <Copy /> Copy Circle ID
                                     </DropdownMenuItem>
@@ -482,7 +483,7 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                     </div>
                     <div className="flex flex-wrap items-center justify-between gap-4">
                         <div className="flex gap-5 border-b">
-                            {(["Expenses", "Balances", "Members"] as const).map((item) => (
+                            {(["Expenses", "Balances"] as const).map((item) => (
                                 <button
                                     key={item}
                                     onClick={() => setTab(item)}
@@ -504,38 +505,36 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                             />
                         </div>
                     </div>
-                    {tab !== "Members" && (
-                        <div className="grid grid-cols-2 gap-6 border-b pb-7 sm:gap-12">
-                            <div>
-                                <p className="eyebrow text-[9px]">Total spent · {currency}</p>
-                                <p className="mt-3 text-[clamp(28px,4vw,48px)] tracking-[-1px] break-words tabular-nums">
-                                    {money(summary?.total || 0, currency)}
-                                </p>
-                                <p className="mt-2 text-[10px] text-muted-foreground">
-                                    {summary?.count || 0} {summary?.count === 1 ? "expense" : "expenses"} in {currency}
-                                </p>
-                                <p className="mt-2 text-[10px] text-primary">Income {money(summary?.income || 0, currency)}
-                                </p>
-                            </div>
-                            <div>
-                                <p className="eyebrow text-[9px]">
-                                    {ownBalance > 0 ?
-                                        "You are owed" :
-                                        ownBalance < 0 ?
-                                            "You owe" :
-                                            "Your balance"}{" "}
-                                    · {currency}
-                                </p>
-                                <p
-                                    className={`mt-3 text-[clamp(28px,4vw,48px)] tracking-[-1px] break-words tabular-nums ${ownBalance < 0 ? "text-[#d6b79a]" : "text-primary"}`}>
-                                    {money(Math.abs(ownBalance), currency)}
-                                </p>
-                                <p className="mt-2 text-[10px] text-muted-foreground">
-                                    Balances stay separate by currency.
-                                </p>
-                            </div>
+                    <div className="grid grid-cols-2 gap-6 border-b pb-7 sm:gap-12">
+                        <div>
+                            <p className="eyebrow text-[9px]">Total spent · All time · {currency}</p>
+                            <p className="mt-3 text-[clamp(28px,4vw,48px)] tracking-[-1px] break-words tabular-nums">
+                                {money(summary?.total || 0, currency)}
+                            </p>
+                            <p className="mt-2 text-[10px] text-muted-foreground">
+                                {summary?.count || 0} {summary?.count === 1 ? "expense" : "expenses"} in {currency}
+                            </p>
+                            <p className="mt-2 text-[10px] text-primary">Income {money(summary?.income || 0, currency)}
+                            </p>
                         </div>
-                    )}
+                        <div>
+                            <p className="eyebrow text-[9px]">
+                                {ownBalance > 0 ?
+                                    "You are owed" :
+                                    ownBalance < 0 ?
+                                        "You owe" :
+                                        "Your balance"}{" "}
+                                · {currency}
+                            </p>
+                            <p
+                                className={`mt-3 text-[clamp(28px,4vw,48px)] tracking-[-1px] break-words tabular-nums ${ownBalance < 0 ? "text-destructive" : "text-primary"}`}>
+                                {money(Math.abs(ownBalance), currency)}
+                            </p>
+                            <p className="mt-2 text-[10px] text-muted-foreground">
+                                Balances stay separate by currency.
+                            </p>
+                        </div>
+                    </div>
                     {tab === "Expenses" && detail.recurring.length > 0 && (
                         <div className="space-y-3 border-b pb-5">
                             <h3 className="text-xs font-medium">Recurring transactions</h3>
@@ -547,10 +546,28 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                         </div>
                     )}
                     {tab === "Expenses" && (
+                        <div className="flex flex-wrap items-center gap-3" aria-label="Circle transaction filters">
+                            <MonthPicker value={month} onChange={onMonthChange} timezone={preferences.timezone} />
+                            <Select value={ledgerFilters.category} onValueChange={(category) => setLedgerFilters({ ...ledgerFilters, category, page: 1 })}>
+                                <SelectTrigger aria-label="Circle category" className="h-10! w-auto min-w-36 max-w-full text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All categories</SelectItem>
+                                    {detail.categories.map((category) => <SelectItem key={category.id} value={category.id}><CategoryIcon category={category.name} color={category.color} small />{category.name}{!category.active && " (archived)"}</SelectItem>)}
+                                </SelectContent>
+                            </Select>
+                            <Select value={ledgerFilters.currency} onValueChange={(currency) => setLedgerFilters({ ...ledgerFilters, currency, page: 1 })}>
+                                <SelectTrigger aria-label="Circle transaction currency" className="h-10! w-auto text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent><SelectItem value="all">All currencies</SelectItem>{currencies.map((code) => <SelectItem key={code} value={code}>{code}</SelectItem>)}</SelectContent>
+                            </Select>
+                            {(ledgerFilters.category !== "all" || ledgerFilters.currency !== "all") && <Button variant="ghost" size="sm" onClick={() => setLedgerFilters({ month, category: "all", currency: "all", page: 1 })}>Reset filters</Button>}
+                        </div>
+                    )}
+                    {tab === "Expenses" && (
                         <CircleExpenseList
                             detail={detail}
                             onView={setViewing}
-                            onPage={setExpensePage}
+                            onPage={(page) => setLedgerFilters({ ...ledgerFilters, page })}
+                            filtered
                         />
                     )}
                     {tab === "Balances" && (
@@ -563,15 +580,20 @@ export function CirclesView({ initialCircle, onTransactionMoved }: { initialCirc
                             onPage={setSettlementPage}
                         />
                     )}
-                    {tab === "Members" && (
-                        <CircleMembers
-                            detail={detail}
-                            onInvite={() => setDialog("invite")}
-                            onCopy={copyLink}
-                            onRemove={removeMember}
-                            onRevoke={revokeInvitation}
-                            onPermissions={setPermissionMember}
-                        />
+                    {dialog === "members" && (
+                        <Dialog open onOpenChange={(open) => { if (!open) setDialog(null); }}>
+                            <DialogContent className="sm:max-w-2xl">
+                                <DialogHeader><DialogTitle>Members</DialogTitle><DialogDescription>{detail.circle.name}</DialogDescription></DialogHeader>
+                                <CircleMembers
+                                    detail={detail}
+                                    onInvite={() => setDialog("invite")}
+                                    onCopy={copyLink}
+                                    onRemove={removeMember}
+                                    onRevoke={revokeInvitation}
+                                    onPermissions={setPermissionMember}
+                                />
+                            </DialogContent>
+                        </Dialog>
                     )}
                 </>
             )}

@@ -1,0 +1,50 @@
+[
+  {
+    "id": "mauve",
+    "name": "Charcoal & Mauve",
+    "colors": {
+      "background": "#1C181D",
+      "surface": "#2A232C",
+      "raised": "#403343",
+      "accent": "#D6B4D5",
+      "text": "#F3EDF3",
+      "muted": "#C1B1C1"
+    }
+  },
+  {
+    "id": "graphite",
+    "name": "Graphite & Ice",
+    "colors": {
+      "background": "#17191D",
+      "surface": "#22262D",
+      "raised": "#343B45",
+      "accent": "#A8C7FA",
+      "text": "#F0F2F6",
+      "muted": "#B1B8C4"
+    }
+  },
+  {
+    "id": "amber",
+    "name": "Obsidian & Amber",
+    "colors": {
+      "background": "#1B1815",
+      "surface": "#28231E",
+      "raised": "#40372E",
+      "accent": "#E7B66B",
+      "text": "#F3EEE7",
+      "muted": "#BDB2A6"
+    }
+  },
+  {
+    "id": "midnight",
+    "name": "Midnight & Periwinkle",
+    "colors": {
+      "background": "#151827",
+      "surface": "#202539",
+      "raised": "#333C55",
+      "accent": "#B5BAFF",
+      "text": "#EEF0FA",
+      "muted": "#B1B9D2"
+    }
+  }
+]

@@ -37,7 +37,7 @@ export function UserAvatar({ user, name }: {
     return (
         <span
             aria-hidden="true"
-            className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#363e30] text-[11px] text-[#d4dcc6]">
+            className="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-secondary text-[11px] text-primary">
             {name.slice(0, 2).toUpperCase()}
             {src && failedUrl !== src && (
                 <Image

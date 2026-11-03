@@ -132,7 +132,7 @@ export function ReceiptEditor({ draft, onChange, members, me, currency, result, 
                                         <div key={item.id} className="flex items-center gap-3 py-3">
                                             {member?.expand.user ?
                                                     <UserAvatar user={member.expand.user} name={name} /> :
-                                                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#363e30] text-[11px] text-[#d4dcc6]" aria-hidden="true">{name.slice(0, 2).toUpperCase()}</span>}
+                                                    <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] text-primary" aria-hidden="true">{name.slice(0, 2).toUpperCase()}</span>}
                                             <span className="min-w-0 flex-1 truncate text-xs">{name}{item.members[0] === me ? " (you)" : ""}{!member?.active ? " · former" : ""}</span>
                                             <div className="w-28 shrink-0"><AmountField label={`${item.label} item subtotal`} value={item.amount} onChange={(amount) => update(item.id, { amount })} placeholder={formatAmountInput(0, currency)} /></div>
                                         </div>

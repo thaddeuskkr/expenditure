@@ -25,7 +25,7 @@ import {
     Plus,
     RefreshCw,
     Search,
-    Settings2,
+    Settings,
     Target,
     Wallet,
     Users,
@@ -71,6 +71,7 @@ import { EmptyState } from "./empty-state";
 import { BudgetEditor } from "./budget-editor";
 import { SpendingChart } from "./spending-chart";
 import { WorkspaceContext } from "./workspace-context";
+import { WorkspaceTheme } from "./workspace-theme";
 import { WorkspaceSettings } from "./workspace-settings";
 import { CirclesView } from "./circles/circles-view";
 import { MoveExpenseDialog } from "./circles/move-expense-dialog";
@@ -113,8 +114,7 @@ type Section =
 const navigation = [
     { name: "Overview", icon: LayoutDashboard },
     { name: "Transactions", icon: ArrowDownLeft },
-    { name: "Categories", icon: FolderOpen },
-    { name: "Budgets", icon: Target },
+    { name: "Spending", icon: FolderOpen },
     { name: "Circles", icon: Users },
 ] as const;
 function subscribeDesktop(callback: () => void) {
@@ -173,8 +173,8 @@ function AccountWorkspace({
         async function load() {
             try {
                 const status = await pb.send<{ version: number }>("/api/expenditure/status", { method: "GET" });
-                if (typeof status.version !== "number" || status.version < 31)
-                    throw new Error("This app requires backend version 31. Install the latest PocketBase migrations and hooks.");
+                if (typeof status.version !== "number" || status.version < 33)
+                    throw new Error("This app requires backend version 33. Install the latest PocketBase migrations and hooks.");
                 const result = await pb.send<WorkspaceConfig>(
                     "/api/expenditure/config",
                     { method: "GET" },
@@ -241,6 +241,7 @@ function Workspace({
     onSignOut: () => void;
 }) {
     const [section, setSection] = useState<Section>(initialConfiguration.preferences.default_tab);
+    const [spendingSection, setSpendingSection] = useState<"Categories" | "Budgets">(initialConfiguration.preferences.default_tab === "Budgets" ? "Budgets" : "Categories");
     const [settingsDirty, setSettingsDirty] = useState(false);
     const [settingsSaving, setSettingsSaving] = useState(false);
     const [leavingSettings, setLeavingSettings] = useState<Section | null>(null);
@@ -364,13 +365,18 @@ function Workspace({
         const timer = setInterval(() => {
             if (document.visibilityState === "visible") refresh();
         }, 300000);
+        const preferencesSubscription = pb.collection("preferences").subscribe(configuration.preferences.id, () => {
+            void reloadConfiguration().catch(() => {});
+        });
+        preferencesSubscription.catch(() => {});
         subscription.catch(() => {}); // Focus refresh remains available if realtime is blocked.
         return () => {
             clearInterval(timer);
             window.removeEventListener("focus", onFocus);
             void subscription.then((unsubscribe) => unsubscribe()).catch(() => {});
+            void preferencesSubscription.then((unsubscribe) => unsubscribe()).catch(() => {});
         };
-    }, [refresh, reloadConfiguration]);
+    }, [refresh, reloadConfiguration, configuration.preferences.id]);
     useEffect(() => {
         let active = true;
         async function load() {
@@ -448,6 +454,7 @@ function Workspace({
         }
 
         setSection(next);
+        if (next === "Categories" || next === "Budgets") setSpendingSection(next);
         setMobileNav(false);
         setSearch("");
         setCurrency("all");
@@ -581,8 +588,11 @@ function Workspace({
         "Categories",
         "Budgets",
     ].includes(section);
+    const isSpending = section === "Categories" || section === "Budgets";
+    const sectionTitle = isSpending ? "Spending" : section;
     return (
         <WorkspaceContext.Provider value={{ ...configuration, rates }}>
+            <WorkspaceTheme theme={preferences.theme} userId={user.id} />
             <div className="min-h-svh">
                 {mobileNav && (
                     <button
@@ -594,7 +604,7 @@ function Workspace({
                 <aside
                     inert={!desktop && !mobileNav}
                     aria-hidden={!desktop && !mobileNav}
-                    className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r bg-[#151914] px-5 py-8 transition-transform duration-250 lg:translate-x-0 ${mobileNav ? "translate-x-0" : "-translate-x-full"}`}>
+                    className={`fixed inset-y-0 left-0 z-40 flex w-60 flex-col border-r bg-card px-5 py-8 transition-transform duration-250 lg:translate-x-0 ${mobileNav ? "translate-x-0" : "-translate-x-full"}`}>
                     <div className="mb-11 px-1">
                         <Brand compact />
                     </div>
@@ -603,12 +613,12 @@ function Workspace({
                         {navigation.map(({ name: label, icon: Icon }) => (
                             <button
                                 key={label}
-                                aria-current={section === label ? "page" : undefined}
-                                onClick={() => navigate(label)}
-                                className={`group flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-colors ${section === label ? "bg-[#c2cbb0]/9 text-[#d7dfc8]" : "text-muted-foreground hover:bg-white/3 hover:text-foreground"}`}>
+                                aria-current={(label === "Spending" ? isSpending : section === label) ? "page" : undefined}
+                                onClick={() => navigate(label === "Spending" ? spendingSection : label)}
+                                className={`group flex h-11 w-full items-center gap-3 rounded-xl px-3 text-[13px] font-medium transition-colors ${(label === "Spending" ? isSpending : section === label) ? "bg-primary/9 text-primary" : "text-muted-foreground hover:bg-white/3 hover:text-foreground"}`}>
                                 <Icon className="size-4" strokeWidth={1.5} />
                                 {label}
-                                {section === label && (
+                                {(label === "Spending" ? isSpending : section === label) && (
                                     <span className="ml-auto size-1 rounded-full bg-primary" />
                                 )}
                             </button>
@@ -618,7 +628,7 @@ function Workspace({
                         <button
                             onClick={() => navigate("Settings")}
                             className={`flex h-10 w-full items-center gap-3 rounded-xl px-3 text-[13px] font-medium ${section === "Settings" ? "text-primary" : "text-muted-foreground hover:text-foreground"}`}>
-                            <Settings2 className="size-4" strokeWidth={1.5} />
+                            <Settings className="size-4" strokeWidth={1.5} />
                             Settings
                         </button>
                         <div className="mt-5 border-t pt-5">
@@ -657,8 +667,9 @@ function Workspace({
                             <span className="hidden text-xs text-muted-foreground/35 sm:inline">
                                 /
                             </span>
-                            <span className="text-[11px] text-foreground/80">{section}</span>
+                            <span className="text-[11px] text-foreground/80">{sectionTitle}</span>
                         </div>
+                        <Button variant="ghost" size="icon" className="lg:hidden" aria-label="Settings" onClick={() => navigate("Settings")}><Settings /></Button>
                     </header>
                     <main
                         id="main-content"
@@ -666,7 +677,7 @@ function Workspace({
                         <div className="mb-9 flex flex-wrap items-end justify-between gap-5">
                             <div>
                                 <h1 className="font-display text-[34px] leading-tight font-semibold tracking-[-0.7px] sm:text-[38px]">
-                                    {section}
+                                    {sectionTitle}
                                 </h1>
                             </div>
                             <div className="flex flex-wrap gap-2">
@@ -713,6 +724,13 @@ function Workspace({
                                 )}
                             </div>
                         </div>
+                        {isSpending && (
+                            <div className="mb-6 flex gap-5 border-b" role="group" aria-label="Spending sections">
+                                {(["Categories", "Budgets"] as const).map((item) => (
+                                    <button key={item} onClick={() => navigate(item)} aria-pressed={section === item} className={`border-b-2 py-3 text-xs transition-colors ${section === item ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}>{item}</button>
+                                ))}
+                            </div>
+                        )}
                         {isDataPage && (
                             <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
                                 <MonthPicker value={month} onChange={changeMonth} timezone={preferences.timezone} />
@@ -813,7 +831,7 @@ function Workspace({
                                                     (
                                                         <>
                                                             <span
-                                                                className={`flex items-center gap-1 rounded-full px-2 py-1 ${difference <= 0 ? "bg-primary/8 text-primary" : "bg-[#d6b79a]/8 text-[#d6b79a]"}`}>
+                                                                className={`flex items-center gap-1 rounded-full px-2 py-1 ${difference <= 0 ? "bg-primary/8 text-primary" : "bg-destructive/8 text-destructive"}`}>
                                                                 {difference <= 0 ?
                                                                         (
                                                                             <ArrowDownRight className="size-3" />
@@ -1168,8 +1186,6 @@ function Workspace({
                                                 icon="budget"
                                                 title="No budgets"
                                                 detail="Set an overall limit or a budget for an individual category."
-                                                action="Add budget"
-                                                onAction={() => setBudgetEditor("new")}
                                             />
                                         )}
                                 <p className="mt-8 text-[10px] leading-6 text-muted-foreground">
@@ -1184,6 +1200,8 @@ function Workspace({
                             <CirclesView
                                 key={focusedCircle || "circles"}
                                 initialCircle={focusedCircle}
+                                month={month}
+                                onMonthChange={changeMonth}
                                 onTransactionMoved={() => {
                                     void reloadConfiguration().catch(() => {});
                                     refresh();

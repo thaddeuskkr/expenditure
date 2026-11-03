@@ -1,3 +1,4 @@
+import type { ThemePreference } from "../../pocketbase/pb_hooks/theme-core.cjs";
 import type { RecordModel } from "pocketbase";
 import currencyCatalog from "../../pocketbase/pb_hooks/currencies.json" with { type: "json" };
 import timezoneCatalog from "../../pocketbase/pb_hooks/timezones.json" with { type: "json" };
@@ -16,14 +17,14 @@ export type Category = string;
 export const CURRENCY_CATALOG = currencyCatalog;
 export const TIMEZONES = timezoneCatalog;
 export const CATEGORY_COLORS = [
-    "#bfc9a4",
-    "#8dada0",
+    "#d6b4d5",
+    "#b5baff",
     "#b7b9cf",
     "#d6b79a",
     "#a8b6c5",
-    "#c9c293",
+    "#e7b9c8",
     "#c3a4af",
-    "#999d94",
+    "#a59aaa",
 ];
 export const DEFAULT_TABS = ["Overview", "Transactions", "Categories", "Budgets", "Circles", "Settings"] as const;
 export type DefaultTab = typeof DEFAULT_TABS[number];
@@ -98,6 +99,7 @@ export interface Budget extends RecordModel {
     amount: number;
 }
 export interface Preferences extends RecordModel {
+    theme: ThemePreference;
     default_entry_currency: string;
     default_expense_category: string;
     default_income_category: string;

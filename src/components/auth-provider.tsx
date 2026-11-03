@@ -8,7 +8,10 @@ import {
     useSyncExternalStore,
 } from "react";
 import type { RecordModel } from "pocketbase";
-import { pb } from "@/lib/pocketbase";
+import { pb, pocketbaseUrl } from "@/lib/pocketbase";
+import { readCachedTheme, THEME_CACHE_KEY } from "@/lib/theme-cache";
+import { presets } from "@/lib/theme";
+import { applyTheme } from "./workspace-theme";
 const AuthContext = createContext<{
     user: RecordModel | null;
     ready: boolean;
@@ -37,6 +40,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [ready, setReady] = useState(false);
     useEffect(() => {
         let active = true;
+        let account = pb.authStore.isValid ? pb.authStore.record?.id || "" : "";
+        function restoreTheme(userId: string) {
+            let cached = null;
+            try {
+                cached = readCachedTheme(localStorage, userId, pocketbaseUrl);
+                if (!cached) localStorage.removeItem(THEME_CACHE_KEY);
+            } catch { /* Storage may be unavailable. */ }
+
+            applyTheme(cached || { preset: "mauve", colors: presets[0].colors });
+        }
+
+        restoreTheme(account);
+        const unsubscribe = pb.authStore.onChange(() => {
+            const next = pb.authStore.isValid ? pb.authStore.record?.id || "" : "";
+            if (next !== account) {
+                account = next;
+                restoreTheme(next);
+            }
+        });
         const refresh = async () => {
             if (pb.authStore.isValid) {
                 try {
@@ -52,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         void refresh();
         return () => {
             active = false;
+            unsubscribe();
         };
     }, []);
     return (

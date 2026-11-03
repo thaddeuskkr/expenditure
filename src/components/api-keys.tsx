@@ -445,7 +445,7 @@ function RequestExample({ title, request, note, onCopy }: {
     onCopy: (request: string) => Promise<void>;
 }) {
     return (
-        <div className="min-w-0 self-start overflow-hidden rounded-xl border bg-[#141713]">
+        <div className="min-w-0 self-start overflow-hidden rounded-xl border bg-card">
             <div className="flex items-center justify-between border-b px-5 py-3">
                 <span className="text-[10px] tracking-wider text-muted-foreground">
                     {title.toUpperCase()}
@@ -458,7 +458,7 @@ function RequestExample({ title, request, note, onCopy }: {
                     <Copy className="size-3.5" />
                 </Button>
             </div>
-            <pre className="overflow-x-auto p-5 font-mono text-[11px] leading-6 text-[#c4cbb8]">
+            <pre className="overflow-x-auto p-5 font-mono text-[11px] leading-6 text-foreground">
                 {request.split("\n").map((line, index, lines) => (
                     <span key={index}>
                         {line}

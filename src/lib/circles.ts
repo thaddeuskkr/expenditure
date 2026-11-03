@@ -121,9 +121,9 @@ const base = "/api/expenditure/circles";
 const invitations = "/api/expenditure/circle-invitations";
 export const circlesApi = {
     list: () => pb.send<CircleIndex>(base, { method: "GET" }),
-    detail: (id: string, expensePage = 1, settlementPage = 1) =>
+    detail: (id: string, expensePage = 1, settlementPage = 1, filters: { expense_from?: string; expense_to?: string; expense_category?: string; expense_currency?: string } = {}) =>
         pb.send<CircleDetail>(
-            `${base}/${id}?expense_page=${expensePage}&settlement_page=${settlementPage}`,
+            `${base}/${id}?${new URLSearchParams({ expense_page: String(expensePage), settlement_page: String(settlementPage), ...filters })}`,
             { method: "GET" },
         ),
     create: (data: Pick<Circle, "name" | "icon" | "currency">) =>

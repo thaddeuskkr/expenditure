@@ -12,7 +12,7 @@ import { receiptCore, SPLIT_LABELS, type CircleDetail, type CircleExpense, type 
 
 function MemberAvatar({ member, name }: { member?: CircleMember; name: string }) {
     if (member?.expand.user) return <UserAvatar user={member.expand.user} name={name} />;
-    return <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#363e30] text-[11px] text-[#d4dcc6]">{name.slice(0, 2).toUpperCase()}</span>;
+    return <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] text-primary">{name.slice(0, 2).toUpperCase()}</span>;
 }
 
 export function CircleExpenseDetails({ expense, detail, onClose, onEdit, onDelete, onMove }: {

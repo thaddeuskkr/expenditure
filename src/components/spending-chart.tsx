@@ -47,12 +47,12 @@ export function SpendingChart({
                     accessibilityLayer>
                     <defs>
                         <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#bdc8a4" stopOpacity={0.2} />
-                            <stop offset="100%" stopColor="#bdc8a4" stopOpacity={0} />
+                            <stop offset="0%" stopColor="var(--primary)" stopOpacity={0.2} />
+                            <stop offset="100%" stopColor="var(--primary)" stopOpacity={0} />
                         </linearGradient>
                     </defs>
                     <CartesianGrid
-                        stroke="#ffffff0a"
+                        stroke="var(--border)"
                         vertical={false}
                         strokeDasharray="3 5"
                     />
@@ -61,20 +61,20 @@ export function SpendingChart({
                         axisLine={false}
                         tickLine={false}
                         ticks={[1, 5, 10, 15, 20, 25, days]}
-                        tick={{ fill: "#858e7d", fontSize: 10 }}
+                        tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
                         dy={10}
                         minTickGap={18}
                     />
                     <YAxis
                         axisLine={false}
                         tickLine={false}
-                        tick={{ fill: "#858e7d", fontSize: 10 }}
+                        tick={{ fill: "var(--muted-foreground)", fontSize: 10 }}
                         tickFormatter={(n) =>
                             `${Math.round(n / 10 ** currencyDigits(currency))}`}
                         tickCount={4}
                     />
                     <Tooltip
-                        cursor={{ stroke: "#c2cbb044" }}
+                        cursor={{ stroke: "var(--primary)" }}
                         content={({ active, payload, label }) =>
                             active && payload?.length ?
                                     (
@@ -92,13 +92,13 @@ export function SpendingChart({
                     <Area
                         dataKey="amount"
                         type="monotone"
-                        stroke="#bdc8a4"
+                        stroke="var(--primary)"
                         strokeWidth={2}
                         fill={`url(#${gradient})`}
                         activeDot={{
                             r: 4,
-                            fill: "#c2cbb0",
-                            stroke: "#181b18",
+                            fill: "var(--primary)",
+                            stroke: "var(--background)",
                             strokeWidth: 3,
                         }}
                         isAnimationActive={false}

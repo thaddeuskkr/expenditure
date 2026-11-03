@@ -2,6 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 import { Button } from "../ui/button";
+import { PaymentMethodField } from "../payment-method-field";
 import { Input } from "../ui/input";
 import { RecurrenceControl } from "../recurrence-control";
 import { Checkbox } from "../ui/checkbox";
@@ -380,14 +381,7 @@ export function CircleExpenseEditor({
                         Payment method{" "}
                         <span className="normal-case text-muted-foreground">(optional)</span>
                     </label>
-                    <Input
-                        id="shared-payment"
-                        name="payment_method"
-                        defaultValue={expense?.payment_method}
-                        maxLength={80}
-                        placeholder="e.g. Visa"
-                        className="h-10"
-                    />
+                    <PaymentMethodField id="shared-payment" defaultValue={expense?.payment_method} />
                 </div>
                 <div>
                     <label htmlFor="shared-notes" className="field-label">

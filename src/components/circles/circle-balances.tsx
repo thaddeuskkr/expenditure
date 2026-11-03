@@ -49,15 +49,13 @@ export function CircleBalances({
                             )?.net || 0;
                         return (
                             <div key={member.id} className="flex items-center gap-3 py-4">
-                                {member.expand.user && (
-                                    <UserAvatar user={member.expand.user} name={member.name} />
-                                )}
+                                <UserAvatar user={member.expand.user || { id: member.user, collectionId: "users" }} name={member.name} />
                                 <span className="min-w-0 flex-1 truncate text-xs">
                                     {member.name}
                                     {member.id === detail.me ? " (you)" : ""}
                                 </span>
                                 <span
-                                    className={`text-right text-xs tabular-nums ${balance < 0 ? "text-[#d6b79a]" : "text-primary"}`}>
+                                    className={`text-right text-xs tabular-nums ${balance < 0 ? "text-destructive" : "text-primary"}`}>
                                     {balance === 0 ?
                                         "Settled" :
                                         `${balance > 0 ? "Is owed" : "Owes"} ${money(Math.abs(balance), currency)} ${currency}`}

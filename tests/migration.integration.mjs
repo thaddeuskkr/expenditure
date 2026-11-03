@@ -237,6 +237,7 @@ test(
         const storedPreferences = await request(`/api/collections/preferences/records/${prefs.id}`, admin);
         assert.deepEqual(storedPreferences.currencies, ["SGD", "USD", "EUR", "GBP", "AUD", "MYR"]);
         assert.deepEqual(storedPreferences.payment_methods, []);
+        assert.deepEqual(storedPreferences.theme, { preset: "mauve", colors: { background: "#1C181D", surface: "#2A232C", raised: "#403343", accent: "#D6B4D5", text: "#F3EDF3", muted: "#C1B1C1" } });
         assert.equal(storedPreferences.updated, preferencesBefore.updated);
         const rateSchema = await request("/api/collections/exchange_rates", admin);
         assert.ok(rateSchema.fields.some((field) => field.name === "quotes"));

@@ -11,14 +11,14 @@ const defaultNames = [
     "Other",
 ];
 const colors = [
-    "#bfc9a4",
-    "#8dada0",
+    "#d6b4d5",
+    "#b5baff",
     "#b7b9cf",
     "#d6b79a",
     "#a8b6c5",
-    "#c9c293",
+    "#e7b9c8",
     "#c3a4af",
-    "#999d94",
+    "#a59aaa",
 ];
 const byCode = Object.create(null);
 catalog.forEach((c) => {
@@ -66,7 +66,7 @@ function initialize(app, user) {
     app.runInTransaction((tx) => {
         if (tx.countRecords("preferences", $dbx.hashExp({ user })) === 0) {
             const record = new Record(tx.findCollectionByNameOrId("preferences"));
-            record.load({ user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, payment_methods: [], default_tab: "Overview", time_format: "24h", show_circle_transactions: false, include_circle_in_budgets: true, default_api_circle: "", default_entry_currency: "", default_expense_category: "", default_income_category: "" });
+            record.load({ theme: require(`${__hooks}/theme-core.cjs`).normalizeTheme({ preset: "mauve", colors: require(`${__hooks}/theme-presets.json`)[0].colors }), user, currency: "SGD", timezone: "Asia/Singapore", currencies: defaults, payment_methods: [], default_tab: "Overview", time_format: "24h", show_circle_transactions: false, include_circle_in_budgets: true, default_api_circle: "", default_entry_currency: "", default_expense_category: "", default_income_category: "" });
             tx.save(record);
         }
 
@@ -137,6 +137,14 @@ function validate(record, app) {
     const code = record.getString("currency");
     if (!currency(code)) throw new BadRequestError("Unsupported currency.");
     if (name === "preferences") {
+        const themes = require(`${__hooks}/theme-core.cjs`);
+        try {
+            const raw = record.getString("theme");
+            record.set("theme", themes.normalizeTheme(raw ? JSON.parse(raw) : record.isNew() ? { preset: "mauve", colors: themes.presets[0].colors } : null));
+        } catch (error) {
+            throw new BadRequestError(error.message || "Choose a valid theme.");
+        }
+
         let methods;
         try {
             methods = JSON.parse(record.getString("payment_methods") || "null");

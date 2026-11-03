@@ -224,6 +224,11 @@ routerAdd(
 );
 
 onRecordCreateRequest((e) => {
+    if (e.requestInfo().body.theme === undefined) {
+        const themes = require(`${__hooks}/theme-core.cjs`);
+        e.record.set("theme", themes.normalizeTheme({ preset: "mauve", colors: themes.presets[0].colors }));
+    }
+
     if (e.requestInfo().body.payment_methods === undefined)
         e.record.set("payment_methods", []);
     if (e.requestInfo().body.include_circle_in_budgets === undefined)

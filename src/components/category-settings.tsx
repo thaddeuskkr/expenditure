@@ -243,7 +243,7 @@ function CategoryEditor({
                                 id="category-color"
                                 value={color}
                                 onChange={(e) => setColor(e.target.value)}
-                                className="size-10 cursor-pointer rounded border bg-transparent"
+                                className="color-input size-10 cursor-pointer border bg-transparent p-1"
                             />
                             <span className="font-mono text-xs text-muted-foreground">
                                 {color}

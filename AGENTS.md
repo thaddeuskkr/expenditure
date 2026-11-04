@@ -18,6 +18,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 - No demo mode, fake workspace data, authentication bypasses, or legacy API aliases in product code. Do not add backward compatibility unless explicitly requested.
 - Follow `eslint.config.mjs`: four spaces, double quotes, semicolons, and existing JSX formatting. Prefer clear names and feature-local code over extra abstraction.
 - Keep the existing tkkr.dev-inspired visual system. Reuse `src/components/ui/`, styled currency/month/date controls, and workspace context. Avoid native pickers and unnecessary explanatory copy. Check mobile/Safari sizing when changing inputs.
+- Use `rounded-lg` (12px) for visible input and selector outlines, including button-based date/currency selectors, month controls, text areas and colour inputs. Connected controls share one rounded outer shell.
 - Do not commit screenshots, deployment archives, downloaded binaries, runtime databases, `.env.local`, or build output. Use temporary directories for verification artifacts.
 
 ## Where changes belong

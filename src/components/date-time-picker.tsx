@@ -115,7 +115,7 @@ export function DateTimePicker({ id, name, defaultValue, timezone, className, on
             <input type="hidden" name={name} value={value} />
             <Root open={open} onOpenChange={setOpen}>
                 <Trigger asChild>
-                    <Button id={id} type="button" variant="outline" className={cn("h-10 w-full min-w-0 justify-start gap-2 bg-transparent px-3 text-left font-normal", className)}>
+                    <Button id={id} type="button" variant="outline" className={cn("h-10 w-full min-w-0 rounded-lg justify-start gap-2 bg-transparent px-3 text-left font-normal", className)}>
                         <CalendarDays className="size-4 text-muted-foreground" />
                         <span className="truncate">{format(selected, "dd MMM yyyy")} <span className="px-1 text-muted-foreground">·</span> {displayTime}</span>
                     </Button>

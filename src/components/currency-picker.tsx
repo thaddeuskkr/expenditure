@@ -73,7 +73,7 @@ export function EnabledCurrenciesPicker({ value, main, onChange }: {
             </div>
             <Popover>
                 <PopoverTrigger asChild>
-                    <Button id="enabled-currencies" type="button" variant="outline" className="h-10 gap-2 px-3 font-normal">
+                    <Button id="enabled-currencies" type="button" variant="outline" className="h-10 gap-2 rounded-lg px-3 font-normal">
                         <Plus className="size-4" /> Manage currencies
                     </Button>
                 </PopoverTrigger>

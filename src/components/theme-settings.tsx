@@ -31,7 +31,7 @@ export function ThemeSettings({ value, onChange, disabled }: { value: ThemePrefe
                         <div key={key}>
                             <label className="field-label" htmlFor={`theme-${key}`}>{labels[key]}</label>
                             <div className="flex items-center gap-3">
-                                <input type="color" id={`theme-${key}`} value={/^#[a-fA-F0-9]{6}$/.test(value.colors[key]) ? value.colors[key] : "#000000"} onChange={(event) => onChange({ preset: "custom", colors: { ...value.colors, [key]: event.target.value.toUpperCase() } })} className="h-11 w-14 shrink-0 rounded-lg border bg-secondary p-1" />
+                                <input type="color" id={`theme-${key}`} value={/^#[a-fA-F0-9]{6}$/.test(value.colors[key]) ? value.colors[key] : "#000000"} onChange={(event) => onChange({ preset: "custom", colors: { ...value.colors, [key]: event.target.value.toUpperCase() } })} className="color-input h-11 w-14 shrink-0 border bg-secondary p-1" />
                                 <Input aria-label={`${labels[key]} hex colour`} value={value.colors[key]} maxLength={7} spellCheck={false} onChange={(event) => onChange({ preset: "custom", colors: { ...value.colors, [key]: event.target.value.toUpperCase() } })} className="max-w-36 font-mono text-xs" />
                             </div>
                         </div>

@@ -76,6 +76,20 @@
   .eyebrow {
     @apply text-[11px] font-semibold tracking-[0.18em] text-muted-foreground uppercase;
   }
+  .color-input {
+    @apply appearance-none rounded-lg;
+  }
+  .color-input::-webkit-color-swatch-wrapper {
+    padding: 0;
+  }
+  .color-input::-webkit-color-swatch {
+    border: 0;
+    @apply rounded-md;
+  }
+  .color-input::-moz-color-swatch {
+    border: 0;
+    @apply rounded-md;
+  }
   .field-label {
     @apply mb-2 block text-xs font-medium text-foreground/85;
   }

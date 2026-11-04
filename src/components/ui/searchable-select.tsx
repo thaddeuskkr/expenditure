@@ -49,7 +49,7 @@ export function SearchableSelect({
                     role="combobox"
                     aria-label={label}
                     aria-expanded={open}
-                    className={cn("h-10 w-full min-w-0 justify-between gap-2 bg-transparent px-3 font-normal", className)}>
+                    className={cn("h-10 w-full min-w-0 rounded-lg justify-between gap-2 bg-transparent px-3 font-normal", className)}>
                     <span className="truncate">
                         {selected ? compact ? selected.value : selected.label : placeholder}
                     </span>
